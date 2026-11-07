@@ -1,0 +1,2679 @@
+diff --git a/.github/workflows/deliver-sui-code-core-0.3.yml b/.github/workflows/deliver-sui-code-core-0.3.yml
+new file mode 100644
+index 0000000..ab09942
+--- /dev/null
++++ b/.github/workflows/deliver-sui-code-core-0.3.yml
+@@ -0,0 +1,90 @@
++name: Deliver integrated sui-code core 0.3 APK
++
++on:
++  push:
++    branches: [sui-code/core-foundation]
++    paths:
++      - .github/workflows/deliver-sui-code-core-0.3.yml
++      - .delivery/sui-code-core-0.3/**
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++jobs:
++  deliver:
++    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/core-foundation'
++    runs-on: ubuntu-latest
++    timeout-minutes: 15
++    env:
++      EXPECTED_APK_SHA256: 661bd7c90f06bf5630d0c4e73b85b378665a4baa4b51db0a7ce94af61ce9010e
++      EXPECTED_APK_BYTES: '88846380'
++    steps:
++      - uses: actions/checkout@v4
++      - name: Verify preserved original APK (no rebuild)
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd .delivery/sui-code-core-0.3
++          test "$(stat -c %s sui-code-core-0.3-debug.apk)" = "$EXPECTED_APK_BYTES"
++          printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-core-0.3-debug.apk | sha256sum --check --strict
++          test -s report.md
++          test -s changes.patch
++      - name: Verify upgrade identity and the original v0.1 signing certificate
++        shell: bash
++        run: |
++          set -euo pipefail
++          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
++          test -x "$signer"
++          old=.delivery/sui-code-v0.1/sui-code-v0.1-debug.apk
++          new=.delivery/sui-code-core-0.3/sui-code-core-0.3-debug.apk
++          printf '%s  %s\n' 1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06 "$old" | sha256sum --check --strict
++          old_cert=$("$signer" verify --print-certs "$old" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          new_cert=$("$signer" verify --print-certs "$new" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          test "$old_cert" = "$new_cert"
++          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
++          "$(dirname "$signer")/aapt" dump badging "$new" > "$RUNNER_TEMP/core03-badging.txt"
++          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070801' versionName='1.7.7-sui.core.0.3'" "$RUNNER_TEMP/core03-badging.txt"
++          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/core03-badging.txt"
++      - name: Upload original APK, report and source patch
++        id: upload
++        uses: actions/upload-artifact@v4
++        with:
++          name: sui-code-core-0.3-integrated-debug
++          path: |
++            .delivery/sui-code-core-0.3/sui-code-core-0.3-debug.apk
++            .delivery/sui-code-core-0.3/report.md
++            .delivery/sui-code-core-0.3/changes.patch
++          if-no-files-found: error
++          include-hidden-files: true
++          compression-level: 0
++          retention-days: 30
++      - name: Download uploaded artifact for verification
++        uses: actions/download-artifact@v4
++        with:
++          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
++          path: ${{ runner.temp }}/sui-code-core-0.3-roundtrip
++          merge-multiple: true
++      - name: Verify downloaded APK and report delivery links
++        shell: bash
++        env:
++          DOWNLOAD_DIR: ${{ runner.temp }}/sui-code-core-0.3-roundtrip
++          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
++          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
++          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
++        run: |
++          set -euo pipefail
++          test "$(find "$DOWNLOAD_DIR" -type f | wc -l)" -eq 3
++          test "$(stat -c %s "$DOWNLOAD_DIR/sui-code-core-0.3-debug.apk")" = "$EXPECTED_APK_BYTES"
++          (cd "$DOWNLOAD_DIR" && printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-core-0.3-debug.apk | sha256sum --check --strict)
++          for name in sui-code-core-0.3-debug.apk report.md changes.patch; do
++            cmp ".delivery/sui-code-core-0.3/$name" "$DOWNLOAD_DIR/$name"
++          done
++          {
++            echo '## Integrated core 0.3 delivery verified'
++            printf '[Download artifact](%s) · [Workflow run](%s)\n\n' "$ARTIFACT_URL" "$RUN_URL"
++            printf 'APK size: **%s bytes**\n\n' "$EXPECTED_APK_BYTES"
++            printf 'APK SHA-256: `%s`\n\n' "$EXPECTED_APK_SHA256"
++            printf 'Artifact ID: `%s`\n\n' "$ARTIFACT_ID"
++            echo 'Upload/download round-trip passed: all three files match byte for byte. No APK rebuild or GitHub Release.'
++          } >> "$GITHUB_STEP_SUMMARY"
+diff --git a/.github/workflows/deliver-sui-code-v0.2.yml b/.github/workflows/deliver-sui-code-v0.2.yml
+new file mode 100644
+index 0000000..2f84707
+--- /dev/null
++++ b/.github/workflows/deliver-sui-code-v0.2.yml
+@@ -0,0 +1,90 @@
++name: Deliver original sui-code v0.2 APK
++
++on:
++  push:
++    branches: [sui-code/v0.2-java-quickrun]
++    paths:
++      - .github/workflows/deliver-sui-code-v0.2.yml
++      - .delivery/sui-code-v0.2/**
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++jobs:
++  deliver:
++    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.2-java-quickrun'
++    runs-on: ubuntu-latest
++    timeout-minutes: 15
++    env:
++      EXPECTED_APK_SHA256: e0672c0823403c8176d1bf91d822cf143c0073186e4f35d9373d82b79d7c010e
++      EXPECTED_APK_BYTES: '88733580'
++    steps:
++      - uses: actions/checkout@v4
++      - name: Verify preserved original APK (no rebuild)
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd .delivery/sui-code-v0.2
++          test "$(stat -c %s sui-code-v0.2-debug.apk)" = "$EXPECTED_APK_BYTES"
++          printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-v0.2-debug.apk | sha256sum --check --strict
++          test -s report.md
++          test -s changes.patch
++      - name: Verify upgrade identity and the original v0.1 signing certificate
++        shell: bash
++        run: |
++          set -euo pipefail
++          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
++          test -x "$signer"
++          old=.delivery/sui-code-v0.1/sui-code-v0.1-debug.apk
++          new=.delivery/sui-code-v0.2/sui-code-v0.2-debug.apk
++          printf '%s  %s\n' 1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06 "$old" | sha256sum --check --strict
++          old_cert=$("$signer" verify --print-certs "$old" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          new_cert=$("$signer" verify --print-certs "$new" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          test "$old_cert" = "$new_cert"
++          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
++          "$(dirname "$signer")/aapt" dump badging "$new" > "$RUNNER_TEMP/v02-badging.txt"
++          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070800' versionName='1.7.7-sui.0.2'" "$RUNNER_TEMP/v02-badging.txt"
++          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/v02-badging.txt"
++      - name: Upload original APK, report and source patch
++        id: upload
++        uses: actions/upload-artifact@v4
++        with:
++          name: sui-code-v0.2-java-quickrun-debug
++          path: |
++            .delivery/sui-code-v0.2/sui-code-v0.2-debug.apk
++            .delivery/sui-code-v0.2/report.md
++            .delivery/sui-code-v0.2/changes.patch
++          if-no-files-found: error
++          include-hidden-files: true
++          compression-level: 0
++          retention-days: 30
++      - name: Download uploaded artifact for verification
++        uses: actions/download-artifact@v4
++        with:
++          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
++          path: ${{ runner.temp }}/sui-code-v0.2-roundtrip
++          merge-multiple: true
++      - name: Verify downloaded APK and report delivery links
++        shell: bash
++        env:
++          DOWNLOAD_DIR: ${{ runner.temp }}/sui-code-v0.2-roundtrip
++          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
++          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
++          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
++        run: |
++          set -euo pipefail
++          test "$(find "$DOWNLOAD_DIR" -type f | wc -l)" -eq 3
++          test "$(stat -c %s "$DOWNLOAD_DIR/sui-code-v0.2-debug.apk")" = "$EXPECTED_APK_BYTES"
++          (cd "$DOWNLOAD_DIR" && printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-v0.2-debug.apk | sha256sum --check --strict)
++          for name in sui-code-v0.2-debug.apk report.md changes.patch; do
++            cmp ".delivery/sui-code-v0.2/$name" "$DOWNLOAD_DIR/$name"
++          done
++          {
++            echo '## Original v0.2 delivery verified'
++            printf '[Download artifact](%s) · [Workflow run](%s)\n\n' "$ARTIFACT_URL" "$RUN_URL"
++            printf 'APK size: **%s bytes**\n\n' "$EXPECTED_APK_BYTES"
++            printf 'APK SHA-256: `%s`\n\n' "$EXPECTED_APK_SHA256"
++            printf 'Artifact ID: `%s`\n\n' "$ARTIFACT_ID"
++            echo 'Upload/download round-trip passed: all three files match byte for byte. No APK rebuild or GitHub Release.'
++          } >> "$GITHUB_STEP_SUMMARY"
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 0d38ce1..bfd070b 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -96,7 +96,7 @@ android {
+         applicationId = jcodeApplicationId
+         minSdk = 33
+         targetSdk = 33
+-        versionCode = jcodeVersionCode
++        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: jcodeVersionCode
+         versionName = jcodeVersionName
+ 
+         buildConfigField("String", "UPDATE_CHANNEL", "\"$jcodeUpdateChannel\"")
+diff --git a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+index cb6b221..ceb0e36 100644
+--- a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
++++ b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+@@ -942,7 +942,8 @@ fun JCodeApp(
+             onScanFonts = viewModel::refreshEnvironmentFonts,
+         )
+     }
+-    val editorSaveActions = remember(viewModel) {
++    val quickRunActive by viewModel.javaQuickRun.active.collectAsStateWithLifecycle()
++    val editorSaveActions = remember(viewModel, quickRunActive) {
+         EditorSaveActions(
+             onUndo = viewModel::undoActiveTab,
+             onRedo = viewModel::redoActiveTab,
+@@ -950,7 +951,11 @@ fun JCodeApp(
+             onSaveAll = viewModel::saveAllTabs,
+             onFormat = viewModel::formatActiveTab,
+             onSaveAllAwait = viewModel::saveAllDirtyAwait,
+-        )
++        ).apply {
++            onQuickRun = viewModel::quickRunActiveFile
++            onStopQuickRun = viewModel.javaQuickRun::stop
++            this.quickRunActive = quickRunActive
++        }
+     }
+     // Completion items for the focused file, resolved from its installed language pack (if any).
+     val activeFileName = editorGroup.activeTab?.filePath?.name
+@@ -1703,7 +1708,7 @@ fun JCodeApp(
+         LocalPendingReload provides pendingReloadUi,
+         LocalRunConfigPresets provides contributedRunPresets,
+         LocalSetupTerminalSessionId provides setupTerminalSessionId,
+-        LocalSetupTerminalFocusRequests provides viewModel.setupTerminalRunner.focusRequests,
++        LocalSetupTerminalFocusRequests provides remember(viewModel) { kotlinx.coroutines.flow.merge(viewModel.setupTerminalRunner.focusRequests, viewModel.javaQuickRun.focusRequests) },
+         LocalDebugSession provides debugSessionUi,
+         LocalPerformanceSettings provides performanceSettings,
+         LocalEnvVarSettings provides envVarSettings,
+@@ -2666,6 +2671,7 @@ private fun JCodeShell(
+             }
+         }
+     }
++    val nativeEnvironmentManager = remember(appContext) { dev.blamspot.jcode.core.distro.DistroServiceLocator.distroService(appContext).nativeEnvironmentManager }
+     val setupTerminalSessionId = LocalSetupTerminalSessionId.current
+     LaunchedEffect(setupTerminalSessionId) {
+         val id = setupTerminalSessionId ?: return@LaunchedEffect
+@@ -2939,6 +2945,11 @@ private fun JCodeShell(
+     // Stop the current run: Ctrl-C the run terminal (graceful server/build shutdown) and reset run
+     // state. The terminal session is kept so its output stays visible and a re-run can reuse it.
+     fun handleStopRun() {
++        if (editorSaveActionsLocal.quickRunActive && editorSaveActionsLocal.onStopQuickRun()) {
++            terminalSessionIds = terminalSessionIds.filter { terminalSessionManager.getSession(it) != null }
++            if (selectedTerminalSessionId !in terminalSessionIds) selectedTerminalSessionId = terminalSessionIds.firstOrNull().orEmpty()
++            return
++        }
+         OutputLog.append("■ Stopped run")
+         runSessionIds.forEach { id ->
+             if (id in terminalSessionIds && terminalSessionManager.getSession(id) != null) {
+@@ -2951,6 +2962,11 @@ private fun JCodeShell(
+     }
+ 
+     fun closeTerminalSession(sessionId: String) {
++        if (sessionId == setupTerminalSessionId && nativeEnvironmentManager.state.value.installing) {
++            nativeEnvironmentManager.cancel()
++            scope.launch { snackbarHostState.showSnackbar("Package cancellation requested. Setup stays open until apt/dpkg reaches a safe boundary.") }
++            return
++        }
+         val parentId = terminalSessionManager.relocationParentOf(sessionId)
+         // Closing a parent strands its blocked relocated child(ren); close them first (this recurses and
+         // mutates terminalSessionIds), then compute the remaining list from the current state.
+@@ -2973,16 +2989,18 @@ private fun JCodeShell(
+ 
+     fun closeAllTerminalSessions() {
+         // Kill every live PTY (the tracked ids may drift from the manager's sessions), then clear state.
+-        val ids = (terminalSessionIds + terminalSessionManager.sessions.keys).distinct()
++        val packageSession = setupTerminalSessionId?.takeIf { nativeEnvironmentManager.state.value.installing }
++        if (packageSession != null) nativeEnvironmentManager.cancel()
++        val ids = (terminalSessionIds + terminalSessionManager.sessions.keys).distinct().filterNot { it == packageSession }
+         ids.forEach { id ->
+             terminalSessionManager.closeSession(id)
+             TerminalSessionHost.onSessionStopped(id)
+             terminalSessionManager.clearRelocation(id)
+             onRunSessionGone(id)
+         }
+-        terminalSessionIds = emptyList()
+-        terminalTitles.clear()
+-        selectedTerminalSessionId = ""
++        terminalSessionIds = listOfNotNull(packageSession).filter { terminalSessionManager.getSession(it) != null }
++        terminalTitles.keys.retainAll(terminalSessionIds.toSet())
++        selectedTerminalSessionId = terminalSessionIds.firstOrNull().orEmpty()
+     }
+ 
+     // A `.vsix` extension calling vscode.window.createTerminal / sendText / show. The extension host
+@@ -3652,7 +3670,7 @@ private fun JCodeShell(
+                                 topBarRunConfigs.getOrNull(index)?.let { config -> handleRun(project, config) }
+                             }
+                         },
+-                        isRunning = runningProjectId != null,
++                        isRunning = runningProjectId != null || editorSaveActionsLocal.quickRunActive,
+                         terminalBusy = terminalBusy,
+                         terminalHasUnseen = terminalHasUnseen,
+                         terminalSessions = terminalInstances,
+@@ -4322,6 +4340,20 @@ private fun WorkspacePanel(
+     modifier: Modifier = Modifier,
+ ) {
+     val context = LocalContext.current
++    val protectedProjectRoots by workspaceManager.registeredLocalRoots.collectAsStateWithLifecycle()
++    var browseInternalFiles by rememberSaveable { mutableStateOf(false) }
++    val internalRoot = remember(context) {
++        dev.blamspot.jcode.fs.InternalFiles.root(context.filesDir)
++    }
++    val internalProject = remember(internalRoot) {
++        Project(dev.blamspot.jcode.fs.InternalFiles.ROOT_NODE_ID, dev.blamspot.jcode.fs.ProjectKind.Local, internalRoot.path, "Internal Files", "/workspace", 0)
++    }
++    LaunchedEffect(internalRoot) {
++        if (!internalRoot.isDirectory) onSnackbar("Internal Files is unavailable: check free space and app storage permissions.", null, null)
++    }
++    val internalAction = remember { MainViewModel.ShellContribution("sui-code", "files.internalRoot", "Internal Files") }
++    val activeProjectAction = remember { MainViewModel.ShellContribution("sui-code", "files.activeProject", "Current Project Files") }
++
+ 
+     Surface(
+         modifier = modifier,
+@@ -4340,10 +4372,16 @@ private fun WorkspacePanel(
+                 scmAvailable = installedExtensions.hasScmClient(),
+                 vmManagerAvailable = installedExtensions.hasVmManagerClient(),
+                 onSelectTool = onSelectTool,
+-                onCreateProject = onCreateProject,
++                onCreateProject = { browseInternalFiles = false; onCreateProject() },
+                 onOpenExternalFolder = onOpenExternalFolder,
+-                contributedDrawerActions = contributedDrawerActions,
+-                onDrawerAction = onDrawerAction,
++                contributedDrawerActions = listOf(internalAction) + (if (selectedProject != null) listOf(activeProjectAction) else emptyList()) + contributedDrawerActions,
++                onDrawerAction = { action ->
++                    when (action.id) {
++                        "files.internalRoot" -> { browseInternalFiles = true; onSelectTool(WorkbenchTool.Explorer) }
++                        "files.activeProject" -> { browseInternalFiles = false; onSelectTool(WorkbenchTool.Explorer) }
++                        else -> onDrawerAction(action)
++                    }
++                },
+                 onCloseWorkspace = onCloseWorkspace,
+                 onCloseProject = onCloseProject,
+                 onCollapseSidebar = onCollapseSidebar,
+@@ -4363,7 +4401,7 @@ private fun WorkspacePanel(
+                                 ProjectRoster(
+                                     projects = rosterProjects,
+                                     selectedProjectId = selectedProject?.id ?: -1L,
+-                                    onOpenProject = onOpenProject,
++                                    onOpenProject = { project -> browseInternalFiles = false; onOpenProject(project) },
+                                     onRenameProject = onRenameProject,
+                                     onRemoveProject = onRemoveProject,
+                                     onOpenProjectSettings = { id -> onSelectProject(id); onOpenProjectConfig() },
+@@ -4373,7 +4411,22 @@ private fun WorkspacePanel(
+                             }
+ 
+                             when {
+-                                selectedProject != null -> {
++                                selectedProject == null || browseInternalFiles -> {
++                                    CompositionLocalProvider(dev.blamspot.jcode.feature.explorer.LocalProtectedProjectRoots provides protectedProjectRoots) {
++                                    ExplorerFeature.Content(
++                                        workspace = null,
++                                        project = internalProject,
++                                        fs = workspaceManager.fsFor(internalProject.fsPath),
++                                        context = context,
++                                        modifier = Modifier.weight(1f),
++                                        viewMode = explorerViewModeOf(effectiveConfig.explorer.viewMode),
++                                        autoRefreshEnabled = explorerAutoRefresh,
++                                        onFileSelected = onOpenFile,
++                                        onSnackbar = { message -> onSnackbar(message, null, null) },
++                                    )
++                                    }
++                                }
++                                else -> {
+                                     // Key on id + location so roster mutations never remount/reload the tree,
+                                     // but a REUSED row id (SQLite hands the deleted max rowid to the next
+                                     // insert — routine in the single-slot Default workspace) still remounts
+@@ -4396,13 +4449,6 @@ private fun WorkspacePanel(
+                                         }
+                                     }
+                                 }
+-                                // User Workspace with nothing selected: roster only, tree hidden.
+-                                inUserWorkspace -> Spacer(modifier = Modifier.weight(1f))
+-                                // Default Workspace with nothing open: says so, and leaves the doing
+-                                // to the header's + and folder buttons right above it.
+-                                else -> Box(modifier = Modifier.weight(1f)) {
+-                                    WorkspaceEmptyState(workspace = workspace)
+-                                }
+                             }
+                         }
+                     }
+diff --git a/app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt b/app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt
+new file mode 100644
+index 0000000..3d354b7
+--- /dev/null
++++ b/app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt
+@@ -0,0 +1,118 @@
++package dev.blamspot.jcode
++
++import android.content.Context
++import dev.blamspot.jcode.core.distro.DistroBind
++import dev.blamspot.jcode.core.distro.DistroService
++import dev.blamspot.jcode.core.distro.QuickRunFileMount
++import dev.blamspot.jcode.core.distro.QuickRunGate
++import dev.blamspot.jcode.core.distro.QuickRunLanguages
++import dev.blamspot.jcode.core.distro.prepareQuickRun
++import java.io.File
++import java.util.UUID
++import java.util.concurrent.atomic.AtomicLong
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.delay
++import kotlinx.coroutines.ensureActive
++import kotlinx.coroutines.flow.MutableSharedFlow
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.asSharedFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.launch
++import kotlin.coroutines.coroutineContext
++
++/** Owns only QuickRun sessions; ProjectRunner and Setup sessions are never stopped or reused. */
++class JavaQuickRunController(
++    private val context: Context,
++    private val distro: DistroService,
++    private val scope: CoroutineScope,
++    private val message: suspend (String) -> Unit,
++) {
++    private val gate = QuickRunGate()
++    private val generation = AtomicLong()
++    private val mutableActive = MutableStateFlow(false)
++    val active = mutableActive.asStateFlow()
++    private val focus = MutableSharedFlow<String>(extraBufferCapacity = 1)
++    val focusRequests = focus.asSharedFlow()
++    private var job: Job? = null
++    @Volatile private var sessionId: String? = null
++    private val terminals get() = TerminalSessionHost.manager(context)
++
++    fun start(file: File, repeatCount: Int, save: suspend () -> Boolean): Boolean {
++        val adapter = QuickRunLanguages.forFile(file.name) ?: return false
++        if (!gate.begin(repeatCount)) return true
++        val ticket = generation.incrementAndGet()
++        mutableActive.value = true
++        job = scope.launch {
++            try {
++                check(distro.isRuntimeReady()) { "QuickRun requires the existing Ubuntu environment. Finish environment setup first." }
++                val runtime = distro.environmentState.value.runtime
++                val path = prepareQuickRun(save) {
++                    val actual = file.canonicalFile
++                    check(actual.isFile && actual.canRead()) { "QuickRun cannot read the saved source file." }
++                    actual.path
++                }
++                coroutineContext.ensureActive()
++                check(distro.environmentState.value.runtime.selectedDistro.id == runtime.selectedDistro.id) { "Ubuntu environment changed while saving. Run again." }
++                sessionId?.let { close(it) }
++                val actual = File(path)
++                val token = UUID.randomUUID().toString()
++                val mount = QuickRunFileMount.forFile(actual)
++                val guestFile = mount.guestFile
++                val scriptPath = "/tmp/sui-quickrun-$token.sh"
++                val mountPoint = File(distro.activeRootfsPath(), "sui-quickrun")
++                check(mountPoint.isDirectory || mountPoint.mkdirs()) { "Cannot prepare the QuickRun mount point in Ubuntu." }
++                check(distro.stageGuestFile(scriptPath, adapter.command(guestFile))) { "Cannot stage the QuickRun script in Ubuntu." }
++                val session = terminals.createOwnedSession(
++                    distroId = runtime.selectedDistro.id,
++                    binds = listOf(DistroBind(mount.hostDirectory.path, "/sui-quickrun")),
++                    workdir = mount.guestDirectory,
++                    user = runtime.user,
++                    rootfsArch = runtime.selectedDistro.arch,
++                    label = "${adapter.id} · ${actual.name}",
++                    processOwner = "sui-quickrun:$token",
++                ) ?: error("Cannot create the QuickRun terminal (check Ubuntu and the session limit).")
++                sessionId = session.id
++                TerminalSessionHost.onSessionStarted(context, session.id, session.label)
++                OutputLog.append("[QuickRun] ${actual.path}")
++                OutputLog.captureSession(session.id)
++                terminals.sendInput(session.id, "/bin/bash $scriptPath; result=\$?; rm -f $scriptPath; printf '\\033]7713;quickrun;%s\\007' \"\$result\"\n")
++                focus.emit(session.id)
++                while (generation.get() == ticket && mutableActive.value && terminals.getSession(session.id) != null) delay(150)
++            } catch (cancel: CancellationException) {
++                throw cancel
++            } catch (error: Exception) {
++                message(error.message ?: "Native QuickRun failed.")
++            } finally {
++                if (generation.get() == ticket) { mutableActive.value = false; gate.finish() }
++            }
++        }
++        return true
++    }
++
++    fun complete(id: String, payload: String) {
++        if (id == sessionId && payload.substringBefore(';') == "quickrun") {
++            mutableActive.value = false
++            gate.finish()
++        }
++    }
++
++    /** Closing invokes the existing tagged-tree cleanup, including Java children ignoring SIGINT. */
++    fun stop(): Boolean {
++        val wasActive = mutableActive.value
++        generation.incrementAndGet()
++        job?.cancel()
++        sessionId?.let { close(it) }
++        sessionId = null
++        mutableActive.value = false
++        gate.finish()
++        return wasActive
++    }
++
++    private fun close(id: String) {
++        OutputLog.releaseSession(id)
++        terminals.closeSession(id)
++        TerminalSessionHost.onSessionStopped(id)
++    }
++}
+diff --git a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
+index f0f9300..c5f0e6f 100644
+--- a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
++++ b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
+@@ -286,6 +286,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+     val scaffoldState = templateScaffolder.state
+ 
+     /** Shared "Setup" terminal in the right drawer that runs toolchain installs and scaffolds. */
++    val javaQuickRun = JavaQuickRunController(appContext, distroService, viewModelScope, ::emitMessage)
++
++    fun quickRunActiveFile(repeatCount: Int): Boolean {
++        val tab = _editorGroup.value.activeTab ?: return false
++        if (tab.isPage || tab.editorState == null) return false
++        return javaQuickRun.start(tab.filePath, repeatCount) { saveTabAwait(tab) }
++    }
++
+     val setupTerminalRunner = SetupTerminalRunner(appContext, distroService)
+ 
+     private val _runTerminalCompletions = MutableSharedFlow<Pair<String, Int>>(extraBufferCapacity = 16)
+@@ -298,6 +306,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+     init {
+         TerminalSessionHost.manager(appContext).onTaskComplete = { sessionId, payload ->
+             setupTerminalRunner.handleTaskComplete(sessionId, payload)
++            javaQuickRun.complete(sessionId, payload)
+             _runTerminalCompletions.tryEmit(sessionId to (payload.substringAfter(';').trim().toIntOrNull() ?: -1))
+         }
+         TerminalSessionHost.manager(appContext).onTaskProgress = setupTerminalRunner::handleTaskProgress
+@@ -5343,6 +5352,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+ 
+     /** Reap every runtime service (called on project/workspace close and ViewModel teardown). */
+     fun stopAllRuntimeServices() {
++        javaQuickRun.stop()
+         runtimeServices.values.forEach { GuestProcessTree.destroy(it) }
+         runtimeServices.clear()
+     }
+@@ -5355,6 +5365,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+      * request survives the immediate [Runtime.exit], which the system carries out in a new process.
+      */
+     fun restartApp() {
++        if (distroService.nativeEnvironmentManager.state.value.installing) {
++            distroService.nativeEnvironmentManager.cancel()
++            viewModelScope.launch { emitMessage("Restart postponed: wait for apt/dpkg to reach a safe cancellation boundary.") }
++            return
++        }
+         runCatching { flushSessionNow() }
+         runCatching { stopAllRuntimeServices() }
+         runCatching { dev.blamspot.jcode.workbench.ScmWebViewHolder.destroyAll() }
+diff --git a/app/src/main/java/dev/blamspot/jcode/OutputLog.kt b/app/src/main/java/dev/blamspot/jcode/OutputLog.kt
+index 31e81f3..4782c65 100644
+--- a/app/src/main/java/dev/blamspot/jcode/OutputLog.kt
++++ b/app/src/main/java/dev/blamspot/jcode/OutputLog.kt
+@@ -56,6 +56,14 @@ object OutputLog {
+         synchronized(lock) { captured = captured + sessionId }
+     }
+ 
++    /** Retire one capture without resetting another owner's running project output. */
++    fun releaseSession(sessionId: String) {
++        synchronized(lock) {
++            captured = captured - sessionId
++            partial.remove(sessionId)
++        }
++    }
++
+     /** Append an app-authored status line (run lifecycle, snackbar messages, errors). */
+     fun append(text: String, kind: OutputKind = OutputKind.Info) {
+         synchronized(lock) { addLine(OutputLine(text, kind)) }
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
+index 23d47c9..114a856 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
+@@ -306,8 +306,12 @@ internal fun WorkbenchTopBar(
+             // Run toggles to Stop while a run is active. A tap runs the single/first config; with more
+             // than one config it opens a picker instead. Long-press always opens the menu — the list of
+             // run configs to launch, plus the debug/session controls.
+-            // Only shown when a project is open and focused — there's nothing to run otherwise.
+-            if (selectedProject != null) {
++            // A running single-file QuickRun also needs the existing Stop control without a project.
++            val nativeRun = dev.blamspot.jcode.design.LocalEditorSaveActions.current
++            val nativeFile = activeTab?.takeIf { !it.isPage }?.filePath?.name?.let {
++                dev.blamspot.jcode.core.distro.QuickRunLanguages.forFile(it) != null
++            } == true
++            if (selectedProject != null || isRunning || nativeFile) {
+                 var runMenuOpen by remember { mutableStateOf(false) }
+                 val hasMultipleRuns = runConfigNames.size > 1
+                 // A debug session owns this button while it lasts, but it stays a three-state control:
+@@ -338,7 +342,7 @@ internal fun WorkbenchTopBar(
+                                 debugging -> debug.onStop()
+                                 isRunning -> onStop()
+                                 hasMultipleRuns -> runMenuOpen = true
+-                                else -> onRun()
++                                else -> if (selectedProject == null && nativeFile) nativeRun.onQuickRun(0) else onRun()
+                             }
+                         },
+                         active = isRunning || debugging,
+@@ -347,7 +351,8 @@ internal fun WorkbenchTopBar(
+                     CompactContextMenu(
+                         expanded = runMenuOpen,
+                         onDismissRequest = { runMenuOpen = false },
+-                        quickActions = listOf(
++                        quickActions = listOfNotNull(
++                            if (nativeFile) ContextAction(JCodeIcon.Run, "Run current file", enabled = !nativeRun.quickRunActive) { nativeRun.onQuickRun(0) } else null,
+                             // The session controls, live only while it is paused — stepping a running
+                             // debuggee is not a thing, and these were dead placeholders before the
+                             // debugger existed.
+@@ -361,7 +366,7 @@ internal fun WorkbenchTopBar(
+                             if (debugging) {
+                                 ContextAction(JCodeIcon.Stop, "Stop debugging") { debug.onStop() }
+                             } else {
+-                                ContextAction(JCodeIcon.Rerun, "Rerun") { onRerun() }
++                                ContextAction(JCodeIcon.Rerun, "Rerun") { if (selectedProject == null && nativeFile) nativeRun.onQuickRun(0) else onRerun() }
+                             },
+                         ),
+                         // Each run config as its own row — tap to launch that one.
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
+index 12f9312..90e89bf 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
+@@ -89,7 +89,7 @@ internal val LocalExtensionDevState = compositionLocalOf { ExtensionDevState() }
+ 
+ /** Session id of the background "Setup" terminal (toolchain installs / project scaffolds), or null
+  *  while none has been started. Same register-limit rationale as above. */
+-internal val LocalSetupTerminalFocusRequests = compositionLocalOf<kotlinx.coroutines.flow.SharedFlow<String>?> { null }
++internal val LocalSetupTerminalFocusRequests = compositionLocalOf<kotlinx.coroutines.flow.Flow<String>?> { null }
+ 
+ internal val LocalSetupTerminalSessionId = compositionLocalOf<String?> { null }
+ 
+diff --git a/app/src/test/java/dev/blamspot/jcode/InternalFilesQuickRunIntegrationTest.kt b/app/src/test/java/dev/blamspot/jcode/InternalFilesQuickRunIntegrationTest.kt
+new file mode 100644
+index 0000000..ec28964
+--- /dev/null
++++ b/app/src/test/java/dev/blamspot/jcode/InternalFilesQuickRunIntegrationTest.kt
+@@ -0,0 +1,49 @@
++package dev.blamspot.jcode
++
++import dev.blamspot.jcode.core.distro.*
++import dev.blamspot.jcode.fs.*
++import java.io.File
++import java.nio.file.Files
++import java.util.concurrent.TimeUnit
++import kotlinx.coroutines.runBlocking
++import org.junit.Assert.*
++import org.junit.Test
++
++/** Real local save -> native dispatcher -> real tool execution, without any Workspace or Project. */
++class InternalFilesQuickRunIntegrationTest {
++    @Test fun internalFilesSaveThenRunAllFourLanguagesWithoutAProject() = runBlocking {
++        val files = Files.createTempDirectory("internal-integration-").toFile()
++        try {
++            val root = InternalFiles.root(files)
++            val folder = File(root,"中文 ' ;/deep/subfolder").apply { mkdirs() }
++            val preserved = File(root,"existing-project/data.txt").apply { parentFile!!.mkdirs(); writeText("preserve me") }
++            val cases = listOf(
++                "hello.c" to "#include <stdio.h>\nint main(void) { puts(\"C-SAVED\"); }",
++                "hello.cpp" to "#include <iostream>\nint main() { std::cout << \"CPP-SAVED\" << std::endl; }",
++                "hello.py" to "print('PYTHON-SAVED')\n",
++                "HelloWorld.java" to "public class HelloWorld { public static void main(String[] a) { System.out.println(\"JAVA-SAVED\"); } }",
++            )
++            val javaEnv = File(files,"test-java.env").apply {
++                val jdk = System.getenv("SUI_QUICKRUN_TEST_JAVA_HOME") ?: System.getProperty("java.home")
++                writeText("export JAVA_HOME='${jdk.replace("'", "'\\''")}'\n")
++            }
++            for ((name, text) in cases) {
++                val document = File(folder,name).apply { writeText("stale content must not run") }
++                val path = prepareQuickRun({ PosixFs().write(FsPath.Local(document),text.toByteArray()); true }) { document.canonicalPath }
++                val adapter = QuickRunLanguages.forFile(name) ?: error("Missing adapter")
++                val command = adapter.command(path).replace("MANAGED_ENV=/opt/sui-code/java.env", "MANAGED_ENV='${javaEnv.path}'")
++                val script = File(files,"runner.sh").apply { writeText(command) }
++                val output = File(files,"output.txt")
++                val process = ProcessBuilder("bash",script.path).redirectErrorStream(true).redirectOutput(output).start()
++                process.outputStream.close()
++                assertTrue("Timed out: $name",process.waitFor(45,TimeUnit.SECONDS))
++                assertEquals(output.readText(),0,process.exitValue())
++                assertTrue(output.readText().contains("-SAVED"))
++                assertEquals(text,document.readText())
++            }
++            assertEquals("preserve me",preserved.readText())
++            assertFalse(root.walk().any { it.extension in setOf("class","o","pyc") || it.name=="program" })
++            assertEquals(root.canonicalPath,InternalFiles.root(File(files.path)).canonicalPath)
++        } finally { files.deleteRecursively() }
++    }
++}
+diff --git a/app/src/test/java/dev/blamspot/jcode/ProjectRunnerQuickRunRegressionTest.kt b/app/src/test/java/dev/blamspot/jcode/ProjectRunnerQuickRunRegressionTest.kt
+new file mode 100644
+index 0000000..3eeaf38
+--- /dev/null
++++ b/app/src/test/java/dev/blamspot/jcode/ProjectRunnerQuickRunRegressionTest.kt
+@@ -0,0 +1,33 @@
++package dev.blamspot.jcode
++
++import dev.blamspot.jcode.core.config.RunConfig
++import dev.blamspot.jcode.core.config.RunConfigTerminal
++import dev.blamspot.jcode.fs.Project
++import dev.blamspot.jcode.fs.ProjectKind
++import dev.blamspot.jcode.run.ProjectRunner
++import java.io.File
++import java.nio.file.Files
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Test
++
++/** An existing non-Java run config still stages and executes without the managed Java environment. */
++class ProjectRunnerQuickRunRegressionTest {
++    @Test fun projectRecipeExecutesUnchangedWithoutJavaEnvironment() {
++        val root = Files.createTempDirectory("project-run-regression").toFile()
++        try {
++            val project = Project(1, ProjectKind.Local, root.path, "Existing project", root.path, 0)
++            val config = RunConfig("Existing run", 0, terminals = listOf(RunConfigTerminal("Console", "printf 'PROJECT_RUN_OK\\n'\n")))
++            val terminal = ProjectRunner.runConfigToPlan(config).terminals.single()
++            val invocation = ProjectRunner.runInvocation(project, terminal)
++            val process = ProcessBuilder("bash", "-c", invocation).apply {
++                environment().remove("JAVA_HOME")
++                redirectErrorStream(true)
++            }.start()
++            val output = process.inputStream.bufferedReader().readText()
++            assertEquals(0, process.waitFor())
++            assertEquals("PROJECT_RUN_OK\n", output)
++            assertFalse(File(root, ".jcode/run-console.sh").readText().contains("/opt/sui-code/java.env"))
++        } finally { root.deleteRecursively() }
++    }
++}
+diff --git a/core/design/src/main/java/dev/blamspot/jcode/design/EditorSaveActions.kt b/core/design/src/main/java/dev/blamspot/jcode/design/EditorSaveActions.kt
+index 64a51f0..4c4b471 100644
+--- a/core/design/src/main/java/dev/blamspot/jcode/design/EditorSaveActions.kt
++++ b/core/design/src/main/java/dev/blamspot/jcode/design/EditorSaveActions.kt
+@@ -17,6 +17,11 @@ class EditorSaveActions(
+      *  only proceeds once the buffers are safely on disk. Returns true only if every tab is now clean
+      *  (false if any couldn't be saved, so the caller can avoid tearing down unsaved work). */
+     val onSaveAllAwait: suspend () -> Boolean = { true },
+-)
++) {
++    // Additive properties keep the exported design SDK's existing constructor ABI intact.
++    var onQuickRun: (Int) -> Boolean = { false }
++    var onStopQuickRun: () -> Boolean = { false }
++    var quickRunActive: Boolean = false
++}
+ 
+ val LocalEditorSaveActions = compositionLocalOf { EditorSaveActions() }
+diff --git a/core/design/src/test/java/dev/blamspot/jcode/design/ExtensionAbiSurfaceTest.kt b/core/design/src/test/java/dev/blamspot/jcode/design/ExtensionAbiSurfaceTest.kt
+index 5828a72..61b5e50 100644
+--- a/core/design/src/test/java/dev/blamspot/jcode/design/ExtensionAbiSurfaceTest.kt
++++ b/core/design/src/test/java/dev/blamspot/jcode/design/ExtensionAbiSurfaceTest.kt
+@@ -24,6 +24,16 @@ import org.junit.Test
+  */
+ class ExtensionAbiSurfaceTest {
+ 
++    @Test
++    fun `editor save actions retains the pre QuickRun constructor descriptor`() {
++        val zero = Class.forName("kotlin.jvm.functions.Function0")
++        val suspendZero = Class.forName("kotlin.jvm.functions.Function1")
++        assertNotNull(EditorSaveActions::class.java.getDeclaredConstructor(
++            zero, zero, zero, zero, zero, suspendZero,
++        ))
++    }
++
++
+     /**
+      * Every `dev.blamspot.jcode.design` class the published extensions reference.
+      *
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt
+index 80a701a..923ef28 100644
+--- a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt
+@@ -58,6 +58,7 @@ class DistroService(
+         appContext,
+         RootfsDownloader(tmpDir = File(appContext.filesDir, "tmp")),
+     )
++    val nativeEnvironmentManager by lazy { NativeEnvironmentManager(this) }
+     val javaEnvironmentManager by lazy { JavaEnvironmentManager(this) }
+ 
+     /** Java installs require the visible PTY runner, without an in-process fallback. */
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/GuestProcessTree.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/GuestProcessTree.kt
+index 7856919..a02b408 100644
+--- a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/GuestProcessTree.kt
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/GuestProcessTree.kt
+@@ -90,6 +90,17 @@ object GuestProcessTree {
+         pidsCarrying(INSTANCE_ENV, instance).forEach { runCatching { Os.kill(it, OsConstants.SIGKILL) } }
+     }
+ 
++    /** Stop one uniquely tagged terminal tree before its proot launcher is closed. Off-main only. */
++    fun terminateOwnerBlocking(owner: String) {
++        require(owner.startsWith("sui-quickrun:"))
++        QuickRunCleanup.stop(
++            owned = { pidsOwnedBy(owner).toSet() }, parents = ::parentByPid,
++            terminate = { runCatching { Os.kill(it, OsConstants.SIGTERM) } },
++            kill = { runCatching { Os.kill(it, OsConstants.SIGKILL) } },
++            pause = { Thread.sleep(20) },
++        )
++    }
++
+     /** Every app-owned process still running on [owner]'s behalf, whatever it is parented to now. */
+     fun pidsOwnedBy(owner: String): List<Int> = pidsCarrying(OWNER_ENV, owner)
+ 
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt
+index eb10295..c918cb7 100644
+--- a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt
+@@ -110,7 +110,7 @@ object JavaLanguageAdapter : NativeLanguageAdapter {
+     override fun command(guestFile: String): String {
+         require(guestFile.startsWith('/') && guestFile.endsWith(".java") && '\u0000' !in guestFile)
+         // Source-file launch handles packages and keeps generated classes off shared storage.
+-        return "set -e; . /opt/sui-code/java.env; exec \"\$JAVA_HOME/bin/java\" ${shellQuote(guestFile)}"
++        return JavaQuickRunScript.build(guestFile)
+     }
+ }
+ 
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeEnvironment.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeEnvironment.kt
+new file mode 100644
+index 0000000..95c3dce
+--- /dev/null
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeEnvironment.kt
+@@ -0,0 +1,107 @@
++package dev.blamspot.jcode.core.distro
++
++/** Fixed Ubuntu packages, never marketplace extensions or arbitrary shell entered by a user. */
++enum class NativeEnvironment(val key: String, val title: String, val packages: List<String>, val tool: String, val variable: String) {
++    C("c", "C (GCC)", listOf("gcc", "libc6-dev"), "gcc", "SUI_C"),
++    Cpp("cpp", "C++ (G++)", listOf("g++", "libc6-dev"), "g++", "SUI_CPP"),
++    Python("python", "Python 3", listOf("python3", "python3-venv", "python3-pip"), "python3", "SUI_PYTHON");
++
++    val catalogId get() = "sui-$key"
++    fun queryScript(): String = """
++        set -eu
++        . /etc/os-release
++        [ "${'$'}ID" = ubuntu ] || { echo 'Only the Ubuntu distribution package channel is supported.' >&2; exit 1; }
++        export LC_ALL=C
++        sudo -n apt-get -o Acquire::AllowInsecureRepositories=false -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update >&2
++        for p in ${packages.joinToString(" ")}; do
++            installed=${'$'}(dpkg-query -W -f='${'$'}{db:Status-Abbrev}${'$'}{Version}' "${'$'}p" 2>/dev/null || true)
++            case "${'$'}installed" in 'ii '*|'hi '*) installed=${'$'}{installed#* } ;; *) installed=- ;; esac
++            candidate=${'$'}(apt-cache policy "${'$'}p" | sed -n 's/^[[:space:]]*Candidate: //p' | head -1)
++            printf 'PKG\t%s\t%s\t%s\n' "${'$'}p" "${'$'}installed" "${'$'}candidate"
++        done
++        apt-cache policy ${packages.joinToString(" ")} >&2
++        dpkg --print-architecture
++    """.trimIndent()
++
++    fun smoke(toolPath: String): String = when (this) {
++        C, Cpp -> """
++            printf '%s\n' '#include <stdio.h>' 'int main(void) { puts("SUI_NATIVE_READY"); return 0; }' > "${'$'}TMP/main.${if (this == C) "c" else "cpp"}"
++            ${shellQuote(toolPath)} "${'$'}TMP/main.${if (this == C) "c" else "cpp"}" -o "${'$'}TMP/program"
++            [ "${'$'}("${'$'}TMP/program")" = SUI_NATIVE_READY ]
++        """.trimIndent()
++        Python -> "${shellQuote(toolPath)} -c 'import sys; assert sys.version_info.major == 3; print(\"SUI_NATIVE_READY\")'\n${shellQuote(toolPath)} -m venv \"\$TMP/venv\""
++    }
++}
++
++data class NativePackage(val name: String, val installed: String?, val candidate: String) {
++    init {
++        require(name.matches(Regex("[a-z0-9][a-z0-9+.-]*")))
++        require(candidate.matches(Regex("[A-Za-z0-9:.+~_-]+")))
++        require(installed == null || installed.matches(Regex("[A-Za-z0-9:.+~_-]+")))
++    }
++    val selected get() = installed ?: candidate
++}
++
++data class NativeInstallPlan(val language: NativeEnvironment, val packages: List<NativePackage>, val distroId: String, val architecture: String) {
++    init {
++        require(architecture in setOf("arm64", "amd64"))
++        require(packages.map { it.name } == language.packages)
++    }
++    val specifications get() = packages.joinToString(" ") { shellQuote("${it.name}=${it.selected}") }
++
++    fun script(cancelFile: String): String {
++        require(cancelFile.matches(Regex("/tmp/sui-env-cancel-[a-zA-Z0-9-]+")))
++        val lang = language
++        val existingSmoke = lang.smoke("/usr/bin/${lang.tool}").replace(shellQuote("/usr/bin/${lang.tool}"), "\"\$SELECTED\"")
++        return """
++            set -eu
++            umask 022
++            ENV_FILE=/opt/sui-code/${lang.key}.env
++            CANCEL=${shellQuote(cancelFile)}
++            check_cancel() { [ ! -f "${'$'}CANCEL" ] || { echo 'Cancelled at a safe boundary. Package operations already completed are retained; previous environment selection is unchanged.'; exit 130; }; }
++            mkdir -p /opt/sui-code
++            TMP=${'$'}(mktemp -d /opt/sui-code/.${lang.key}-install-XXXXXX)
++            trap 'rm -rf -- "${'$'}TMP"' EXIT
++            check_cancel
++            if [ -r "${'$'}ENV_FILE" ]; then
++                . "${'$'}ENV_FILE"
++                SELECTED="${'$'}{${lang.variable}:-}"
++                if [ -n "${'$'}SELECTED" ] && [ -x "${'$'}SELECTED" ] && "${'$'}SELECTED" --version; then
++                    $existingSmoke
++                    check_cancel
++                    echo 'Existing managed ${lang.title} is usable and preserved. No packages or environment files changed.'
++                    exit 0
++                fi
++            fi
++            echo '1/4 Repairing only pending package configuration, if any'
++            sudo -n dpkg --configure -a
++            check_cancel
++            echo '2/4 Downloading reviewed Ubuntu packages; apt verifies signed metadata and package hashes'
++            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false -o Acquire::AllowInsecureRepositories=false -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 --download-only --no-upgrade install $specifications
++            check_cancel
++            echo '3/4 Installing downloaded packages; cancellation waits for dpkg to finish safely'
++            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false --no-download --no-upgrade install $specifications
++            check_cancel
++            echo '4/4 Verifying tool and compiling/running a smoke program before activation'
++            /usr/bin/${lang.tool} --version
++            ${lang.smoke("/usr/bin/${lang.tool}")}
++            check_cancel
++            printf '%s\n' 'export ${lang.variable}=/usr/bin/${lang.tool}' > "${'$'}TMP/environment"
++            chmod 644 "${'$'}TMP/environment"
++            mv -f "${'$'}TMP/environment" "${'$'}ENV_FILE"
++            echo 'SUI_NATIVE_READY — ${lang.title}. Existing JDKs and system defaults were not replaced.'
++        """.trimIndent()
++    }
++
++    companion object {
++        fun parse(language: NativeEnvironment, distro: String, output: String): NativeInstallPlan {
++            val lines = output.lines()
++            val pkgs = lines.filter { it.startsWith("PKG\t") }.map { line ->
++                val values = line.split('\t')
++                require(values.size == 4) { "Invalid Ubuntu package metadata" }
++                NativePackage(values[1], values[2].takeUnless { it == "-" }, values[3])
++            }
++            return NativeInstallPlan(language, pkgs, distro, lines.lastOrNull { it in setOf("arm64", "amd64") } ?: error("Ubuntu architecture was not reported"))
++        }
++    }
++}
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeEnvironmentManager.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeEnvironmentManager.kt
+new file mode 100644
+index 0000000..ea3190b
+--- /dev/null
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeEnvironmentManager.kt
+@@ -0,0 +1,90 @@
++package dev.blamspot.jcode.core.distro
++
++import java.io.File
++import java.util.UUID
++import kotlinx.coroutines.*
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.update
++
++/** Shares the existing Setup PTY. Cancellation is cooperative across apt/dpkg safe boundaries. */
++class NativeEnvironmentManager(private val distro: DistroService) {
++    data class State(val busy: Boolean = false, val installing: Boolean = false, val plan: NativeInstallPlan? = null,
++        val message: String = "Query Ubuntu packages, review the versions, then confirm installation.", val log: String = "", val logPath: String? = null)
++    private val mutable = MutableStateFlow(State())
++    val state = mutable.asStateFlow()
++    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
++    private var job: Job? = null
++    @Volatile private var cancellationFile: File? = null
++
++    @Synchronized fun query(language: NativeEnvironment) {
++        if (job?.isActive == true) return
++        mutable.value = State(busy = true, message = "Refreshing signed Ubuntu package metadata…")
++        val runtime = distro.environmentState.value.runtime
++        job = scope.launch {
++            try {
++                check(distro.isRuntimeReady()) { "Complete the existing Ubuntu setup first." }
++                val result = distro.exec(language.queryScript(), timeoutMs = 240_000)
++                coroutineContext.ensureActive()
++                check(result.succeeded) { result.stderr.ifBlank { result.internalError ?: "Ubuntu package query failed." } }
++                val plan = NativeInstallPlan.parse(language, runtime.selectedDistro.id, result.stdout)
++                check(plan.architecture == runtime.selectedDistro.arch.rootfsKey) { "Ubuntu architecture does not match the selected environment." }
++                mutable.update { it.copy(plan = plan, log = result.stderr.takeLast(65536), message = "Review the Ubuntu package versions before installation. Installed versions are preserved.") }
++            } catch (cancel: CancellationException) { mutable.update { it.copy(message = "Query cancelled.") }; throw cancel
++            } catch (error: Exception) { mutable.update { it.copy(message = error.message ?: "Package query failed; retry when connected.") }
++            } finally { mutable.update { it.copy(busy = false) } }
++        }
++    }
++
++    @Synchronized fun install(plan: NativeInstallPlan) {
++        if (job?.isActive == true || plan != mutable.value.plan) return
++        job = scope.launch {
++            var poller: Job? = null
++            var logFile: File? = null
++            try {
++                check(distro.isRuntimeReady() && distro.environmentState.value.runtime.selectedDistro.id == plan.distroId) { "Ubuntu changed; query again." }
++                val runner = distro.interactiveJavaRunner ?: error("Setup terminal is unavailable; reopen the workbench.")
++                val token = UUID.randomUUID().toString()
++                val cancelPath = "/tmp/sui-env-cancel-$token"
++                cancellationFile = File(distro.activeRootfsPath(), cancelPath.removePrefix("/"))
++                val logPath = "/opt/sui-code/logs/${plan.language.key}-$token.log"
++                val file = File(distro.activeRootfsPath(), logPath.removePrefix("/")); logFile = file
++                mutable.update { it.copy(busy = true, installing = true, log = "", logPath = logPath, message = "Installing ${plan.language.title}. See Setup terminal; cancellation waits for a safe package boundary.") }
++                poller = scope.launch { while (true) {
++                    if (file.isFile) mutable.update { it.copy(log = tail(file)) }
++                    delay(750)
++                } }
++                val command = "mkdir -p /opt/sui-code/logs && /bin/bash -o pipefail -c " + shellQuote("/bin/bash -c ${shellQuote(plan.script(cancelPath))} 2>&1 | tee ${shellQuote(logPath)}")
++                val result = runner("${plan.language.title} environment", command, 2_100_000, plan.distroId)
++                    ?: error("Could not open Setup terminal. Nothing was installed silently.")
++                if (result.succeeded) scope.launch { runCatching { distro.checkSdkStatuses() } }
++                mutable.update { it.copy(message = when {
++                    result.succeeded -> "${plan.language.title} verified. QuickRun is ready; the Java environment is unchanged."
++                    result.exitCode == 130 -> "Cancelled at a safe package boundary. Completed package operations are retained. You can retry."
++                    else -> "Installation failed (${result.exitCode}). ${result.internalError.orEmpty()} Inspect the log and retry; no lock files will be deleted."
++                }) }
++            } catch (error: Exception) { mutable.update { it.copy(message = error.message ?: "Native environment setup failed.") }
++            } finally { withContext(NonCancellable) {
++                poller?.cancelAndJoin()
++                logFile?.takeIf { it.isFile }?.let { f -> mutable.update { it.copy(log = tail(f)) } }
++                cancellationFile?.delete(); cancellationFile = null
++                mutable.update { it.copy(busy = false, installing = false) }
++            } }
++        }
++    }
++
++    fun cancel() {
++        if (mutable.value.installing) {
++            val written = runCatching { (cancellationFile ?: error("No active installation")).writeText("cancel\n") }
++            if (written.isFailure) { mutable.update { it.copy(message = "Could not request cancellation. Keep Setup open and wait for the current package operation.") }; return }
++            mutable.update { it.copy(message = "Cancellation requested. Waiting for apt/dpkg to finish safely; do not force-close the Setup terminal.") }
++        } else job?.cancel()
++    }
++
++    private fun tail(file: File): String = runCatching {
++        java.io.RandomAccessFile(file, "r").use { input ->
++            input.seek((input.length() - 65536).coerceAtLeast(0))
++            ByteArray((input.length() - input.filePointer).toInt()).also { input.readFully(it) }.toString(Charsets.UTF_8)
++        }
++    }.getOrDefault("See Setup terminal for logs.")
++}
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeQuickRun.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeQuickRun.kt
+new file mode 100644
+index 0000000..9450951
+--- /dev/null
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/NativeQuickRun.kt
+@@ -0,0 +1,65 @@
++package dev.blamspot.jcode.core.distro
++
++object CLanguageAdapter : NativeLanguageAdapter {
++    override val id = "c"
++    override val extensions = setOf("c")
++    override fun command(guestFile: String) = NativeQuickRunScript.build(guestFile, "c", "gcc", "SUI_C", "-std=c17")
++}
++object CppLanguageAdapter : NativeLanguageAdapter {
++    override val id = "cpp"
++    override val extensions = setOf("cpp", "cc", "cxx", "C")
++    override fun command(guestFile: String) = NativeQuickRunScript.build(guestFile, "cpp", "g++", "SUI_CPP", "-std=c++20")
++}
++object PythonLanguageAdapter : NativeLanguageAdapter {
++    override val id = "python"
++    override val extensions = setOf("py")
++    override fun command(guestFile: String) = NativeQuickRunScript.build(guestFile, "python", "python3", "SUI_PYTHON", "")
++}
++
++internal object NativeQuickRunScript {
++    fun build(file: String, language: String, tool: String, variable: String, flags: String): String {
++        require(file.startsWith('/') && '\u0000' !in file)
++        val header = """
++            #!/bin/bash
++            set -u
++            ENV_FILE=/opt/sui-code/$language.env
++            if [ -r "${'$'}ENV_FILE" ]; then
++                unset $variable
++                . "${'$'}ENV_FILE" || { echo '[QuickRun environment error] Cannot load $language environment.' >&2; exit 78; }
++                TOOL="${'$'}{$variable:-}"
++            else
++                TOOL=/usr/bin/$tool
++                echo '[QuickRun] Using the existing Ubuntu /usr/bin/$tool; no managed override is configured.'
++            fi
++            [ -n "${'$'}TOOL" ] && [ -x "${'$'}TOOL" ] || { echo '[QuickRun environment error] Install $language through Toolchains; no automatic installation or fallback.' >&2; exit 78; }
++            "${'$'}TOOL" --version || { echo '[QuickRun environment error] The selected tool cannot run.' >&2; exit 78; }
++            cd -- ${shellQuote(file.substringBeforeLast('/').ifEmpty { "/" })} || exit 66
++            BUILD=${'$'}(mktemp -d /tmp/sui-quickrun-XXXXXX) || exit 73
++            trap 'rm -rf -- "${'$'}BUILD"' EXIT
++            trap 'exit 130' INT
++            trap 'exit 143' TERM
++            SOURCE=${shellQuote(file)}
++            cp -- "${'$'}SOURCE" "${'$'}BUILD/input" || { echo '[QuickRun file error] Cannot snapshot the saved file.' >&2; exit 66; }
++        """.trimIndent() + "\n"
++        val execution = if (language == "python") """
++            export PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
++            if ! "${'$'}TOOL" -c 'import sys,tokenize; compile(tokenize.open(sys.argv[1]).read(), sys.argv[2], "exec")' "${'$'}BUILD/input" "${'$'}SOURCE"; then
++                echo '[QuickRun compilation failed] Python syntax error' >&2; exit 65;
++            fi
++            echo '[QuickRun] Running Python; terminal input is connected'
++            "${'$'}TOOL" -u -c 'import sys,tokenize,os; original=sys.argv[2]; source=tokenize.open(sys.argv[1]).read(); sys.argv=[original]; sys.path[0]=os.path.dirname(original); namespace=sys.modules["__main__"].__dict__; namespace.update(__file__=original, __package__=None, __cached__=None, __spec__=None); exec(compile(source, original, "exec"), namespace)' "${'$'}BUILD/input" "${'$'}SOURCE"
++        """.trimIndent() else """
++            echo '[QuickRun] Compiling $language into a temporary directory'
++            if ! "${'$'}TOOL" $flags -Wall -Wextra "-ffile-prefix-map=${'$'}BUILD/input=${'$'}SOURCE" -iquote "${'$'}PWD" -x ${if (language == "c") "c" else "c++"} "${'$'}BUILD/input" -o "${'$'}BUILD/program"; then
++                echo '[QuickRun compilation failed]' >&2; exit 65;
++            fi
++            echo '[QuickRun] Running $language; terminal input is connected'
++            "${'$'}BUILD/program"
++        """.trimIndent()
++        return header + execution + "\n" + """
++            RESULT=${'$'}?
++            if [ "${'$'}RESULT" -ne 0 ]; then echo "[QuickRun runtime failed] exit ${'$'}RESULT" >&2; exit 70; fi
++            echo '[QuickRun completed] exit 0'
++        """.trimIndent() + "\n"
++    }
++}
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/QuickRun.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/QuickRun.kt
+new file mode 100644
+index 0000000..e83675e
+--- /dev/null
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/QuickRun.kt
+@@ -0,0 +1,126 @@
++package dev.blamspot.jcode.core.distro
++
++import java.util.concurrent.atomic.AtomicBoolean
++
++/** A registry, not a project recipe: future adapters can opt in without changing keyboard handling. */
++object QuickRunLanguages {
++    private val adapters: List<NativeLanguageAdapter> = listOf(JavaLanguageAdapter, CLanguageAdapter, CppLanguageAdapter, PythonLanguageAdapter)
++    fun forFile(name: String): NativeLanguageAdapter? = adapters.firstOrNull {
++        name.substringAfterLast('.', "") in it.extensions
++    }
++}
++
++class QuickRunGate {
++    private val held = AtomicBoolean(false)
++    fun begin(repeatCount: Int): Boolean = repeatCount == 0 && held.compareAndSet(false, true)
++    fun finish() { held.set(false) }
++}
++
++/** Saving must succeed before resolving a path or creating any process. Captures one editor tab. */
++suspend fun prepareQuickRun(save: suspend () -> Boolean, resolve: () -> String): String {
++    check(save()) { "QuickRun cancelled: the current file could not be saved, or changed during saving." }
++    return resolve()
++}
++
++/** Source launch preserves package/entry-point semantics and a real PTY stdin. javac preflight
++ * classifies compile errors; all its class output goes into a disposable directory, never the source. */
++object JavaQuickRunScript {
++    fun build(guestFile: String): String {
++        require(guestFile.startsWith('/') && guestFile.endsWith(".java") && '\u0000' !in guestFile)
++        val directory = guestFile.substringBeforeLast('/').ifEmpty { "/" }
++        return """
++            #!/bin/bash
++            set -u
++            fail_env() { echo "[QuickRun environment error] ${'$'}*" >&2; exit 78; }
++            MANAGED_ENV=/opt/sui-code/java.env
++            [ -r "${'$'}MANAGED_ENV" ] || fail_env 'Missing /opt/sui-code/java.env. Install Java in Toolchains; no fallback JDK will be used.'
++            unset JAVA_HOME
++            . "${'$'}MANAGED_ENV" || fail_env 'Cannot load managed Java environment.'
++            [ -n "${'$'}{JAVA_HOME:-}" ] || fail_env 'JAVA_HOME is not configured.'
++            [ -x "${'$'}JAVA_HOME/bin/java" ] && [ -x "${'$'}JAVA_HOME/bin/javac" ] || fail_env 'Managed java or javac is missing.'
++            "${'$'}JAVA_HOME/bin/java" -version || fail_env 'Managed Java cannot run.'
++            cd -- ${shellQuote(directory)} || { echo '[QuickRun file error] Cannot open source directory.' >&2; exit 66; }
++            [ -f ${shellQuote(guestFile)} ] && [ -r ${shellQuote(guestFile)} ] || { echo '[QuickRun file error] Source is not readable.' >&2; exit 66; }
++            BUILD=${'$'}(mktemp -d /tmp/sui-quickrun-XXXXXX) || exit 73
++            trap 'rm -rf -- "${'$'}BUILD"' EXIT
++            trap 'exit 130' INT
++            trap 'exit 143' TERM
++            mkdir "${'$'}BUILD/input" "${'$'}BUILD/classes" "${'$'}BUILD/source" || exit 73
++            INPUT="${'$'}BUILD/input/"${shellQuote(guestFile.substringAfterLast('/'))}
++            cp -- ${shellQuote(guestFile)} "${'$'}INPUT" || exit 66
++            echo '[QuickRun] Checking Java source (temporary output only)'
++            if ! "${'$'}JAVA_HOME/bin/javac" -proc:none -d "${'$'}BUILD/classes" "${'$'}INPUT"; then
++                echo '[QuickRun compilation failed]' >&2
++                exit 65
++            fi
++            # Java 27 requires a source path matching its package. Use the JDK parser, not a
++            # regex over Java comments/strings. Both the snapshot and generated classes stay private.
++            cat > "${'$'}BUILD/SuiQuickRunSource.java" <<'SUI_SOURCE_INFO'
++            import java.nio.file.*;
++            import java.util.*;
++            import javax.tools.*;
++            import com.sun.source.util.JavacTask;
++            public class SuiQuickRunSource {
++                public static void main(String[] args) throws Exception {
++                    var compiler = ToolProvider.getSystemJavaCompiler();
++                    if (compiler == null) throw new IllegalStateException("JDK compiler unavailable");
++                    try (var files = compiler.getStandardFileManager(null, null, null)) {
++                        var input = Path.of(args[0]);
++                        var task = (JavacTask) compiler.getTask(null, files, null, List.of("-proc:none"), null, files.getJavaFileObjects(input));
++                        var unit = task.parse().iterator().next();
++                        var base = Path.of(args[1]).toAbsolutePath().normalize();
++                        var folder = unit.getPackageName() == null ? base : base.resolve(unit.getPackageName().toString().replace('.', '/')).normalize();
++                        if (!folder.startsWith(base)) throw new IllegalArgumentException("Invalid package path");
++                        Files.createDirectories(folder);
++                        var source = folder.resolve(input.getFileName());
++                        Files.copy(input, source);
++                        System.out.print(source);
++                    }
++                }
++            }
++            SUI_SOURCE_INFO
++            RUN_SOURCE=${'$'}("${'$'}JAVA_HOME/bin/java" "${'$'}BUILD/SuiQuickRunSource.java" "${'$'}INPUT" "${'$'}BUILD/source") || {
++                echo '[QuickRun preparation failed] Cannot prepare Java source package.' >&2; exit 73;
++            }
++            echo '[QuickRun] Running Java source; terminal input is connected'
++            "${'$'}JAVA_HOME/bin/java" --class-path "${'$'}BUILD/classes" "${'$'}RUN_SOURCE"
++            RESULT=${'$'}?
++            if [ "${'$'}RESULT" -ne 0 ]; then
++                echo "[QuickRun runtime failed] Java exit code: ${'$'}RESULT" >&2
++                exit 70
++            fi
++            echo '[QuickRun completed] exit 0'
++        """.trimIndent() + "\n"
++    }
++}
++
++/** Shared, bounded shutdown policy; inventory is refreshed to catch descendants and detached children. */
++internal object QuickRunCleanup {
++    fun stop(
++        owned: () -> Set<Int>, parents: () -> Map<Int, Int>,
++        terminate: (Int) -> Unit, kill: (Int) -> Unit, pause: () -> Unit,
++    ) {
++        val initial = owned()
++        val ancestry = parents()
++        initial.filter { ancestry[it] !in initial }.forEach(terminate)
++        repeat(25) {
++            if (owned().isEmpty()) return
++            pause()
++        }
++        owned().forEach(kill)
++    }
++}
++
++/** PRoot separates host:guest at the first colon. Bind an unambiguous ancestor, then address
++ * colon-containing directories inside the guest rather than misparsing a legal source path. */
++data class QuickRunFileMount(val hostDirectory: java.io.File, val guestFile: String) {
++    val guestDirectory: String get() = guestFile.substringBeforeLast('/')
++    companion object {
++        fun forFile(file: java.io.File): QuickRunFileMount {
++            val actual = file.canonicalFile
++            var parent = actual.parentFile ?: error("Source has no parent directory")
++            while (':' in parent.path) parent = parent.parentFile ?: error("Cannot map this source directory into Ubuntu")
++            return QuickRunFileMount(parent, "/sui-quickrun/" + actual.relativeTo(parent).invariantSeparatorsPath)
++        }
++    }
++}
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt
+index f22c166..174826f 100644
+--- a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt
+@@ -33,7 +33,14 @@ internal class SdkCatalogLoader(
+             verifyScript = "test -f /opt/sui-code/java.env && . /opt/sui-code/java.env && test -x \"\$JAVA_HOME/bin/javac\"",
+             uninstallScript = "echo 'Managed JDK removal is not available in v0.1.'; exit 1",
+             supportedArches = listOf("arm64"),
+-        )) + document.list("entries").mapIndexedNotNull { index, rawEntry ->
++        )) + NativeEnvironment.entries.map { language -> SdkCatalogEntry(
++            id = language.catalogId, category = SdkCatalogCategory.Languages,
++            name = "${language.title} · Native QuickRun",
++            description = "Reviewed Ubuntu packages, verified runtime, safe cancellation and persistent installation logs.",
++            installScript = "echo 'Open the native environment detail page to review and confirm.'; exit 1",
++            verifyScript = "if [ -r /opt/sui-code/${language.key}.env ]; then . /opt/sui-code/${language.key}.env && test -x \"\${${language.variable}:-}\"; else test -x /usr/bin/${language.tool}; fi",
++            uninstallScript = "echo 'Removing shared Ubuntu runtimes is intentionally unavailable here.'; exit 1",
++        ) } + document.list("entries").mapIndexedNotNull { index, rawEntry ->
+             val entry = (rawEntry as? Map<*, *>)?.toStringKeyMap() ?: return@mapIndexedNotNull null
+             val id = entry.string("id") ?: return@mapIndexedNotNull null
+             val category = SdkCatalogCategory.fromSerialized(entry.string("category"))
+diff --git a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt
+index b2ccbf6..319ffd0 100644
+--- a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt
++++ b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt
+@@ -45,8 +45,8 @@ class JavaEnvironmentTest {
+     @Test fun quickRunUsesManagedEnvironmentAndQuotesTheFile() {
+         assertEquals(setOf("java"), JavaLanguageAdapter.extensions)
+         val command = JavaLanguageAdapter.command("/workspace/a b/it's.java")
+-        assertTrue(command.contains(". /opt/sui-code/java.env"))
+-        assertTrue(command.endsWith("'/workspace/a b/it'\\''s.java'"))
++        assertTrue(command.contains("MANAGED_ENV=/opt/sui-code/java.env"))
++        assertTrue(command.contains("'/workspace/a b/it'\\''s.java'"))
+         assertFailsWith<IllegalArgumentException> { JavaLanguageAdapter.command("relative.java") }
+     }
+ 
+diff --git a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaQuickRunTest.kt b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaQuickRunTest.kt
+new file mode 100644
+index 0000000..3fb9024
+--- /dev/null
++++ b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaQuickRunTest.kt
+@@ -0,0 +1,232 @@
++package dev.blamspot.jcode.core.distro
++
++import kotlinx.coroutines.async
++import java.io.File
++import java.nio.file.Files
++import java.util.concurrent.TimeUnit
++import kotlin.coroutines.Continuation
++import kotlin.coroutines.EmptyCoroutineContext
++import kotlin.coroutines.startCoroutine
++import kotlin.test.Test
++import kotlin.test.assertEquals
++import kotlin.test.assertFailsWith
++import kotlin.test.assertFalse
++import kotlin.test.assertNull
++import kotlin.test.assertTrue
++
++class JavaQuickRunTest {
++    private fun <T> sync(block: suspend () -> T): T {
++        var result: Result<T>? = null
++        block.startCoroutine(object : Continuation<T> {
++            override val context = EmptyCoroutineContext
++            override fun resumeWith(value: Result<T>) { result = value }
++        })
++        return result!!.getOrThrow()
++    }
++
++    @Test fun dispatchUsesNativeAdaptersAndDoesNotNeedAProject() {
++        assertEquals(JavaLanguageAdapter, QuickRunLanguages.forFile("HelloWorld.java"))
++        assertEquals(PythonLanguageAdapter, QuickRunLanguages.forFile("hello.py"))
++        assertNull(QuickRunLanguages.forFile("page"))
++    }
++
++    @Test fun repeatedAndConcurrentKeysCannotStartAnotherTask() {
++        val gate = QuickRunGate()
++        assertFalse(gate.begin(1))
++        assertTrue(gate.begin(0))
++        assertFalse(gate.begin(0))
++        assertFalse(gate.begin(9))
++        gate.finish()
++        assertTrue(gate.begin(0))
++    }
++
++    @Test fun failedSaveNeverResolvesOrRunsStaleContent() {
++        var resolved = false
++        assertFailsWith<IllegalStateException> {
++            sync { prepareQuickRun({ false }) { resolved = true; "stale.java" } }
++        }
++        assertFalse(resolved)
++    }
++
++    @Test fun executionWaitsForAnActuallySuspendedSave() = kotlinx.coroutines.runBlocking {
++        val saved = kotlinx.coroutines.CompletableDeferred<Unit>()
++        var resolved = false
++        val task = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
++            prepareQuickRun({ saved.await(); true }) { resolved = true; "/saved.java" }
++        }
++        assertFalse(resolved)
++        saved.complete(Unit)
++        assertEquals("/saved.java", task.await())
++        assertTrue(resolved)
++    }
++
++    @Test fun dirtyFileIsSavedBeforeItsPathIsUsed() {
++        val events = mutableListOf<String>()
++        assertEquals("/saved.java", sync { prepareQuickRun({ events += "saved"; true }) { events += "resolved"; "/saved.java" } })
++        assertEquals(listOf("saved", "resolved"), events)
++    }
++
++    @Test fun stopKillsTheTraceeFirstAndReapsStubbornAndDetachedChildren() {
++        val live = mutableSetOf(10, 11, 12)
++        val signals = mutableListOf<String>()
++        var waits = 0
++        QuickRunCleanup.stop(
++            owned = { live.toSet() }, parents = { mapOf(10 to 1, 11 to 10, 12 to 1, 99 to 1) },
++            terminate = { signals += "term:$it" },
++            kill = { signals += "kill:$it"; live.remove(it) },
++            pause = { waits++ },
++        )
++        assertEquals(listOf("term:10", "term:12", "kill:10", "kill:11", "kill:12"), signals)
++        assertTrue(live.isEmpty())
++        assertEquals(25, waits)
++        assertFalse(signals.any { it.endsWith(":99") }) // unrelated ProjectRunner process
++    }
++
++    @Test fun gracefulStopDoesNotEscalateAndCloseUsesTheSamePolicy() {
++        val live = mutableSetOf(10, 11)
++        val signals = mutableListOf<Int>()
++        QuickRunCleanup.stop(
++            owned = { live.toSet() }, parents = { mapOf(10 to 1, 11 to 10) },
++            terminate = { signals += it; live.clear() },
++            kill = { error("No escalation should be needed") }, pause = { error("Already stopped") },
++        )
++        assertEquals(listOf(10), signals)
++    }
++
++    private class Sandbox : AutoCloseable {
++        val root = Files.createTempDirectory("quickrun 中文 空格 '$;").toFile()
++        val env = File(root, "java.env")
++        init { env.writeText("export JAVA_HOME=${shellQuote(System.getenv("SUI_QUICKRUN_TEST_JAVA_HOME") ?: System.getProperty("java.home"))}\n") }
++        fun source(text: String, name: String = "HelloWorld.java"): File = File(root, name).apply { writeText(text) }
++        fun start(file: File, stdin: String = "", pty: Boolean = false): Pair<Int, String> {
++            val script = File(root, "runner.sh").apply {
++                writeText(JavaLanguageAdapter.command(file.path).replace("MANAGED_ENV=/opt/sui-code/java.env", "MANAGED_ENV=${shellQuote(env.path)}"))
++            }
++            val output = File(root, "output.log")
++            val command = if (pty) listOf("script", "-qefc", "bash ${shellQuote(script.path)}", "/dev/null") else listOf("bash", script.path)
++            val p = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output).start()
++            p.outputStream.use { it.write(stdin.toByteArray()) }
++            check(p.waitFor(45, TimeUnit.SECONDS)) { p.destroyForcibly(); "QuickRun test timed out" }
++            return p.exitValue() to output.readText()
++        }
++        override fun close() { root.deleteRecursively() }
++    }
++
++    @Test fun helloWorldFromUnicodeQuotedDirectoryHasNoClassGarbage() = Sandbox().use { s ->
++        val file = s.source("public class HelloWorld { public static void main(String[] a) { System.out.println(\"Hello from sui-code!\"); } }")
++        val (exit, out) = s.start(file)
++        assertEquals(0, exit, out)
++        assertTrue(out.contains("Hello from sui-code!"))
++        assertTrue(out.contains("[QuickRun completed]"))
++        assertFalse(s.root.walk().any { it.extension == "class" })
++    }
++
++    @Test fun packageAndRelativeResourcesWorkFromTheSourceDirectory() = Sandbox().use { s ->
++        File(s.root, "message.txt").writeText("source directory OK")
++        val f = s.source("package demo; public class HelloWorld { public static void main(String[] a) throws Exception { System.out.println(java.nio.file.Files.readString(java.nio.file.Path.of(\"message.txt\"))); } }")
++        val (exit, out) = s.start(f)
++        assertEquals(0, exit, out)
++        assertTrue(out.contains("source directory OK"))
++    }
++
++    @Test fun specialFileNameIsNeverShellCode() = Sandbox().use { s ->
++        val f = s.source("class HelloWorld { public static void main(String[] a) { System.out.println(\"safe filename\"); } }", "中文 ' ; \$ (合法).java")
++        val (exit, out) = s.start(f)
++        assertEquals(0, exit, out)
++        assertTrue(out.contains("safe filename"))
++    }
++
++    @Test fun missingManagedEnvironmentDoesNotFallBackToHostJava() = Sandbox().use { s ->
++        s.env.delete()
++        val (exit, out) = s.start(s.source("class HelloWorld {}"))
++        assertEquals(78, exit)
++        assertTrue(out.contains("Missing"))
++        assertFalse(out.contains("Checking Java source"))
++    }
++
++    @Test fun brokenManagedJavaDoesNotFallBack() = Sandbox().use { s ->
++        s.env.writeText("JAVA_HOME=/missing/jdk\n")
++        val (exit, out) = s.start(s.source("class HelloWorld {}"))
++        assertEquals(78, exit)
++        assertTrue(out.contains("Managed java or javac is missing"))
++    }
++
++    @Test fun compilationFailureIsDifferentFromRuntimeFailure() = Sandbox().use { s ->
++        val (compileExit, compileOut) = s.start(s.source("public class HelloWorld { invalid syntax }"))
++        assertEquals(65, compileExit, compileOut)
++        assertTrue(compileOut.contains("compilation failed"))
++        val (runExit, runOut) = s.start(s.source("public class HelloWorld { public static void main(String[] a) { throw new IllegalStateException(\"boom\"); } }"))
++        assertEquals(70, runExit, runOut)
++        assertTrue(runOut.contains("IllegalStateException: boom"))
++        assertTrue(runOut.contains("runtime failed"))
++    }
++
++    @Test fun interactiveStdinUsesARealHostPty() = Sandbox().use { s ->
++        val f = s.source("public class HelloWorld { public static void main(String[] a) { var scanner = new java.util.Scanner(System.in); System.out.println(\"INPUT=\" + scanner.nextLine()); } }")
++        val (exit, out) = s.start(f, "平板 input\n", pty = true)
++        assertEquals(0, exit, out)
++        assertTrue(out.contains("INPUT=平板 input"), out)
++    }
++
++    @Test fun stoppingALongRunningHostPtyReapsJavaAndItsChildWithoutTouchingOtherTasks() = Sandbox().use { s ->
++        val file = s.source("""public class HelloWorld {
++            public static void main(String[] a) throws Exception {
++                new ProcessBuilder("sleep", "120").start();
++                Runtime.getRuntime().addShutdownHook(new Thread(() -> { try { Thread.sleep(60000); } catch (Exception ignored) {} }));
++                System.out.println("SUI_LONG_READY");
++                Thread.sleep(120000);
++            }
++        }""")
++        val runner = File(s.root, "long-runner.sh").apply {
++            writeText(JavaLanguageAdapter.command(file.path).replace("MANAGED_ENV=/opt/sui-code/java.env", "MANAGED_ENV=${shellQuote(s.env.path)}"))
++        }
++        val token = "sui-quickrun:test-" + java.util.UUID.randomUUID()
++        val output = File(s.root, "long-output.log")
++        val process = ProcessBuilder("script", "-qefc", "bash ${shellQuote(runner.path)}", "/dev/null").apply {
++            environment()["JCODE_EXT_ID"] = token
++            redirectErrorStream(true); redirectOutput(output)
++        }.start()
++        val unrelated = ProcessBuilder("sleep", "120").start()
++        fun owned(): Set<Int> = File("/proc").listFiles().orEmpty().mapNotNull { entry ->
++            val pid = entry.name.toIntOrNull() ?: return@mapNotNull null
++            if (runCatching { File(entry, "environ").readText().split('\u0000').contains("JCODE_EXT_ID=$token") }.getOrDefault(false)) pid else null
++        }.toSet()
++        fun signal(pid: Int, name: String) {
++            ProcessBuilder("kill", "-$name", pid.toString()).start().waitFor()
++        }
++        fun parents(): Map<Int, Int> = File("/proc").listFiles().orEmpty().mapNotNull { entry ->
++            val pid = entry.name.toIntOrNull() ?: return@mapNotNull null
++            val parent = runCatching { File(entry, "stat").readText().substringAfterLast(") ").split(' ')[1].toInt() }.getOrNull() ?: return@mapNotNull null
++            pid to parent
++        }.toMap()
++        try {
++            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(40)
++            while (!output.readText().contains("SUI_LONG_READY") && System.nanoTime() < deadline) Thread.sleep(50)
++            assertTrue(output.readText().contains("SUI_LONG_READY"), output.readText())
++            assertTrue(owned().size >= 3)
++            QuickRunCleanup.stop(
++                owned = ::owned,
++                parents = ::parents,
++                terminate = { pid -> signal(pid, "TERM") },
++                kill = { pid -> signal(pid, "KILL") },
++                pause = { Thread.sleep(20) },
++            )
++            process.waitFor(5, TimeUnit.SECONDS)
++            repeat(50) { if (owned().isNotEmpty()) Thread.sleep(20) }
++            assertTrue(owned().isEmpty(), "Tagged Java/children survived stop")
++            assertTrue(unrelated.isAlive, "An unrelated task was stopped")
++        } finally {
++            owned().forEach { pid -> signal(pid, "KILL") }
++            process.destroyForcibly(); unrelated.destroyForcibly()
++        }
++    }
++
++    @Test fun consecutiveDifferentFilesRunIndependently() = Sandbox().use { s ->
++        for (name in listOf("One", "Two")) {
++            val (exit, out) = s.start(s.source("class $name { public static void main(String[] a) { System.out.println(\"$name OK\"); } }", "$name.java"))
++            assertEquals(0, exit, out)
++            assertTrue(out.contains("$name OK"))
++        }
++        assertFalse(s.root.walk().any { it.extension == "class" })
++    }
++}
+diff --git a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/NativeEnvironmentTest.kt b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/NativeEnvironmentTest.kt
+new file mode 100644
+index 0000000..9cef373
+--- /dev/null
++++ b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/NativeEnvironmentTest.kt
+@@ -0,0 +1,105 @@
++package dev.blamspot.jcode.core.distro
++
++import kotlin.test.*
++
++class NativeEnvironmentTest {
++    private fun plan(language: NativeEnvironment) = NativeInstallPlan.parse(language, "ubuntu-24.04",
++        language.packages.joinToString("\n") { "PKG\t$it\t-\t1:2.3-4ubuntu1" } + "\narm64\n")
++    @Test fun plansUseTheReviewedPackageVersionsAndArchitecture() {
++        val plan = plan(NativeEnvironment.Cpp)
++        assertEquals("arm64",plan.architecture)
++        assertTrue(plan.specifications.contains("g++=1:2.3-4ubuntu1"))
++    }
++    @Test fun existingVersionsAreSelectedInsteadOfSilentlyUpgraded() {
++        val plan = NativeInstallPlan.parse(NativeEnvironment.C,"ubuntu-24.04","PKG\tgcc\t12.0\t13.0\nPKG\tlibc6-dev\t2.39\t2.40\narm64\n")
++        assertEquals("12.0",plan.packages.first().selected)
++        assertTrue(plan.script("/tmp/sui-env-cancel-test").contains("--no-upgrade"))
++    }
++    @Test fun untrustedVersionsAndIncompleteMetadataAreRejected() {
++        assertFails { NativePackage("gcc","1; touch /tmp/x","2") }
++        assertFails { NativePackage("gcc",null,"(none)") }
++        assertFails { NativeInstallPlan.parse(NativeEnvironment.Python,"ubuntu-24.04","arm64") }
++        assertFails { NativeInstallPlan.parse(NativeEnvironment.C,"ubuntu-24.04","PKG\tgcc\t-\t2\nPKG\tlibc6-dev\t-\t2\nriscv64") }
++    }
++    @Test fun installationIsAuthenticatedCooperativelyCancellableAndDoesNotTouchJava() {
++        for (language in NativeEnvironment.entries) {
++            val script = plan(language).script("/tmp/sui-env-cancel-test")
++            assertTrue(script.contains("AllowUnauthenticated=false"))
++            assertTrue(script.indexOf("--download-only") < script.indexOf("--no-download"))
++            assertTrue(script.indexOf("check_cancel",script.indexOf("--no-download")) < script.indexOf("mv -f"))
++            assertFalse(script.contains("java.env")); assertFalse(script.contains("apt-get upgrade")); assertFalse(script.contains("apt-get remove"))
++        }
++    }
++    private class Fixture : AutoCloseable {
++        val root = java.nio.file.Files.createTempDirectory("native-manager-").toFile()
++        val managed = java.io.File(root, "managed")
++        val tools = java.io.File(root, "tools").apply { mkdirs() }
++        val calls = java.io.File(root, "apt.calls")
++        val cancel = java.io.File("/tmp/sui-env-cancel-" + java.util.UUID.randomUUID())
++        init {
++            tool("sudo", "[ \"\$1\" = '-n' ] && shift; exec \"\$@\"")
++            tool("dpkg", "if [ \"\${1:-}\" = '--print-architecture' ]; then echo arm64; fi; exit 0")
++            tool("dpkg-query", "printf 'ii 1:2.3-4ubuntu1'")
++            tool("apt-cache", "printf '  Candidate: 2:3.4-5ubuntu1\\n'")
++            tool("apt-get", "printf '%s\\n' \"\$*\" >> '${calls.path}'; case \"\$*\" in *--download-only*) [ \"\${FAIL_DOWNLOAD:-0}\" = 0 ] || exit 100; [ \"\${CANCEL_DOWNLOAD:-0}\" = 0 ] || touch '${cancel.path}' ;; *--no-download*) touch '${root.path}/packages-completed'; [ \"\${CANCEL_INSTALL:-0}\" = 0 ] || touch '${cancel.path}' ;; esac; exit 0")
++        }
++        fun tool(name: String, body: String) { java.io.File(tools, name).apply { writeText("#!/bin/sh\n$body\n"); setExecutable(true) } }
++        fun execute(script: String, env: Map<String,String> = emptyMap()): Pair<Int,String> {
++            val file = java.io.File(root,"task.sh").apply { writeText(script.replace("/opt/sui-code", managed.path)) }
++            val p = ProcessBuilder("bash", file.path).apply {
++                environment()["PATH"] = tools.path + ":" + System.getenv("PATH")
++                environment().putAll(env); redirectErrorStream(true)
++            }.start()
++            val output = p.inputStream.bufferedReader().readText()
++            return p.waitFor() to output
++        }
++        override fun close() { cancel.delete(); root.deleteRecursively() }
++    }
++
++    @Test fun queryReadsRealScriptMetadataWithoutTouchingHostApt() = Fixture().use { f ->
++        val os = java.io.File(f.root,"os-release").apply { writeText("ID=ubuntu\n") }
++        val (exit,out) = f.execute(NativeEnvironment.C.queryScript().replace(". /etc/os-release", ". ${shellQuote(os.path)}"))
++        assertEquals(0,exit,out)
++        val reviewed = NativeInstallPlan.parse(NativeEnvironment.C,"ubuntu-24.04",out)
++        assertEquals("1:2.3-4ubuntu1",reviewed.packages.first().installed)
++        assertEquals("2:3.4-5ubuntu1",reviewed.packages.first().candidate)
++    }
++    @Test fun installerCompilesRealGccSmokeBeforeActivatingAndLeavesJavaAlone() = Fixture().use { f ->
++        f.managed.mkdirs()
++        val javaEnv = java.io.File(f.managed,"java.env").apply { writeText("export JAVA_HOME=/existing/jdk\n") }
++        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path))
++        assertEquals(0,exit,out)
++        assertTrue(java.io.File(f.managed,"c.env").readText().contains("SUI_C=/usr/bin/gcc"))
++        assertEquals("export JAVA_HOME=/existing/jdk\n",javaEnv.readText())
++        assertTrue(f.calls.readText().contains("--download-only"))
++        assertTrue(f.calls.readText().contains("--no-download"))
++    }
++    @Test fun cancelledDownloadNeverRunsDpkgInstallOrPublishesEnvironment() = Fixture().use { f ->
++        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path),mapOf("CANCEL_DOWNLOAD" to "1"))
++        assertEquals(130,exit,out)
++        assertFalse(f.calls.readText().contains("--no-download"))
++        assertFalse(java.io.File(f.managed,"c.env").exists())
++    }
++    @Test fun cancellationDuringInstallWaitsForItsSafeCompletion() = Fixture().use { f ->
++        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path),mapOf("CANCEL_INSTALL" to "1"))
++        assertEquals(130,exit,out)
++        assertTrue(java.io.File(f.root,"packages-completed").isFile)
++        assertFalse(java.io.File(f.managed,"c.env").exists())
++    }
++    @Test fun failedAuthenticatedDownloadDoesNotReplaceThePreviousEnvironment() = Fixture().use { f ->
++        f.managed.mkdirs()
++        val previous = java.io.File(f.managed,"c.env").apply { writeText("export SUI_C=/missing/old/compiler\n") }
++        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path),mapOf("FAIL_DOWNLOAD" to "1"))
++        assertEquals(100,exit,out)
++        assertEquals("export SUI_C=/missing/old/compiler\n",previous.readText())
++    }
++    @Test fun existingUsableManagedCompilerIsVerifiedAndPreservedWithoutApt() = Fixture().use { f ->
++        f.managed.mkdirs()
++        val previous = java.io.File(f.managed,"c.env").apply { writeText("export SUI_C=/usr/bin/gcc\n") }
++        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path))
++        assertEquals(0,exit,out)
++        assertFalse(f.calls.exists())
++        assertEquals("export SUI_C=/usr/bin/gcc\n",previous.readText())
++    }
++
++}
+diff --git a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/NativeQuickRunTest.kt b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/NativeQuickRunTest.kt
+new file mode 100644
+index 0000000..69858aa
+--- /dev/null
++++ b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/NativeQuickRunTest.kt
+@@ -0,0 +1,86 @@
++package dev.blamspot.jcode.core.distro
++
++import java.io.File
++import java.nio.file.Files
++import java.util.concurrent.TimeUnit
++import kotlin.test.*
++
++class NativeQuickRunTest {
++    private fun sandbox(test: (File) -> Unit) {
++        val root = Files.createTempDirectory("native 中文 空格 '$;").toFile()
++        try { test(root) } finally { root.deleteRecursively() }
++    }
++    private fun run(root: File, adapter: NativeLanguageAdapter, source: String, name: String, input: String = "", pty: Boolean = false): Pair<Int,String> {
++        val file = File(root, name).apply { writeText(source) }
++        val script = File(root, "runner.sh").apply {
++            writeText(adapter.command(file.path).replace("ENV_FILE=/opt/sui-code/${adapter.id}.env", "ENV_FILE=${shellQuote(File(root, "missing.env").path)}"))
++        }
++        val output = File(root, "output.log")
++        val cmd = if (pty) listOf("script", "-qefc", "bash ${shellQuote(script.path)}", "/dev/null") else listOf("bash", script.path)
++        val process = ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(output).start()
++        process.outputStream.use { it.write(input.toByteArray()) }
++        check(process.waitFor(30,TimeUnit.SECONDS)) { process.destroyForcibly(); "Native test timed out" }
++        return process.exitValue() to output.readText()
++    }
++    @Test fun dispatchSupportsOnlyTheImplementedLanguages() {
++        assertEquals(CLanguageAdapter, QuickRunLanguages.forFile("a.c"))
++        assertEquals(CppLanguageAdapter, QuickRunLanguages.forFile("a.cpp"))
++        assertEquals(CppLanguageAdapter, QuickRunLanguages.forFile("a.C"))
++        assertEquals(PythonLanguageAdapter, QuickRunLanguages.forFile("a.py"))
++        assertNull(QuickRunLanguages.forFile("a.rs"))
++    }
++    @Test fun colonContainingParentsHaveAnUnambiguousProotBindAndCorrectWorkingDirectory() = sandbox { root ->
++        val file = File(root,"colon:folder/中文 子目录/hello.py").apply { parentFile!!.mkdirs(); writeText("print('OK')") }
++        val mount = QuickRunFileMount.forFile(file)
++        assertFalse(mount.hostDirectory.path.contains(':'))
++        assertTrue(mount.guestFile.endsWith("/colon:folder/中文 子目录/hello.py"))
++        assertEquals(file.canonicalPath, File(mount.hostDirectory, mount.guestFile.removePrefix("/sui-quickrun/")).canonicalPath)
++        assertTrue(mount.guestDirectory.endsWith("colon:folder/中文 子目录"))
++    }
++    @Test fun cCompilesReadsPtyInputAndLeavesNoSourceArtifacts() = sandbox { root ->
++        val (exit,out) = run(root,CLanguageAdapter,"#include <stdio.h>\nint main(void) { int n; if(scanf(\"%d\",&n)!=1) return 3; printf(\"C=%d\\n\", n+1); }", "中文 ' ;.c", "41\n",true)
++        assertEquals(0,exit,out); assertTrue(out.contains("C=42"),out)
++        assertFalse(root.listFiles()!!.any { it.name in setOf("a.out","program") || it.extension=="o" })
++    }
++    @Test fun cppCompilesAndHandlesInteractiveInput() = sandbox { root ->
++        val (exit,out) = run(root,CppLanguageAdapter,"#include <iostream>\nint main() { std::string s; std::getline(std::cin,s); std::cout << \"CPP=\" << s << std::endl; }", "hello world.cpp", "input\n",true)
++        assertEquals(0,exit,out); assertTrue(out.contains("CPP=input"),out)
++    }
++    @Test fun pythonReadsPtyInputAndPreservesFileAndRelativeImportSemantics() = sandbox { root ->
++        File(root,"helper.py").writeText("value = 'module OK'\n")
++        val source = "import helper, pathlib\nprint(helper.value)\nprint('FILE=' + pathlib.Path(__file__).name)\nprint('PY=' + input())\n"
++        val (exit,out) = run(root,PythonLanguageAdapter,source,"中文 '$;.py","你好\n",true)
++        assertEquals(0,exit,out); assertTrue(out.contains("module OK"),out); assertTrue(out.contains("PY=你好"),out)
++        assertTrue(out.contains("FILE=中文 '$;.py"),out); assertFalse(File(root,"__pycache__").exists())
++    }
++    @Test fun cAndCppCompileFailuresAreNotRuntimeFailures() = sandbox { root ->
++        for ((adapter,name) in listOf(CLanguageAdapter to "bad.c",CppLanguageAdapter to "bad.cpp")) {
++            val (exit,out) = run(root,adapter,"not valid syntax",name)
++            assertEquals(65,exit,out); assertTrue(out.contains("compilation failed"))
++        }
++    }
++    @Test fun nativeAndPythonRuntimeFailuresPreserveDiagnostics() = sandbox { root ->
++        val (cExit,cOut) = run(root,CLanguageAdapter,"int main(void) { return 7; }","fail.c")
++        assertEquals(70,cExit,cOut); assertTrue(cOut.contains("exit 7"))
++        val (pExit,pOut) = run(root,PythonLanguageAdapter,"raise ValueError('boom')\n","fail.py")
++        assertEquals(70,pExit,pOut); assertTrue(pOut.contains("ValueError: boom"))
++    }
++    @Test fun pythonSyntaxFailureIsClassifiedBeforeExecution() = sandbox { root ->
++        val (exit,out) = run(root,PythonLanguageAdapter,"print('not executed')\nif :\n","bad.py")
++        assertEquals(65,exit,out); assertFalse(out.contains("[QuickRun] Running Python"))
++    }
++    @Test fun pythonMainModuleAndDataclassAnnotationsBehaveLikeARealScript() = sandbox { root ->
++        val source = "from __future__ import annotations\nfrom dataclasses import dataclass\nimport __main__\n@dataclass\nclass Item:\n    value: int\nassert __main__.Item is Item\nprint(Item(42).value)\n"
++        val (exit,out) = run(root,PythonLanguageAdapter,source,"module.py")
++        assertEquals(0,exit,out); assertTrue(out.contains("42"),out)
++    }
++    @Test fun compilerFileMacrosKeepTheOriginalSourceName() = sandbox { root ->
++        val (exit,out) = run(root,CLanguageAdapter,"#include <stdio.h>\nint main(void) { puts(__FILE__); }","original name.c")
++        assertEquals(0,exit,out); assertTrue(out.contains(java.io.File(root,"original name.c").path),out)
++    }
++    @Test fun brokenManagedToolNeverFallsBackToUbuntuDefault() = sandbox { root ->
++        File(root,"missing.env").writeText("SUI_C=/does/not/exist\n")
++        val (exit,out) = run(root,CLanguageAdapter,"int main(void) { return 0; }","good.c")
++        assertEquals(78,exit,out); assertTrue(out.contains("environment error"))
++    }
++}
+diff --git a/core/editor/src/main/java/dev/blamspot/jcode/core/editor/EditorView.kt b/core/editor/src/main/java/dev/blamspot/jcode/core/editor/EditorView.kt
+index 4ebdc06..b7307f3 100644
+--- a/core/editor/src/main/java/dev/blamspot/jcode/core/editor/EditorView.kt
++++ b/core/editor/src/main/java/dev/blamspot/jcode/core/editor/EditorView.kt
+@@ -183,6 +183,8 @@ class EditorView @JvmOverloads constructor(
+     }
+ 
+     /** Invoked when the user requests a save (Ctrl+S); the host writes the buffer to disk. */
++    var onQuickRunRequest: ((Int) -> Boolean)? = null
++
+     var onSaveRequest: (() -> Unit)? = null
+ 
+     /** Invoked when the user requests Save All (Ctrl+Shift+S); the host saves every open tab. */
+@@ -1137,6 +1139,11 @@ class EditorView @JvmOverloads constructor(
+     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+         val state = editorState ?: return super.dispatchKeyEvent(event)
+ 
++        if (event.isCtrlPressed && !event.isShiftPressed && !event.isAltPressed && event.keyCode == KeyEvent.KEYCODE_F5) {
++            if (event.action == KeyEvent.ACTION_DOWN) return onQuickRunRequest?.invoke(event.repeatCount) ?: false
++            return true
++        }
++
+         // Ctrl+Z / Ctrl+Shift+Z for undo/redo
+         if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_Z) {
+             if (event.action == KeyEvent.ACTION_DOWN) {
+diff --git a/core/fs/build.gradle.kts b/core/fs/build.gradle.kts
+index fdc3800..804833d 100644
+--- a/core/fs/build.gradle.kts
++++ b/core/fs/build.gradle.kts
+@@ -42,4 +42,5 @@ dependencies {
+     ksp(libs.room.compiler)
+     ksp(libs.hilt.compiler)
+     implementation(project(":core:design"))
++    testImplementation(kotlin("test"))
+ }
+diff --git a/core/fs/src/main/java/dev/blamspot/jcode/fs/FsImplementations.kt b/core/fs/src/main/java/dev/blamspot/jcode/fs/FsImplementations.kt
+index 4c42836..4585c8a 100644
+--- a/core/fs/src/main/java/dev/blamspot/jcode/fs/FsImplementations.kt
++++ b/core/fs/src/main/java/dev/blamspot/jcode/fs/FsImplementations.kt
+@@ -54,8 +54,7 @@ class PosixFs @Inject constructor() : Fs {
+ 
+     override suspend fun write(path: FsPath, bytes: ByteArray) = withContext(Dispatchers.IO) {
+         val file = path.requireLocal()
+-        file.parentFile?.mkdirs()
+-        file.writeBytes(bytes)
++        SafeLocalFiles.write(file, bytes)
+     }
+ 
+     override fun watch(path: FsPath): Flow<FsWatchEvent> = callbackFlow {
+diff --git a/core/fs/src/main/java/dev/blamspot/jcode/fs/FsOperations.kt b/core/fs/src/main/java/dev/blamspot/jcode/fs/FsOperations.kt
+index 2d138cd..8f7776e 100644
+--- a/core/fs/src/main/java/dev/blamspot/jcode/fs/FsOperations.kt
++++ b/core/fs/src/main/java/dev/blamspot/jcode/fs/FsOperations.kt
+@@ -33,8 +33,7 @@ suspend fun createDirectory(fs: Fs, context: Context, parent: FsPath, name: Stri
+ 
+ private suspend fun createDirectoryPosix(parent: FsPath, name: String): FsNode {
+     val parentFile = parent.requireLocal()
+-    val newDir = File(parentFile, name)
+-    newDir.mkdirs()
++    val newDir = SafeLocalFiles.create(parentFile, name, directory = true)
+     return FsNode(
+         path = FsPath.Local(newDir),
+         name = newDir.name,
+@@ -59,11 +58,7 @@ private suspend fun createDirectorySaf(context: Context, parent: FsPath, name: S
+ 
+ private suspend fun createFilePosix(parent: FsPath, name: String): FsNode {
+     val parentFile = parent.requireLocal()
+-    val newFile = File(parentFile, name)
+-    newFile.parentFile?.mkdirs()
+-    if (!newFile.exists()) {
+-        newFile.writeText("")
+-    }
++    val newFile = SafeLocalFiles.create(parentFile, name, directory = false)
+     return FsNode(
+         path = FsPath.Local(newFile),
+         name = newFile.name,
+@@ -104,8 +99,7 @@ suspend fun renameFile(fs: Fs, context: Context, from: FsPath, newName: String):
+ 
+ private suspend fun renamePosix(from: FsPath, newName: String): FsNode {
+     val oldFile = from.requireLocal()
+-    val newFile = File(oldFile.parentFile, newName)
+-    check(oldFile.renameTo(newFile)) { "Rename failed: ${oldFile.path} -> $newName" }
++    val newFile = SafeLocalFiles.rename(oldFile, newName)
+     return FsNode(
+         path = FsPath.Local(newFile),
+         name = newName,
+@@ -135,7 +129,7 @@ suspend fun deletePermanently(fs: Fs, context: Context, path: FsPath) {
+     when (fs) {
+         is PosixFs -> {
+             val file = path.requireLocal()
+-            check(file.deleteRecursively()) { "Delete failed: ${file.path}" }
++            SafeLocalFiles.remove(file)
+         }
+         is SafFs -> {
+             val doc = path.toDocumentFile(context)
+@@ -157,14 +151,7 @@ private suspend fun copyPosix(source: FsPath, targetParent: FsPath, newName: Str
+     val sourceFile = source.requireLocal()
+     val parentFile = targetParent.requireLocal()
+     val targetName = newName ?: sourceFile.name
+-    val targetFile = File(parentFile, targetName)
+-
+-    if (sourceFile.isDirectory) {
+-        sourceFile.copyRecursively(targetFile, overwrite = true)
+-    } else {
+-        sourceFile.copyTo(targetFile, overwrite = true)
+-    }
+-
++    val targetFile = SafeLocalFiles.copy(sourceFile, parentFile, targetName)
+     return FsPath.Local(targetFile)
+ }
+ 
+@@ -210,7 +197,7 @@ suspend fun importContentUris(fs: Fs, context: Context, uris: List<Uri>, targetD
+                     var suffix = 1
+                     while (dest.exists()) dest = File(parent, uniquifiedName(name, suffix++))
+                     context.contentResolver.openInputStream(uri)?.use { input ->
+-                        dest.outputStream().use { input.copyTo(it) }
++                        SafeLocalFiles.importNew(parent, dest.name) { output -> input.copyTo(output) }
+                     } ?: error("Cannot read '$name'")
+                     dest.name
+                 }
+diff --git a/core/fs/src/main/java/dev/blamspot/jcode/fs/InternalFiles.kt b/core/fs/src/main/java/dev/blamspot/jcode/fs/InternalFiles.kt
+new file mode 100644
+index 0000000..c270878
+--- /dev/null
++++ b/core/fs/src/main/java/dev/blamspot/jcode/fs/InternalFiles.kt
+@@ -0,0 +1,19 @@
++package dev.blamspot.jcode.fs
++
++import java.io.File
++
++/** Persistent app-private storage, independent of Workspace/Project database records. The existing
++ * projects location is retained so Project creation, backup and export keep seeing the same files. */
++object InternalFiles {
++    fun protectsProject(file: File, registeredRoots: Set<String>): Boolean {
++        if (registeredRoots.isEmpty()) return false
++        val path = runCatching { file.canonicalPath.trimEnd(File.separatorChar) }.getOrElse { return true }
++        return registeredRoots.any { root ->
++            val protected = runCatching { File(root).canonicalPath }.getOrElse { return true }
++            protected == path || protected.startsWith(path + File.separator)
++        }
++    }
++
++    const val ROOT_NODE_ID: Long = Long.MIN_VALUE
++    fun root(filesDir: File): File = File(filesDir, "workspace/projects").apply { if (!isDirectory) mkdirs() }
++}
+diff --git a/core/fs/src/main/java/dev/blamspot/jcode/fs/SafeLocalFiles.kt b/core/fs/src/main/java/dev/blamspot/jcode/fs/SafeLocalFiles.kt
+new file mode 100644
+index 0000000..61c936e
+--- /dev/null
++++ b/core/fs/src/main/java/dev/blamspot/jcode/fs/SafeLocalFiles.kt
+@@ -0,0 +1,120 @@
++package dev.blamspot.jcode.fs
++
++import java.io.File
++import java.io.FileOutputStream
++import java.nio.file.Files
++import java.nio.file.LinkOption
++import java.nio.file.StandardCopyOption
++
++/** Local mutations never truncate an existing document before its replacement is safely written. */
++internal object SafeLocalFiles {
++    private fun child(parent: File, relative: String, nested: Boolean): File {
++        require(relative.isNotBlank() && '\u0000' !in relative && !File(relative).isAbsolute) { "Invalid relative name" }
++        val parts = relative.split('/')
++        require(parts.all { it.isNotEmpty() && it != "." && it != ".." }) { "Names cannot escape the selected folder" }
++        require(nested || parts.size == 1) { "Rename accepts one name, not a path" }
++        val base = parent.canonicalFile.toPath()
++        check(Files.isDirectory(base)) { "Parent folder does not exist" }
++        var next = base
++        for (part in parts) {
++            next = next.resolve(part)
++            require(!Files.isSymbolicLink(next)) { "Cannot create or replace a symbolic link" }
++            require(next.normalize().startsWith(base)) { "Path escapes the selected folder" }
++        }
++        return next.toFile()
++    }
++
++    fun create(parent: File, relative: String, directory: Boolean): File {
++        val target = child(parent, relative, nested = true).toPath()
++        check(!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) { "An entry with that name already exists" }
++        Files.createDirectories(target.parent)
++        if (directory) Files.createDirectory(target) else Files.createFile(target)
++        return target.toFile()
++    }
++
++    fun rename(source: File, name: String): File {
++        val target = child(source.parentFile ?: error("No parent folder"), name, nested = false)
++        check(!Files.exists(target.toPath(), LinkOption.NOFOLLOW_LINKS)) { "An entry with that name already exists" }
++        Files.move(source.toPath(), target.toPath())
++        return target
++    }
++
++    fun remove(file: File) {
++        if (!Files.exists(file.toPath(), LinkOption.NOFOLLOW_LINKS)) return
++        Files.walkFileTree(file.toPath(), object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
++            override fun visitFile(path: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult {
++                Files.delete(path); return java.nio.file.FileVisitResult.CONTINUE
++            }
++            override fun postVisitDirectory(path: java.nio.file.Path, error: java.io.IOException?): java.nio.file.FileVisitResult {
++                if (error != null) throw error
++                Files.delete(path); return java.nio.file.FileVisitResult.CONTINUE
++            }
++        })
++    }
++
++    fun copy(source: File, parent: File, name: String): File {
++        val target = child(parent, name, nested = false).toPath()
++        check(!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) { "An entry with that name already exists" }
++        val src = source.toPath()
++        if (Files.isDirectory(src, LinkOption.NOFOLLOW_LINKS)) {
++            require(!target.normalize().startsWith(source.canonicalFile.toPath())) { "Cannot copy a folder into itself" }
++        }
++        val stage = Files.createTempDirectory(target.parent, ".sui-copy-")
++        val staged = stage.resolve("payload")
++        try {
++            if (Files.isDirectory(src, LinkOption.NOFOLLOW_LINKS)) {
++                Files.walkFileTree(src, object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
++                    override fun preVisitDirectory(dir: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult {
++                        Files.createDirectory(staged.resolve(src.relativize(dir)))
++                        return java.nio.file.FileVisitResult.CONTINUE
++                    }
++                    override fun visitFile(file: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult {
++                        Files.copy(file, staged.resolve(src.relativize(file)), LinkOption.NOFOLLOW_LINKS)
++                        return java.nio.file.FileVisitResult.CONTINUE
++                    }
++                })
++            } else Files.copy(src, staged, LinkOption.NOFOLLOW_LINKS)
++            Files.move(staged, target)
++            return target.toFile()
++        } finally {
++            Files.walkFileTree(stage, object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
++                override fun visitFile(file: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult {
++                    Files.deleteIfExists(file); return java.nio.file.FileVisitResult.CONTINUE
++                }
++                override fun postVisitDirectory(dir: java.nio.file.Path, error: java.io.IOException?): java.nio.file.FileVisitResult {
++                    Files.deleteIfExists(dir); return java.nio.file.FileVisitResult.CONTINUE
++                }
++            })
++        }
++    }
++
++    fun importNew(parent: File, name: String, writer: (FileOutputStream) -> Unit): File {
++        val target = child(parent, name, nested = false).toPath()
++        check(!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) { "An entry with that name already exists" }
++        val temp = Files.createTempFile(target.parent, ".sui-import-", ".tmp")
++        try {
++            FileOutputStream(temp.toFile()).use { stream -> writer(stream); stream.fd.sync() }
++            Files.move(temp, target)
++            return target.toFile()
++        } finally { Files.deleteIfExists(temp) }
++    }
++
++    fun write(file: File, bytes: ByteArray) = replace(file) { it.write(bytes) }
++
++    /** The writer seam also exercises interrupted I/O without corrupting the prior document. */
++    fun replace(file: File, writer: (FileOutputStream) -> Unit) {
++        val target = file.canonicalFile.toPath()
++        Files.createDirectories(target.parent)
++        if (Files.exists(target)) check(Files.isWritable(target)) { "File is read-only" }
++        val temp = Files.createTempFile(target.parent, ".sui-save-", ".tmp")
++        try {
++            FileOutputStream(temp.toFile()).use { stream -> writer(stream); stream.fd.sync() }
++            if (Files.exists(target)) {
++                Files.setPosixFilePermissions(temp, Files.getPosixFilePermissions(target))
++            }
++            // The temp is on the same internal filesystem. Refuse unsupported atomic replacement
++            // rather than falling back to truncating the user's only copy.
++            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
++        } finally { Files.deleteIfExists(temp) }
++    }
++}
+diff --git a/core/fs/src/main/java/dev/blamspot/jcode/fs/Trash.kt b/core/fs/src/main/java/dev/blamspot/jcode/fs/Trash.kt
+index a136037..944e8c5 100644
+--- a/core/fs/src/main/java/dev/blamspot/jcode/fs/Trash.kt
++++ b/core/fs/src/main/java/dev/blamspot/jcode/fs/Trash.kt
+@@ -183,18 +183,18 @@ class Trash(private val root: File) {
+         val payload = payloadOf(File(root, entry.id)) ?: error("'${entry.name}' is no longer in the Trash")
+         val landed =
+             if (entry.saf) restoreSaf(context, entry, payload) else restoreLocal(entry, payload)
+-        File(root, entry.id).deleteRecursively()
++        SafeLocalFiles.remove(File(root, entry.id))
+         landed
+     }
+ 
+     /** Destroy one entry for good. */
+     suspend fun purge(id: String) = withContext(Dispatchers.IO) {
+-        File(root, id).deleteRecursively()
++        SafeLocalFiles.remove(File(root, id))
+         Unit
+     }
+ 
+     suspend fun empty() = withContext(Dispatchers.IO) {
+-        root.listFiles().orEmpty().forEach { it.deleteRecursively() }
++        root.listFiles().orEmpty().forEach { SafeLocalFiles.remove(it) }
+         Unit
+     }
+ 
+@@ -213,7 +213,7 @@ class Trash(private val root: File) {
+             // An entry too damaged to read is swept too — it can never be restored, and leaving it
+             // means the bin only ever grows.
+             if (entry == null || entry.deletedAtMillis < cutoff) {
+-                dir.deleteRecursively()
++                SafeLocalFiles.remove(dir)
+                 dropped++
+             }
+         }
+@@ -242,12 +242,8 @@ class Trash(private val root: File) {
+         // live under filesDir and so does this. It costs nothing whatever the folder weighs; the
+         // copy below is the fallback for a project still on the legacy shared storage.
+         if (file.renameTo(target)) return taken
+-        if (file.isDirectory) {
+-            file.copyRecursively(target, overwrite = true)
+-        } else {
+-            file.copyTo(target, overwrite = true)
+-        }
+-        check(file.deleteRecursively()) { "Could not remove '${file.name}' after copying it to the Trash" }
++        SafeLocalFiles.copy(file, data, file.name)
++        SafeLocalFiles.remove(file)
+         return taken
+     }
+ 
+@@ -284,8 +280,7 @@ class Trash(private val root: File) {
+         parent.mkdirs()
+         val target = freeName(parent, payload.name)
+         if (!payload.renameTo(target)) {
+-            if (payload.isDirectory) payload.copyRecursively(target, overwrite = true)
+-            else payload.copyTo(target, overwrite = true)
++            SafeLocalFiles.copy(payload, parent, target.name)
+         }
+         return target.absolutePath
+     }
+diff --git a/core/fs/src/main/java/dev/blamspot/jcode/fs/WorkspaceManager.kt b/core/fs/src/main/java/dev/blamspot/jcode/fs/WorkspaceManager.kt
+index ec1e1db..9e80f3f 100644
+--- a/core/fs/src/main/java/dev/blamspot/jcode/fs/WorkspaceManager.kt
++++ b/core/fs/src/main/java/dev/blamspot/jcode/fs/WorkspaceManager.kt
+@@ -57,6 +57,11 @@ class WorkspaceManager @Inject constructor(
+         }
+         .stateIn(scope, SharingStarted.Eagerly, null)
+ 
++    /** Protect DB-backed project roots (and their ancestors) when browsing the internal file tree. */
++    val registeredLocalRoots: StateFlow<Set<String>> = workspaceDao.observeWorkspaces()
++        .map { workspaces -> workspaces.flatMap { it.projects }.filter { it.kind == ProjectKind.Local }.map { it.location }.toSet() }
++        .stateIn(scope, SharingStarted.Eagerly, emptySet())
++
+     val rememberedSafTreeUris: StateFlow<Set<Uri>> = safPermissionStore.rememberedTrees
+         .stateIn(scope, SharingStarted.Eagerly, emptySet())
+ 
+diff --git a/core/fs/src/test/java/dev/blamspot/jcode/fs/SafeLocalFilesTest.kt b/core/fs/src/test/java/dev/blamspot/jcode/fs/SafeLocalFilesTest.kt
+new file mode 100644
+index 0000000..9b6bc62
+--- /dev/null
++++ b/core/fs/src/test/java/dev/blamspot/jcode/fs/SafeLocalFilesTest.kt
+@@ -0,0 +1,83 @@
++package dev.blamspot.jcode.fs
++
++import java.io.IOException
++import java.nio.file.Files
++import kotlin.test.*
++
++class SafeLocalFilesTest {
++    private fun fixture(test: (java.io.File) -> Unit) {
++        val root = Files.createTempDirectory("sui-files-").toFile()
++        try { test(root) } finally { SafeLocalFiles.remove(root) }
++    }
++    @Test fun internalRootIsStableWithoutAnyWorkspaceDatabaseOrProject() = fixture { filesDir ->
++        val root = InternalFiles.root(filesDir)
++        SafeLocalFiles.create(root, "loose/hello.py", false).writeText("print('saved')")
++        val reopened = InternalFiles.root(java.io.File(filesDir.path))
++        assertEquals(root.canonicalPath, reopened.canonicalPath)
++        assertEquals("print('saved')", java.io.File(reopened,"loose/hello.py").readText())
++        assertFalse(java.io.File(root,".jcode").exists())
++    }
++    @Test fun registeredProjectRootsAndTheirAncestorsCannotBeMovedByTheLooseFileBrowser() = fixture { root ->
++        val project = SafeLocalFiles.create(root,"group/project",true)
++        val registered = setOf(project.path)
++        assertTrue(InternalFiles.protectsProject(root,registered))
++        assertTrue(InternalFiles.protectsProject(project.parentFile,registered))
++        assertTrue(InternalFiles.protectsProject(project,registered))
++        assertFalse(InternalFiles.protectsProject(java.io.File(project,"source.java"),registered))
++        assertFalse(InternalFiles.protectsProject(java.io.File(root,"loose"),registered))
++    }
++    @Test fun nestedUnicodeFilesPersistAcrossReopening() = fixture { root ->
++        val f = SafeLocalFiles.create(root, "中文 空格/deep/nested/Hello.java", false)
++        SafeLocalFiles.write(f, "hello".toByteArray())
++        assertEquals("hello", java.io.File(root.path, "中文 空格/deep/nested/Hello.java").readText())
++    }
++    @Test fun creatingOrRenamingNeverOverwritesAnExistingEntry() = fixture { root ->
++        val a = SafeLocalFiles.create(root, "a", false).apply { writeText("original") }
++        val b = SafeLocalFiles.create(root, "b", false).apply { writeText("second") }
++        assertFails { SafeLocalFiles.create(root, "a", false) }
++        assertFails { SafeLocalFiles.rename(b, "a") }
++        assertEquals("original", a.readText()); assertEquals("second", b.readText())
++    }
++    @Test fun traversalAndSymlinkCreationAreRejected() = fixture { root ->
++        for (path in listOf("../escape", "/tmp/escape", "a/../../escape", "./x", "a//b")) assertFails { SafeLocalFiles.create(root, path, false) }
++        Files.createSymbolicLink(root.toPath().resolve("outside"), root.parentFile.toPath())
++        assertFails { SafeLocalFiles.create(root, "outside/escape", false) }
++    }
++    @Test fun failedSaveRetainsOriginalContentsAndRemovesStaging() = fixture { root ->
++        val f = SafeLocalFiles.create(root, "document", false).apply { writeText("precious data") }
++        assertFailsWith<IOException> { SafeLocalFiles.replace(f) { it.write("partial".toByteArray()); throw IOException("simulated disk failure") } }
++        assertEquals("precious data", f.readText())
++        assertEquals(listOf("document"), root.listFiles()!!.map { it.name })
++    }
++    @Test fun savesPreserveExecutablePermissionsAndSymlinkTargets() = fixture { root ->
++        val original = SafeLocalFiles.create(root, "script", false).apply { writeText("old"); setExecutable(true) }
++        val link = root.toPath().resolve("link"); Files.createSymbolicLink(link, original.toPath())
++        SafeLocalFiles.write(link.toFile(), "new".toByteArray())
++        assertTrue(Files.isSymbolicLink(link)); assertTrue(original.canExecute()); assertEquals("new", original.readText())
++    }
++    @Test fun copyingFoldersDoesNotRecurseIntoItselfOrOverwrite() = fixture { root ->
++        val dir = SafeLocalFiles.create(root, "source", true)
++        SafeLocalFiles.create(dir, "data", false).writeText("original")
++        assertFails { SafeLocalFiles.copy(dir, dir, "recursive") }
++        val copy = SafeLocalFiles.copy(dir, root, "copy")
++        assertEquals("original", java.io.File(copy, "data").readText())
++        assertFails { SafeLocalFiles.copy(dir, root, "copy") }
++    }
++    @Test fun copyAndDeleteDoNotFollowSymlinks() = fixture { root ->
++        val source = SafeLocalFiles.create(root, "source", true)
++        val other = SafeLocalFiles.create(root, "other", true)
++        java.io.File(other, "keep").writeText("safe")
++        Files.createSymbolicLink(source.toPath().resolve("link"), other.toPath())
++        val copy = SafeLocalFiles.copy(source, root, "copy")
++        assertTrue(Files.isSymbolicLink(copy.toPath().resolve("link")))
++        SafeLocalFiles.remove(copy); SafeLocalFiles.remove(source)
++        assertEquals("safe", java.io.File(other, "keep").readText())
++    }
++    @Test fun importFailureAndCollisionPreserveUserData() = fixture { root ->
++        assertFailsWith<IOException> { SafeLocalFiles.importNew(root, "new") { it.write(1); throw IOException("interrupted") } }
++        assertFalse(java.io.File(root, "new").exists())
++        java.io.File(root, "existing").writeText("safe")
++        assertFails { SafeLocalFiles.importNew(root, "existing") { it.write(2) } }
++        assertEquals("safe", java.io.File(root, "existing").readText())
++    }
++}
+diff --git a/core/term/src/main/java/dev/blamspot/jcode/core/term/TerminalSessionManager.kt b/core/term/src/main/java/dev/blamspot/jcode/core/term/TerminalSessionManager.kt
+index e0fcb53..ba8e094 100644
+--- a/core/term/src/main/java/dev/blamspot/jcode/core/term/TerminalSessionManager.kt
++++ b/core/term/src/main/java/dev/blamspot/jcode/core/term/TerminalSessionManager.kt
+@@ -4,6 +4,7 @@ import dev.blamspot.jcode.core.distro.Arch
+ import dev.blamspot.jcode.core.distro.DistroBind
+ import dev.blamspot.jcode.core.distro.ProotManager
+ import dev.blamspot.jcode.core.distro.RootfsManager
++import dev.blamspot.jcode.core.distro.GuestProcessTree
+ import java.io.File
+ import java.util.UUID
+ import kotlinx.coroutines.CoroutineScope
+@@ -76,6 +77,7 @@ class TerminalSessionManager(
+         /** Spawn parameters captured so a nested-shell child can be created cloning this session's
+          *  distro/binds/user/arch/workdir (OSC 7715). Null for sessions created before this existed. */
+         @Volatile var spawnSpec: SpawnSpec? = null
++        var processOwner: String? = null
+ 
+         /** Resize both the PTY and the parser together (parser realloc is synchronized against the
+          *  reader's feed). Safe to call from the UI thread. */
+@@ -301,6 +303,7 @@ class TerminalSessionManager(
+      * Create a new terminal session spawning the configured shell via proot as the distro user.
+      * Returns null if max sessions reached or proot/rootfs are not available.
+      */
++    // Preserve the original public/default-argument ABI for existing callers and extensions.
+     fun createSession(
+         distroId: String,
+         binds: List<DistroBind>,
+@@ -309,7 +312,19 @@ class TerminalSessionManager(
+         shellCommand: String = "/bin/bash --login",
+         rootfsArch: Arch = Arch.ARM64,
+         label: String? = null,
++    ): Session? = createOwnedSession(distroId, binds, workdir, user, shellCommand, rootfsArch, label, null)
++
++    fun createOwnedSession(
++        distroId: String,
++        binds: List<DistroBind>,
++        workdir: String,
++        user: String,
++        shellCommand: String = "/bin/bash --login",
++        rootfsArch: Arch = Arch.ARM64,
++        label: String? = null,
++        processOwner: String? = null,
+     ): Session? {
++        require(processOwner == null || processOwner.startsWith("sui-quickrun:"))
+         if (sessionCount >= maxSessions) return null
+         if (!prootManager.isProotInstalled) return null
+ 
+@@ -453,11 +468,12 @@ class TerminalSessionManager(
+             "BROWSER" to "/usr/local/bin/xdg-open",
+         ) + adbEnvVars() + androidSdkEnvVars(rootfsPath) + userEnvVars.filterKeys { ENV_NAME_RE.matches(it) }
+ 
++        val taggedEnv = if (processOwner != null) envVars + (GuestProcessTree.OWNER_ENV to processOwner) else envVars
+         val prootArgs = prootManager.buildShellCommand(
+             rootfsPath = rootfsPath,
+             shellCommand = shellCommand,
+             binds = binds,
+-            env = envVars,
++            env = taggedEnv,
+             workdir = workdir,
+             user = user,
+             rootfsArch = rootfsArch,
+@@ -477,6 +493,7 @@ class TerminalSessionManager(
+             )
+             val session = Session(sessionId, sessionLabel, pty)
+             session.spawnSpec = SpawnSpec(distroId, binds, user, rootfsArch, workdir)
++            session.processOwner = processOwner
+             synchronized(sessionsLock) { _sessions[sessionId] = session }
+             activeSessionId = sessionId
+             startReader(session)
+@@ -620,6 +637,7 @@ class TerminalSessionManager(
+         // still be drawing it on the main thread, and closing native parser state from this IO thread
+         // would race onDraw. The parser is freed on the main thread by closeSession(), or by its
+         // Cleaner once the view unbinds and the Session becomes unreachable.
++        session.processOwner?.let { owner -> runCatching { GuestProcessTree.terminateOwnerBlocking(owner) } }
+         runCatching { session.pty.close() }
+         if (activeSessionId == id) {
+             activeSessionId = synchronized(sessionsLock) { _sessions.keys.firstOrNull() }
+@@ -668,6 +686,10 @@ class TerminalSessionManager(
+         // the PTY dies (the parent would otherwise only get EOF → exit 0). No-op for normal sessions.
+         writeRelocationBackstop(session, "E 143\n")
+         val readerJob = session.readerJob
++        // Bounded cleanup must finish before the launcher closes, including explicit app exit.
++        session.processOwner?.let { owner ->
++            runCatching { GuestProcessTree.terminateOwnerBlocking(owner) }
++        }
+         readerJob?.cancel()
+         session.onUpdate = null
+         synchronized(session) { session.parser.close() }
+diff --git a/docs/sui-code-core-0.3.md b/docs/sui-code-core-0.3.md
+new file mode 100644
+index 0000000..9c35ab5
+--- /dev/null
++++ b/docs/sui-code-core-0.3.md
+@@ -0,0 +1,91 @@
++# sui-code core 0.3 集成交付报告
++
++## 范围及依赖
++
++本版从 v0.1 功能分支继续，保留 Java QuickRun 成果，以文件系统 → 通用执行框架 → 语言适配器 → 环境管理 → 工程兼容的依赖组织集成。未修改 main、官方上游或现有主题、图标和布局；仅新增功能入口及状态提示。没有创建 Release。
++
++源码基准：v0.1 `5496f14a1d4a3dfa3a9c3528fbe3f8ce154e1f4d`；v0.2 `b1a98181f80cb2d5b5fe9e8c4abe94396791024b`。
++独立分支：`sui-code/core-foundation`。
++本轮功能提交：`0eaaff1`（统一多语言适配及 Ubuntu 环境管理）、`8e0a8c06b4ab3d5554e98b266991eceb014d0c43`（常驻文件根目录及安全保存）。APK 对应后者；之后只有报告、交付工作流和原始产物提交。
++
++## 实现及关键文件
++
++- `core/fs/InternalFiles.kt`、`SafeLocalFiles.kt`、`FsOperations.kt`、`FsImplementations.kt`、`Trash.kt`、`WorkspaceManager.kt`：常驻应用私有根目录复用 `filesDir/workspace/projects`，不要求 Workspace/Project 数据库记录即可创建多层文件夹、文件并编辑保存；不迁移或清空原有数据。临时同目录写入、fsync、原子替换，失败保留原内容。创建禁止覆盖、路径穿越及符号链接穿越；复制暂存后发布、删除不跟随符号链接。工程已登记的根目录及其祖先禁止通过普通文件操作重命名/剪切/删除，避免数据库路径失效。
++- `feature/explorer/ExplorerFeature.kt`、`ExplorerView.kt`、`app/JCodeShell.kt`：复用原有 Explorer 和菜单，提供 Internal Files / Current Project Files；保留创建 Project、工程导航、原有导出实现及扩展机制。
++- `core/distro/QuickRun.kt`、`app/JavaQuickRunController.kt`、`EditorView.kt`、`EditorPane.kt`、`EditorSaveActions.kt`：四种语言共用当前标签识别、等待保存成功、真实路径解析、重复触发门禁、PRoot 映射、PTY 会话所有权、完成事件和停止流程。类名 JavaQuickRunController 为历史名称，内部已使用语言注册表分发，没有为每种语言复制控制器。非支持文件不启动其他任务。保存失败不会运行旧内容。
++- `QuickRunFileMount` 针对 PRoot 的冒号分隔规则选择无冒号祖先挂载，保留相对子路径。shell 参数统一引用，支持中文、空格、引号及冒号路径。
++- `NativeLanguageAdapter`、`NativeQuickRun.kt`：Java、C、C++、Python 只提供后缀及执行脚本。Java 每次显式加载 `/opt/sui-code/java.env`，不回退其他 JDK；真实 JDK 编译检查后使用源文件启动，解析 package，不向源码目录写 class。C/C++ 临时目录编译并执行，包含目录和工作目录保持源目录；Python 保留源文件的 `__file__`、导入路径及 `__main__` 语义，语法检查后执行且不写 pycache。错误码区分准备失败 73、环境缺失 78、编译/语法错误 65、程序运行失败 70。
++- `TerminalSessionManager.kt`、`GuestProcessTree.kt`、`OutputLog.kt`：复用原 PTY/PRoot，专属 QuickRun 所有权标签，直接交互输入、实时输出、停止及会话关闭清理。正常 ProjectRunner 会话没有 QuickRun 标签；原有运行配置入口保留。Ctrl+F5 从编辑器实际连接到保存、启动及终端聚焦；忽略按键重复并防止并发启动。
++- `NativeEnvironment.kt`、`NativeEnvironmentManager.kt`、`SdkCatalogLoader.kt`、`NativeEnvironmentPage.kt`：复用现有 DistroService、Toolchains、Setup 终端及安装日志入口。保留 v0.1 官方 Adoptium Java 查询、校验与安装器；C/C++/Python 查询 Ubuntu 已配置的签名 APT 软件源，显示架构、已装/候选版本、来源及步骤，用户确认后固定请求包版本。不是追求上游最新 GCC/Python，而是 Ubuntu 稳定渠道。下载验证后安装，成功烟测才原子发布各语言 env。C/C++ 编译运行验证，Python 验证解释器和 venv。
++- 已有可用环境优先保留。未配置 C/C++/Python env 时，只明确使用 Ubuntu 既有 `/usr/bin` 工具，不自动安装；已存在但失效的配置会报错。Java 不允许该回退。插件安装来源未扩展至第三方市场。
++- 安装取消在安全阶段边界执行，不强杀 dpkg；Setup 活动期间正常关闭/应用内重启受到保护。失败可重试并配置未完成的包。没有全系统 apt upgrade 或删除 JDK，但 APT 可能安装/配置依赖包；不能承诺依赖完全不变。
++
++## 构建与自动化验证
++
++Gradle Debug 构建成功，使用 JDK 21、SDK 36、NDK 27.2、真实 Rust/Cargo JNI，不使用占位 native 库。构建参数：
++
++```sh
++source /workspace/setup/env.sh
++export SUI_QUICKRUN_TEST_JAVA_HOME=/workspace/toolchains/temurin27/jdk-27.0.1.0.2+1
++bash gradlew --no-daemon --max-workers=4 \
++  -PjcodeApplicationId=dev.suicode.ide \
++  -PsuiVersionCode=1070801 -PjcodeVersionName=1.7.7-sui.core.0.3 \
++  :core:fs:testDebugUnitTest :core:distro:testDebugUnitTest \
++  :core:design:testDebugUnitTest --tests '*ExtensionAbiSurfaceTest' \
++  :app:testDebugUnitTest :app:assembleDebug
++```
++
++JUnit 合计 **84 项，通过 84、失败 0、错误 0、跳过 0**：
++
++| 测试组 | 数量 | 覆盖 |
++|---|---:|---|
++| SafeLocalFilesTest | 10 | 多层中文路径、碰撞、穿越/链接、保存中断、权限、复制/删除/导入、无数据库根目录、工程保护 |
++| GuestShellScriptTest | 3 | shell 参数引用 |
++| JavaEnvironmentTest | 10 | 原 Java 环境安装回归 |
++| JavaQuickRunTest | 16 | 真实 Java 27、保存屏障、package、错误、PTY 输入、停止长任务及子进程、重复触发 |
++| NativeQuickRunTest | 11 | 真实 GCC/G++/Python、PTY、编译/运行错误、路径映射、Python 导入/main/dataclasses、无缓存 |
++| NativeEnvironmentTest | 10 | 严格安装计划、模拟 apt/dpkg 失败/取消、实际编译烟测、保留旧环境 |
++| ExtensionAbiSurfaceTest | 5 | 公共接口兼容 |
++| InternalFilesQuickRunIntegrationTest | 1 | 无工程内部文件保存到四种真实运行时的集成链路 |
++| ProjectRunnerQuickRunRegressionTest | 1 | 原工程运行配置实际执行 |
++| ManagedCache/MemoryPressure/UpdateChecker | 17 | 原有稳定性回归 |
++
++上述运行测试在 Linux x64 云端完成（Java Temurin 27、GCC/G++ 14.2、Python 3.13.5），不是 Android ARM64 实机验收。没有连接 adb 设备。Android 焦点/快捷键、UI 生命周期、实际 Ubuntu PRoot 清理和 SAF 导出仍需最终统一实机验收。
++
++### 补充真实 Ubuntu APT 集成验证
++
++使用官方 `ubuntu:24.04` 镜像（digest `sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852`），实际发行版 Ubuntu 24.04.5 LTS、amd64。直接调用已编译生产代码生成的查询、安装及运行脚本，真实 APT 安装三组环境成功：GCC/G++ 13.3.0、Python 3.12.3（含 venv/pip）。三次安装验证成功；三次适配器运行成功并接收管道输入，输出 `C=42`、`CPP=input`、`PY=你好`，退出均为 0。安装前后的模拟既有 java.env 逐字节一致。此容器没有真实设备 JDK，不能据此声称设备 JDK 已验证。
++
++首次下载因 sudo 清除代理变量而超时；为一次性测试容器显式配置受信任代理和 CA 后重跑成功，没有关闭 TLS/签名校验，没有更改应用源代码。用户设备网络并不依赖云端代理。容器已清理。以上 3 组安装及 3 组运行是额外集成检查，不计入 84 项 JUnit，也不是 Android PRoot/ARM64 实测；交互 PTY 由前述宿主测试覆盖，此容器采用管道输入。
++
++## APK 与升级安全
++
++- 文件：`sui-code-core-0.3-debug.apk`
++- 大小：**88846380 bytes**
++- SHA-256：`661bd7c90f06bf5630d0c4e73b85b378665a4baa4b51db0a7ce94af61ce9010e`
++- applicationId：`dev.suicode.ide.debug`，显示名仍为 `JCode (debug)`，仅 ARM64，minSdk/targetSdk 33。
++- versionCode：`1070801`，高于 v0.1 `1070799` 及 v0.2 `1070800`；versionName：`1.7.7-sui.core.0.3`。
++- apksigner 验证通过；实际证书 SHA-256：`62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0`，与原始 v0.1 APK 一致。
++- 包身份、签名及版本条件允许直接覆盖升级 v0.1；云端没有执行 Android 覆盖安装，数据保留仍需最终设备验证。代码不删除或重建已有 Ubuntu/JDK，不要求重新安装 JDK，不触碰 `/opt/sui-code/java.env` 的既有有效选择。
++- v0.1 APK 原始 SHA-256 `1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06` 保持不变；其报告及原安装包不覆盖。
++
++## 下载与交付机制
++
++独立分支工作流 `.github/workflows/deliver-sui-code-core-0.3.yml` 上传同一份已构建签名 APK、`report.md`、`changes.patch`。工作流不重新构建，不上传私钥，不创建 Release；检查原始 SHA/大小、实际包身份、旧新版证书，然后下载 Artifact 逐字节比较三份文件。Artifact 名 `sui-code-core-0.3-integrated-debug`，保留 30 天，下载通常需登录 GitHub。运行及 Artifact 的真实地址在最终交付回复中提供，以实际成功运行生成的 ID 为准。
++
++`changes.patch` 从 v0.1 有效提交到本轮报告/工作流提交生成，排除 `.delivery` 二进制载荷，包含 Java QuickRun 及后续通用核心改动。原始源码提交及报告可在分支浏览。
++
++## 已知限制与最终 ARM64 验收
++
++未声称所有 Android 行为已实机通过。统一环境管理通过统一入口协调原 Java 专用发行包安装器和 Ubuntu APT 管理器，未强行将两种不同事务合并。系统强制结束可能中断包管理或留下临时目录；下次重试尝试修复 pending dpkg，不能保证在系统强杀时无残留。文件原子替换面向应用私有本地文件系统，不支持原子替换的文件系统直接报错，不退回截断写入。SAF/外部存储保留旧机制，外部提供者行为未设备验证。当前仍是单文件运行器，不承诺完整多文件构建系统、所有语言/版本或 Android 调试器。已登记工程根目录的移动/删除须走工程管理。
++
++最终仅安装本集成版一次，建议先正常导出/备份重要文件，**不得卸载或清除数据**：
++
++1. 校验下载 APK SHA，覆盖安装现有 v0.1；若 Android 拒绝升级，记录错误并停止，不卸载。
++2. 打开现有 Ubuntu，显式加载 `/opt/sui-code/java.env`，确认旧 JDK 路径、java/javac/jshell 与已有文件保留；重启应用再确认。
++3. 不创建工程，在 Internal Files 创建 `中文 空格/多层/HelloWorld.java`，输入未保存修改后 Ctrl+F5，确认自动保存和真实输出；尝试文件名/目录包含引号、冒号。非支持标签不得触发其他任务。
++4. 在终端测试 Scanner/System.in、编译错误、异常堆栈；运行长循环及创建子进程，点击停止、关闭对应终端后确认没有残留 Java 子进程。长按快捷键、连续切换文件运行并检查会话释放。
++5. 在 Toolchains 查询并确认安装缺少的 GCC/G++/Python；检查来源、版本、日志、取消和失败重试，重新打开应用确认环境持久化；Java 原配置不变。
++6. 分别创建 .c、.cpp、.py 文件，Ctrl+F5 测试交互输入、编译/语法错误、运行异常、工作目录/本地头文件和 Python 同目录导入；每次运行后源码目录不应出现 class、二进制或 pycache。
++7. 测试根目录多层创建、重名失败、复制、重命名、删除/回收站、导入和编辑保存；确认普通操作不能移动或删除已登记工程根目录及祖先。
++8. 创建/打开原有 Project，使用原 Run/Debug/运行配置、导出及扩展；切换内部根目录再运行单文件，确认工程和普通文件互不影响。外接键盘、触摸入口、终端关闭和应用后台/恢复均需实机确认。
+diff --git a/docs/sui-code-v0.2.md b/docs/sui-code-v0.2.md
+new file mode 100644
+index 0000000..6476d06
+--- /dev/null
++++ b/docs/sui-code-v0.2.md
+@@ -0,0 +1,155 @@
++# sui-code v0.2 — 原生 Java QuickRun 开发与验收报告
++
++日期：2026-11-08（Asia/Shanghai）。状态：代码、云端测试、Debug 构建通过；ARM64 平板操作与覆盖升级待实机确认。
++
++## 1. 本轮实现的功能
++
++- 从 v0.1 最新有效提交 `5496f14a1d4a3dfa3a9c3528fbe3f8ce154e1f4d` 创建 `sui-code/v0.2-java-quickrun`，没有基于缺少 v0.1 的 main 重新开发。
++- 编辑器获得焦点时，物理键盘 `Ctrl+F5` 通过 `EditorView.dispatchKeyEvent` 调用原生 QuickRun，不经过工程/Run Configuration。
++- 从 ViewModel 当时的激活标签捕获文件与编辑状态，只接收 `.java` 文件。先等待 `saveTabAwait` 完成；保存失败、保存期间又有编辑、无法读取本地文件或 Ubuntu 改变时，不创建运行进程。
++- 非 Java 标签不启动其他运行任务。长按 repeatCount 和运行中重复启动由原子门闩拦截；再次运行前关闭上一条已完成的 QuickRun 会话，避免累积会话及 Output 捕获记录。
++- 每次启动明确加载 `/opt/sui-code/java.env`，清除继承的 JAVA_HOME 后读取受管理的配置，使用绝对路径 java/javac。没有环境文件、JDK 工具缺失或 Java 启动失败时明确报错；不改用 Android Java、其他 JDK，不调用 apt、不触发安装器。
++- 通过既有 PRoot/PTY/TerminalSessionManager 创建独立可管理终端，将真实文件父目录绑定到 guest `/sui-quickrun`；该目录作为工作目录，因而相对资源仍来自当前文件目录。命令里的用户路径一律 shellQuote，长脚本先暂存，不把源码或长命令灌入 PTY。
++- 快捷键会自动打开并聚焦既有 Terminal 面板。stdin 直接连接 PTY，stdout、stderr 和异常堆栈原样显示，并汇入已有 Output 通道。
++- 先将已保存文件快照复制到私有临时目录，执行 `javac -proc:none -d <临时目录>` 做编译诊断；编译失败返回 65。随后使用同一 JDK 的源文件启动；运行失败返回 70，并保留原 Java 退出码及堆栈。环境错误返回 78，文件错误 66，准备失败 73。
++- 云端 Java 27 测试证明：源文件路径不匹配 package 时，Java 27 会拒绝源文件启动。本实现用 JDK 自带的 JavacTask AST 解析包名，将快照放到匹配包名的私有目录再源文件启动，不用正则猜 Java 语法。工作目录保持为原文件父目录。生成的 `.class`、辅助源码和快照都在临时目录，正常退出由 trap 清理。
++- 使用已有 Stop 控件停止 QuickRun；即使没有工程，运行期间该原有控件也可用。停止会关闭 QuickRun PTY，先按唯一 owner 标记终止 guest tracee，再清理不响应终止的 Java/子进程，然后关闭 PRoot launcher。手动关闭会话、明确退出应用及 ViewModel 释放也走此清理路径。
++- QuickRun 的会话、门闩、标记与 ProjectRunner 分开管理。停止 QuickRun 不停止现有工程任务。Java 原生适配器通过 registry 分发，后续可添加 C/GCC、C++/G++、Python 适配器；本轮未实现或安装这些语言环境。
++- 未重设 JCode 名称、图标、主题和布局。仅接入快捷键及复用现有 Stop/Terminal 功能，没有视觉重设计。
++
++## 2. 修改的关键文件
++
++| 文件 | 用途 |
++| --- | --- |
++| `core/distro/.../QuickRun.kt` | 语言 registry、重复触发门闩、保存完成门控、Java 临时编译/源启动计划、可测试的停止策略。 |
++| `core/distro/.../JavaEnvironment.kt` | 复用 JavaLanguageAdapter 接口，接入实际 Java 执行计划。 |
++| `app/.../JavaQuickRunController.kt` | 当前文件生命周期、保存等待、文件绑定、创建/聚焦/停止独立终端、会话回收。 |
++| `app/.../MainViewModel.kt` | 捕获激活标签，连接保存与 QuickRun，转发完成事件，退出清理。 |
++| `core/editor/.../EditorView.kt`、`feature/editor-pane/.../EditorPane.kt` | 焦点内 Ctrl+F5 和 repeatCount 传递；真实连接 Controller，而非空处理器。 |
++| `core/design/.../EditorSaveActions.kt` | 附加 QuickRun 操作属性；保留原设计 SDK 构造函数的 JVM 描述符。 |
++| `core/term/.../TerminalSessionManager.kt`、`core/distro/.../GuestProcessTree.kt` | 可选的专属 owner 标记与先杀 tracee 后关 launcher；原 createSession 及默认参数 ABI 保留，普通终端行为不变。 |
++| `app/.../JCodeShell.kt`、`workbench/WorkbenchModel.kt`、`workbench/WorkbenchChromeBars.kt` | 合并既有终端聚焦通道，连接 Stop 和无工程运行状态。 |
++| `app/.../OutputLog.kt` | 关闭 QuickRun 会话时回收自身捕获状态，不清空其他工程输出。 |
++| `feature/sdk-manager/.../JavaEnvironmentPage.kt` | 更新原管理器中的功能说明；安装器、JDK 存储和日志流程不变。 |
++| `app/build.gradle.kts` | 提供明确的正整数 versionCode 构建覆盖项。 |
++| `core/distro/.../JavaQuickRunTest.kt`、`JavaEnvironmentTest.kt` | 新执行链路测试与 v0.1 回归。 |
++| `core/design/.../ExtensionAbiSurfaceTest.kt` | 扩展 ABI 检查及原构造签名回归。 |
++| `app/src/test/.../ProjectRunnerQuickRunRegressionTest.kt` | 原有工程命令暂存与真实 shell 执行回归。 |
++| `.github/workflows/deliver-sui-code-v0.2.yml`、`.delivery/sui-code-v0.2/` | 原 APK 上传、下载回验及升级身份/签名检查，仅用于 v0.2 分支。 |
++
++完整源码差异以交付的 `changes.patch` 为准；原 `ProjectRunner.kt` 未修改。v0.1 的 APK、报告、补丁及交付工作流未覆盖。
++
++## 3. 分支名称与提交 SHA
++
++分支：`sui-code/v0.2-java-quickrun`。
++
++- `95d5ae2`：Java 计划、键盘入口、停止策略及测试。
++- `6421a95`：当前编辑文件保存—运行—停止链路、独立升级身份及工程回归。
++- `e8697745ad769fb6180c7dd0355c63f41a357d8d`：保留扩展/终端 ABI，回收 Output 捕获。最终 APK 源码对应此提交。
++- 后续文档/工作流/交付提交不改变上述 APK 源码；最终分支 HEAD 在 GitHub 可查。
++
++## 4. 构建结果
++
++`BUILD SUCCESSFUL`，Android Debug APK 已生成。使用已验证云端工具链：JDK 21、Gradle 8.14.3、SDK 36、NDK 27.2.12479018、CMake 3.30.5。既有 Cargo JNI 输出已保留，APK 包含 `libripgrep_ffi.so`、`libjcode_wasm.so`，仅 arm64-v8a。
++
++```bash
++cd /workspace/j-code-android
++source /workspace/setup/env.sh
++export SUI_QUICKRUN_TEST_JAVA_HOME=/workspace/toolchains/temurin27/jdk-27.0.1.0.2+1
++bash gradlew --no-daemon --max-workers=4 \
++  -PjcodeApplicationId=dev.suicode.ide \
++  -PsuiVersionCode=1070800 -PjcodeVersionName=1.7.7-sui.0.2 \
++  :core:design:testDebugUnitTest --tests '*ExtensionAbiSurfaceTest' \
++  :core:distro:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug
++```
++
++本轮功能包由本机保留的 v0.1 Debug 密钥签名；Actions 只搬运已验证 APK，不重新构建、不生成另一把签名密钥。
++
++## 5. 测试用例、数量及通过结果
++
++共 **52 项通过，0 失败、0 错误、0 跳过**。core/distro 的 29 项在功能验收构建实际执行；兼容性最终构建对未变化的该模块复用有效结果，core/design 和 app 实际执行。没有将旧 v0.1 快照的测试结果当成本轮新结果。
++
++| 测试组 | 数量 | 结果 |
++| --- | ---: | --- |
++| JavaQuickRunTest | 16 | 全部通过，真实 JVM/PTY 与策略测试，见下表。 |
++| JavaEnvironmentTest（v0.1） | 10 | 全部通过：GA 解析、校验、并存安装、失败/取消等。 |
++| GuestShellScriptTest | 3 | 全部通过：用户环境经 su 传递、root 路径等。 |
++| ExtensionAbiSurfaceTest | 5 | 全部通过：原扩展引用表面与设计 SDK 构造签名。 |
++| ProjectRunnerQuickRunRegressionTest | 1 | 真实执行原工程 Run Configuration 的暂存脚本，未加载 Java 环境，输出 `PROJECT_RUN_OK`。 |
++| ManagedCacheTest / MemoryPressureTest / UpdateCheckerTest | 6 / 4 / 7 | 全部通过。 |
++
++JavaQuickRunTest 的 16 个用例：
++
++1. 仅 Java 分发，无工程依赖。
++2. repeatCount 与并发门闩抑制重复启动。
++3. 保存失败后不解析/执行过期文件。
++4. 保存真正挂起时等待完成再解析文件。
++5. 保存与路径使用顺序。
++6. 中文、空格、引号目录中的 HelloWorld，无源码目录 class 垃圾。
++7. package 与当前目录相对资源读取。
++8. 中文、空格、单引号、分号、美元符等合法文件名不成为 shell 代码。
++9. 缺少 managed java.env 明确失败，不用主机 Java 回退。
++10. 配置内 JDK 损坏时明确失败，不回退。
++11. 编译失败 65 与运行失败 70 区分，异常堆栈保留。
++12. Linux 真实 PTY 标准输入，含中文输入。
++13. 连续运行不同文件，输出独立，无源码目录 class 文件。
++14. 停止策略首先终止 tracee，并清理不响应终止和脱离父进程的进程，不碰其他 owner。
++15. 正常停止不进行多余强杀。
++16. 真实 Linux PTY 长时 Java 程序创建 `sleep` 子进程并安装慢退出 hook；按生产同一停止策略清理后，owner 进程集合为空，另一个未标记任务仍存活。
++
++执行 Java 测试的是官方 **Temurin 27.0.1.0.2+1 / Linux x64**，归档来自 Adoptium GitHub 发布，下载后用官方 `.sha256.txt` 验证。构建 Gradle 使用 JDK 21；没有把构建用 JDK 21 误报为 Java 27 执行测试。
++
++## 6. APK 包身份、版本及签名兼容性
++
++| 项目 | v0.1 原交付 APK | v0.2 |
++| --- | --- | --- |
++| applicationId | dev.suicode.ide.debug | dev.suicode.ide.debug |
++| versionCode | 1070799 | **1070800** |
++| versionName | 1.7.7 | **1.7.7-sui.0.2** |
++| 签名证书 SHA-256 | 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0 | **完全一致** |
++| minSdk / targetSdk | 33 / 33 | 33 / 33 |
++| ABI | arm64-v8a | arm64-v8a |
++
++`apksigner verify` 与 `aapt dump badging` 均通过。核查的 v0.1 APK SHA-256 仍为 `1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06`。
++
++结论：与原交付 v0.1 满足同包名、同证书、更高 versionCode 的覆盖更新条件；没有数据清除、JDK 重装或 rootfs 迁移逻辑。预期保留应用内 Ubuntu 和 `/opt/sui-code/jdks/temurin-27.0.1.0-aarch64`。尚未在目标设备实际执行覆盖安装；如果系统报签名冲突或安装失败，停止并保留原应用，不卸载、不清除数据。
++
++## 7. APK 下载方式及 SHA-256
++
++交付文件：`sui-code-v0.2-debug.apk`、`report.md`、`changes.patch`。
++
++- APK 字节数：**88,733,580**。
++- APK SHA-256：**e0672c0823403c8176d1bf91d822cf143c0073186e4f35d9373d82b79d7c010e**。
++- Actions 工作流：`Deliver original sui-code v0.2 APK`，仅允许 Fork 的 v0.2 分支。
++- Artifact 名：`sui-code-v0.2-java-quickrun-debug`，保留 30 天，登录 GitHub 后下载 ZIP。
++- 源码补丁基线为 v0.1 最新提交 `5496f14`，不包含交付用 APK 二进制。
++- 最终工作流运行页及 Artifact 的真实入口在本次交付回复中提供；不会用容器内部路径冒充下载地址。
++
++## 8. 尚未验证或已知存在的问题
++
++- `adb devices` 没有连接设备。本轮所有运行测试均为云端 Linux x64；**没有宣称 ARM64 PRoot、物理键盘、Android UI 或更新安装实机通过**。
++- 用户提供的 v0.1 ARM64 实机验收是既有基线，本轮没有重新验证或破坏它，也不要求重装 JDK。
++- 必须实机确认：Ctrl+F5 的硬件键映射/焦点、dirty 文件自动保存、Terminal 自动聚焦、中文输入法与 stdin、Stop/关闭/退出时 Android `/proc` 可见性与 PRoot 清理、长时间运行及连续执行。
++- Linux host PTY 的停止测试使用生产同一清理策略，但信号和进程枚举适配器是 Linux host，不能替代 Android `Os.kill`/SELinux 的集成验收。
++- Java 预编译校验、JDK AST helper 和源启动会额外启动 JVM，优先保证错误分类与 Java 27 包名兼容，平板冷启动耗时尚待测量。
++- 正常退出会清除临时文件；被强杀、系统杀进程等情况下可能留下应用私有 `/tmp/sui-quickrun-*` 临时目录，不在源码目录生成 class，不改 JDK 安装目录。
++- 本轮只支持可读写的真实本地文件。无法保存、无真实文件路径的标签会报错，不静默运行旧内容。尚未实现远程文档/SAF-only 文档复制运行。
++- 无 main 方法等入口问题在预编译通过后报告为运行失败；本轮不做工程构建、依赖下载或复杂 classpath 配置。
++- Stop 会关闭该 QuickRun 会话；运行完成时会话保留输出。已有 Output 通道保留已收集输出；没有新增第二套终端或运行面板。
++- 其他语言、调试器和 UI 改造未开始。
++
++## 9. 用户 ARM64 平板逐步验收流程
++
++1. 下载本次 Actions Artifact ZIP，解压并核对 APK SHA-256。保留 v0.1 安装包；不要卸载 v0.1、清数据或重新配置 Ubuntu。
++2. 在系统安装器中对 `dev.suicode.ide.debug` 执行**更新**。若提示冲突/失败，停止并反馈错误，不卸载。安装后在应用信息确认版本 `1.7.7-sui.0.2`。
++3. 打开原有 Ubuntu 24.04 环境，确认已有文件、工程、终端配置和 JDK 目录仍在。可用原命令 `. /opt/sui-code/java.env; java -version; javac -version` 作保留验证；QuickRun 本身不需要手工执行这些命令。
++4. 新建或打开独立的 `HelloWorld.java`，不创建工程、不添加 Run Configuration。代码打印 `Hello from sui-code!`。点击编辑器使其获得焦点，按 Ctrl+F5，确认终端自动出现并输出该行及 `[QuickRun completed] exit 0`。
++5. 在编辑器修改输出文本但不点保存，再按 Ctrl+F5。应执行新内容；检查磁盘文件已保存。针对不可写文件应报错，不应启动旧文件。
++6. 将文件放到含中文、空格、单引号的目录中重复运行；再用合法的非 public 类/特殊文件名测试。测试带 package 的文件及从当前目录读取 `message.txt`。
++7. 加入语法错误，确认显示 `[QuickRun compilation failed]`；修复后让 main 抛异常，确认堆栈及 `[QuickRun runtime failed]`，两者能区分。
++8. 使用 Scanner/System.in 读取一行并打印，按 Ctrl+F5 后在 Terminal 内输入文字及回车，应显示输入结果。
++9. 使用循环打印或 sleep 的长运行程序。长按 Ctrl+F5，不应产生多个 QuickRun 终端。点既有 Stop；再用关闭相关终端和明确退出应用分别测试。返回后检查没有残留 Java/子进程，已有其他工程任务不应被 QuickRun 的 Stop 杀死。
++10. 在不同目录连续运行多个 Java 文件，再运行一个原有 ProjectRunner 工程，验证旧 Run/Debug 行为；再次打开 Java 环境管理器，确认原 JDK 状态及安装日志仍可访问。
++11. 关闭并重新打开应用，重复 HelloWorld，确认无须手工 source，已有 Ubuntu/JDK 数据仍保留。
++
++最终状态：**覆盖更新的包级条件通过；JDK 不迁移、不重装；Ctrl+F5 已接通真实保存—PRoot—Java—PTY 链路；交互输入和停止已实现并通过 host 测试；ARM64 平板上的更新、快捷键、交互及清理效果仍须按上述步骤确认。**
+diff --git a/feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt b/feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt
+index bc08d42..9da22ad 100644
+--- a/feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt
++++ b/feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt
+@@ -474,6 +474,7 @@ fun EditorViewHost(
+                     onContextRequest = { menu = it }
+                     onSaveRequest = { onSave() }
+                     onSaveAllRequest = { saveActions.onSaveAll() }
++                    onQuickRunRequest = { saveActions.onQuickRun(it) }
+                     onFindRequest = { onFind() }
+                     onGoToLineRequest = { menuExtras.onGoToLine?.invoke() }
+                     onCloseTabRequest = { onCloseTab() }
+@@ -505,6 +506,7 @@ fun EditorViewHost(
+                 v.onContextRequest = { menu = it }
+                 v.onSaveRequest = { onSave() }
+                 v.onSaveAllRequest = { saveActions.onSaveAll() }
++                v.onQuickRunRequest = { saveActions.onQuickRun(it) }
+                 v.onFindRequest = { onFind() }
+                 v.onGoToLineRequest = { menuExtras.onGoToLine?.invoke() }
+                 v.onCloseTabRequest = { onCloseTab() }
+diff --git a/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerFeature.kt b/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerFeature.kt
+index 3184092..ac434f6 100644
+--- a/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerFeature.kt
++++ b/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerFeature.kt
+@@ -13,6 +13,9 @@ import dev.blamspot.jcode.fs.Workspace
+  * Provides the file/folder explorer with tree and list views, file operations,
+  * and drag-and-drop scaffolding.
+  */
++/** Additional roots whose movement would orphan Project database references. */
++val LocalProtectedProjectRoots = androidx.compose.runtime.compositionLocalOf<Set<String>> { emptySet() }
++
+ object ExplorerFeature {
+ 
+     /**
+diff --git a/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt b/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt
+index abf1e59..ffcebad 100644
+--- a/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt
++++ b/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt
+@@ -303,7 +303,14 @@ fun ExplorerView(
+         }
+     }
+ 
++    val protectedProjects = LocalProtectedProjectRoots.current
++    fun isProtectedPath(path: FsPath): Boolean = path.stableId == project.fsPath.stableId ||
++        (path as? FsPath.Local)?.let { dev.blamspot.jcode.fs.InternalFiles.protectsProject(it.file, protectedProjects) } == true
+     fun runRowAction(row: TreeRow, action: RowAction) {
++        if (isProtectedPath(row.node.path) && action in setOf(RowAction.Rename, RowAction.Cut, RowAction.Delete)) {
++            onSnackbar?.invoke("The root folder is permanent. Manage project names through Project management.")
++            return
++        }
+         when (action) {
+             RowAction.Open -> onFileSelected?.invoke(row.node)
+             RowAction.NewFile -> showCreateDialog = CreateTarget(row.node.path, isDirectory = false)
+@@ -360,6 +367,7 @@ fun ExplorerView(
+                 clipboard?.let { entry ->
+                     scope.launch {
+                         runCatching {
++                            if (entry.isCut) check(!isProtectedPath(entry.sourcePath)) { "Manage registered project folders through Project management" }
+                             val targetParent = resolveCreateParent()
+                             copyFileOrDir(fs, context, entry.sourcePath, targetParent)
+                             viewModel.refresh()
+@@ -464,6 +472,7 @@ fun ExplorerView(
+             onConfirm = { newName ->
+                 scope.launch {
+                     runCatching {
++                        check(!isProtectedPath(target.path)) { "Manage registered project folders through Project management" }
+                         renameFile(fs, context, target.path, newName)
+                         viewModel.refresh()
+                         scmUi.onFsActivity?.invoke()
+@@ -507,6 +516,7 @@ fun ExplorerView(
+                     showDeleteConfirm = null
+                     scope.launch {
+                         runCatching {
++                            check(!isProtectedPath(node.path)) { "Manage registered project folders through Project management" }
+                             if (toTrash) {
+                                 trash.put(
+                                     context = context,
+@@ -583,7 +593,8 @@ private fun RowOverflowMenu(
+     val isDir = row.node.kind == FsKind.Directory
+     val scmUi = LocalExplorerScmUi.current
+     // The project root must not be moved or deleted from the tree, so Cut/Delete are hidden on it.
+-    val isProjectRoot = LocalProjectRootId.current == row.node.path.stableId
++    val protectedProjects = LocalProtectedProjectRoots.current
++    val isProjectRoot = LocalProjectRootId.current == row.node.path.stableId || (row.node.path as? FsPath.Local)?.let { dev.blamspot.jcode.fs.InternalFiles.protectsProject(it.file, protectedProjects) } == true
+     Box {
+         JcTooltip("More actions") {
+             IconButton(
+@@ -604,7 +615,7 @@ private fun RowOverflowMenu(
+             quickActions = buildList {
+                 add(ContextAction(JCodeIcon.Copy, "Copy") { onAction(row, RowAction.Copy) })
+                 if (!isProjectRoot) add(ContextAction(JCodeIcon.Cut, "Cut") { onAction(row, RowAction.Cut) })
+-                add(ContextAction(JCodeIcon.Rename, "Rename") { onAction(row, RowAction.Rename) })
++                if (!isProjectRoot) add(ContextAction(JCodeIcon.Rename, "Rename") { onAction(row, RowAction.Rename) })
+                 if (!isProjectRoot) {
+                     add(ContextAction(JCodeIcon.Delete, "Delete", destructive = true) { onAction(row, RowAction.Delete) })
+                 }
+diff --git a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt
+index d8b81e8..e95a273 100644
+--- a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt
++++ b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt
+@@ -64,7 +64,7 @@ internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier:
+             }
+         }
+         if (state.busy) TextButton(onClick = manager::cancel) { Text("Cancel") }
+-        Text("QuickRun: Java adapter prepared; Ctrl+F5 and current-file execution are not connected in v0.1.")
++        Text("QuickRun: open a .java file in the editor and press Ctrl+F5. The current file is saved before running in Ubuntu.")
+         Text("Language plugin: not enabled here. The official JCode marketplace lists Java Dev Pack (jcode.lang.java); device compatibility is unverified. Review it in Extensions. No third-party fallback is used.")
+         state.logPath?.let { Text("Install log in Ubuntu: $it") }
+         if (state.log.isNotBlank()) SelectionContainer { Text(state.log, style = MaterialTheme.typography.bodySmall) }
+diff --git a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/NativeEnvironmentPage.kt b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/NativeEnvironmentPage.kt
+new file mode 100644
+index 0000000..48fefce
+--- /dev/null
++++ b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/NativeEnvironmentPage.kt
+@@ -0,0 +1,56 @@
++package dev.blamspot.jcode.feature.sdkmanager
++
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.text.selection.SelectionContainer
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.unit.dp
++import dev.blamspot.jcode.core.distro.*
++
++/** Native package setup inside the existing Toolchains detail slot; no new visual system. */
++@Composable
++internal fun NativeEnvironmentPage(language: NativeEnvironment, environment: DistroEnvironmentState, modifier: Modifier) {
++    val context = LocalContext.current
++    val manager = remember(context) { DistroServiceLocator.distroService(context).nativeEnvironmentManager }
++    val state by manager.state.collectAsState()
++    var confirmation by remember(language) { mutableStateOf<NativeInstallPlan?>(null) }
++    val ready = environment.distroInstalled == true && environment.jcodeUserReady == true
++    val plan = state.plan?.takeIf { it.language == language && it.distroId == environment.runtime.selectedDistro.id }
++    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
++        Text(language.title, style = MaterialTheme.typography.titleLarge)
++        Text("Native Ubuntu environment · signed distribution packages")
++        Text("Environment: ${environment.runtime.selectedDistro.label}")
++        Text(state.message)
++        if (!ready) Text("Complete Ubuntu setup first. Existing installations and Java data will not be reset.")
++        if (state.busy) CircularProgressIndicator()
++        Button(onClick = { manager.query(language) }, enabled = ready && !state.busy) { Text("Query Ubuntu versions / retry") }
++        plan?.let { reviewed ->
++            SelectionContainer {
++                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                    Text("Architecture: ${reviewed.architecture}")
++                    Text("Source: the configured, signed Ubuntu package repositories. No extension marketplace is used.")
++                    reviewed.packages.forEach { pkg -> Text("${pkg.name}: ${pkg.selected} · ${if (pkg.installed != null) "keep installed version" else "Ubuntu candidate"}") }
++                    Text("1. Preserve an existing usable managed tool.\n2. Finish pending dpkg configuration, if any.\n3. Download reviewed packages with apt signature/hash verification.\n4. Keep installed requested versions; apt may configure required dependencies.\n5. Run a compile/interpreter smoke test, then atomically configure the native QuickRun environment.")
++                    Text("Cancellation is cooperative: apt/dpkg is allowed to finish its current operation. Completed packages are retained; no lock files are removed. Other language environments, including Java, are not overwritten.")
++                }
++            }
++            Button(onClick = { confirmation = reviewed }, enabled = ready && !state.busy) { Text("Review and install / retry") }
++        }
++        if (state.busy) TextButton(onClick = manager::cancel) { Text("Cancel safely") }
++        Text("Open a .${language.let { when (it) { NativeEnvironment.C -> "c"; NativeEnvironment.Cpp -> "cpp"; NativeEnvironment.Python -> "py" } }} file in the editor and press Ctrl+F5. Runtime execution never installs packages automatically.")
++        Text("Language plugins are not installed by this native workflow. Use only the official JCode marketplace for compatible optional plugins.")
++        state.logPath?.let { Text("Persistent Ubuntu log: $it") }
++        if (state.log.isNotBlank()) SelectionContainer { Text(state.log, style = MaterialTheme.typography.bodySmall) }
++    }
++    confirmation?.let { reviewed -> AlertDialog(
++        onDismissRequest = { confirmation = null },
++        title = { Text("Install ${language.title}?") },
++        text = { Text("Ubuntu packages: ${reviewed.packages.joinToString { "${it.name}=${it.selected}" }}\n\nThe existing Setup terminal will open. Review apt output there. Cancellation waits for a safe boundary; this action does not remove or upgrade your JDK.") },
++        confirmButton = { TextButton(onClick = { confirmation = null; manager.install(reviewed) }) { Text("Confirm and open terminal") } },
++        dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancel") } },
++    ) }
++}
+diff --git a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt
+index caaa508..202a7ea 100644
+--- a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt
++++ b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt
+@@ -35,6 +35,10 @@ object SdkManagerFeature {
+         onUseVersion: (String, String) -> Unit = { _, _ -> },
+         modifier: Modifier = Modifier,
+     ) {
++        dev.blamspot.jcode.core.distro.NativeEnvironment.entries.firstOrNull { it.catalogId == entry.id }?.let { language ->
++            NativeEnvironmentPage(language, environmentState, modifier)
++            return
++        }
+         if (entry.id == "sui-java-ga") {
+             JavaEnvironmentPage(environmentState, modifier)
+             return
