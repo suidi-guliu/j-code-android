@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "languageId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9+-]{0,31}$"
+    },
+    "extensions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9+_-]{1,16}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    }
+  },
+  "required": [
+    "languageId",
+    "extensions",
+    "priority"
+  ]
+}

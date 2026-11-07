@@ -57,3 +57,6 @@ include(":native:pty")
 include(":native:vt")
 include(":native:wasmtime-ffi")
 include(":native:proot")
+
+// Independent sui-code package protocol; no JCode extension API dependency.
+include(":core:native-packages")

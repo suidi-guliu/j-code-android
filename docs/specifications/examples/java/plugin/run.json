@@ -1,0 +1,1 @@
+{"environmentId":"java","languageId":"java","prepare":[],"run":["${tool}","${source}"]}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operation": {
+      "enum": [
+        "SIMPLE_RUN",
+        "LSP_START",
+        "DAP_START",
+        "BUILD",
+        "TEST",
+        "FORMAT",
+        "LINT",
+        "PROJECT_READ",
+        "PANEL_OPEN"
+      ]
+    },
+    "arguments": {
+      "type": "object",
+      "maxProperties": 128,
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    }
+  },
+  "required": [
+    "operation",
+    "arguments"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "environmentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "provider": {
+      "enum": [
+        "temurin",
+        "ubuntu-apt"
+      ]
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9+_-]{1,40}$"
+      },
+      "minItems": 1
+    },
+    "configuration": {
+      "type": "string",
+      "pattern": "^/opt/sui-code/[a-z-]+\\.env$"
+    }
+  },
+  "required": [
+    "environmentId",
+    "provider",
+    "tools",
+    "configuration"
+  ]
+}
