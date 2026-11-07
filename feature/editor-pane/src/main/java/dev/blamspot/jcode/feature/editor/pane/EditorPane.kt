@@ -474,6 +474,7 @@ fun EditorViewHost(
                     onContextRequest = { menu = it }
                     onSaveRequest = { onSave() }
                     onSaveAllRequest = { saveActions.onSaveAll() }
+                    onQuickRunRequest = { saveActions.onQuickRun(it) }
                     onFindRequest = { onFind() }
                     onGoToLineRequest = { menuExtras.onGoToLine?.invoke() }
                     onCloseTabRequest = { onCloseTab() }
@@ -505,6 +506,7 @@ fun EditorViewHost(
                 v.onContextRequest = { menu = it }
                 v.onSaveRequest = { onSave() }
                 v.onSaveAllRequest = { saveActions.onSaveAll() }
+                v.onQuickRunRequest = { saveActions.onQuickRun(it) }
                 v.onFindRequest = { onFind() }
                 v.onGoToLineRequest = { menuExtras.onGoToLine?.invoke() }
                 v.onCloseTabRequest = { onCloseTab() }

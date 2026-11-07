@@ -90,6 +90,17 @@ object GuestProcessTree {
         pidsCarrying(INSTANCE_ENV, instance).forEach { runCatching { Os.kill(it, OsConstants.SIGKILL) } }
     }
 
+    /** Stop one uniquely tagged terminal tree before its proot launcher is closed. Off-main only. */
+    fun terminateOwnerBlocking(owner: String) {
+        require(owner.startsWith("sui-quickrun:"))
+        QuickRunCleanup.stop(
+            owned = { pidsOwnedBy(owner).toSet() }, parents = ::parentByPid,
+            terminate = { runCatching { Os.kill(it, OsConstants.SIGTERM) } },
+            kill = { runCatching { Os.kill(it, OsConstants.SIGKILL) } },
+            pause = { Thread.sleep(20) },
+        )
+    }
+
     /** Every app-owned process still running on [owner]'s behalf, whatever it is parented to now. */
     fun pidsOwnedBy(owner: String): List<Int> = pidsCarrying(OWNER_ENV, owner)
 

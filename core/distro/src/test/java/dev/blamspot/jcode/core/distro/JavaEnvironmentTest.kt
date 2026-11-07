@@ -45,8 +45,8 @@ class JavaEnvironmentTest {
     @Test fun quickRunUsesManagedEnvironmentAndQuotesTheFile() {
         assertEquals(setOf("java"), JavaLanguageAdapter.extensions)
         val command = JavaLanguageAdapter.command("/workspace/a b/it's.java")
-        assertTrue(command.contains(". /opt/sui-code/java.env"))
-        assertTrue(command.endsWith("'/workspace/a b/it'\\''s.java'"))
+        assertTrue(command.contains("MANAGED_ENV=/opt/sui-code/java.env"))
+        assertTrue(command.contains("'/workspace/a b/it'\\''s.java'"))
         assertFailsWith<IllegalArgumentException> { JavaLanguageAdapter.command("relative.java") }
     }
 

@@ -183,6 +183,8 @@ class EditorView @JvmOverloads constructor(
     }
 
     /** Invoked when the user requests a save (Ctrl+S); the host writes the buffer to disk. */
+    var onQuickRunRequest: ((Int) -> Boolean)? = null
+
     var onSaveRequest: (() -> Unit)? = null
 
     /** Invoked when the user requests Save All (Ctrl+Shift+S); the host saves every open tab. */
@@ -1136,6 +1138,11 @@ class EditorView @JvmOverloads constructor(
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val state = editorState ?: return super.dispatchKeyEvent(event)
+
+        if (event.isCtrlPressed && !event.isShiftPressed && !event.isAltPressed && event.keyCode == KeyEvent.KEYCODE_F5) {
+            if (event.action == KeyEvent.ACTION_DOWN) return onQuickRunRequest?.invoke(event.repeatCount) ?: false
+            return true
+        }
 
         // Ctrl+Z / Ctrl+Shift+Z for undo/redo
         if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_Z) {

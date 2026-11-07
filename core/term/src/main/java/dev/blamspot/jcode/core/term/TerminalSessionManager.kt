@@ -4,6 +4,7 @@ import dev.blamspot.jcode.core.distro.Arch
 import dev.blamspot.jcode.core.distro.DistroBind
 import dev.blamspot.jcode.core.distro.ProotManager
 import dev.blamspot.jcode.core.distro.RootfsManager
+import dev.blamspot.jcode.core.distro.GuestProcessTree
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -76,6 +77,7 @@ class TerminalSessionManager(
         /** Spawn parameters captured so a nested-shell child can be created cloning this session's
          *  distro/binds/user/arch/workdir (OSC 7715). Null for sessions created before this existed. */
         @Volatile var spawnSpec: SpawnSpec? = null
+        var processOwner: String? = null
 
         /** Resize both the PTY and the parser together (parser realloc is synchronized against the
          *  reader's feed). Safe to call from the UI thread. */
@@ -309,6 +311,7 @@ class TerminalSessionManager(
         shellCommand: String = "/bin/bash --login",
         rootfsArch: Arch = Arch.ARM64,
         label: String? = null,
+        processOwner: String? = null,
     ): Session? {
         if (sessionCount >= maxSessions) return null
         if (!prootManager.isProotInstalled) return null
@@ -453,11 +456,12 @@ class TerminalSessionManager(
             "BROWSER" to "/usr/local/bin/xdg-open",
         ) + adbEnvVars() + androidSdkEnvVars(rootfsPath) + userEnvVars.filterKeys { ENV_NAME_RE.matches(it) }
 
+        val taggedEnv = if (processOwner != null) envVars + (GuestProcessTree.OWNER_ENV to processOwner) else envVars
         val prootArgs = prootManager.buildShellCommand(
             rootfsPath = rootfsPath,
             shellCommand = shellCommand,
             binds = binds,
-            env = envVars,
+            env = taggedEnv,
             workdir = workdir,
             user = user,
             rootfsArch = rootfsArch,
@@ -477,6 +481,7 @@ class TerminalSessionManager(
             )
             val session = Session(sessionId, sessionLabel, pty)
             session.spawnSpec = SpawnSpec(distroId, binds, user, rootfsArch, workdir)
+            session.processOwner = processOwner
             synchronized(sessionsLock) { _sessions[sessionId] = session }
             activeSessionId = sessionId
             startReader(session)
@@ -620,6 +625,7 @@ class TerminalSessionManager(
         // still be drawing it on the main thread, and closing native parser state from this IO thread
         // would race onDraw. The parser is freed on the main thread by closeSession(), or by its
         // Cleaner once the view unbinds and the Session becomes unreachable.
+        session.processOwner?.let { owner -> runCatching { GuestProcessTree.terminateOwnerBlocking(owner) } }
         runCatching { session.pty.close() }
         if (activeSessionId == id) {
             activeSessionId = synchronized(sessionsLock) { _sessions.keys.firstOrNull() }
@@ -668,6 +674,10 @@ class TerminalSessionManager(
         // the PTY dies (the parent would otherwise only get EOF → exit 0). No-op for normal sessions.
         writeRelocationBackstop(session, "E 143\n")
         val readerJob = session.readerJob
+        // Bounded cleanup must finish before the launcher closes, including explicit app exit.
+        session.processOwner?.let { owner ->
+            runCatching { GuestProcessTree.terminateOwnerBlocking(owner) }
+        }
         readerJob?.cancel()
         session.onUpdate = null
         synchronized(session) { session.parser.close() }

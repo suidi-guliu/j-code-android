@@ -8,6 +8,9 @@ import androidx.compose.runtime.compositionLocalOf
  * verifier's register limit). Each defaults to a no-op.
  */
 class EditorSaveActions(
+    val onQuickRun: (Int) -> Boolean = { false },
+    val onStopQuickRun: () -> Boolean = { false },
+    val quickRunActive: Boolean = false,
     val onUndo: () -> Unit = {},
     val onRedo: () -> Unit = {},
     val onDiscard: () -> Unit = {},

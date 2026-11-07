@@ -110,7 +110,7 @@ object JavaLanguageAdapter : NativeLanguageAdapter {
     override fun command(guestFile: String): String {
         require(guestFile.startsWith('/') && guestFile.endsWith(".java") && '\u0000' !in guestFile)
         // Source-file launch handles packages and keeps generated classes off shared storage.
-        return "set -e; . /opt/sui-code/java.env; exec \"\$JAVA_HOME/bin/java\" ${shellQuote(guestFile)}"
+        return JavaQuickRunScript.build(guestFile)
     }
 }
 
