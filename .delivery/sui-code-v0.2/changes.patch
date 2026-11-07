@@ -1,0 +1,1161 @@
+diff --git a/.github/workflows/deliver-sui-code-v0.2.yml b/.github/workflows/deliver-sui-code-v0.2.yml
+new file mode 100644
+index 0000000..2f84707
+--- /dev/null
++++ b/.github/workflows/deliver-sui-code-v0.2.yml
+@@ -0,0 +1,90 @@
++name: Deliver original sui-code v0.2 APK
++
++on:
++  push:
++    branches: [sui-code/v0.2-java-quickrun]
++    paths:
++      - .github/workflows/deliver-sui-code-v0.2.yml
++      - .delivery/sui-code-v0.2/**
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++jobs:
++  deliver:
++    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.2-java-quickrun'
++    runs-on: ubuntu-latest
++    timeout-minutes: 15
++    env:
++      EXPECTED_APK_SHA256: e0672c0823403c8176d1bf91d822cf143c0073186e4f35d9373d82b79d7c010e
++      EXPECTED_APK_BYTES: '88733580'
++    steps:
++      - uses: actions/checkout@v4
++      - name: Verify preserved original APK (no rebuild)
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd .delivery/sui-code-v0.2
++          test "$(stat -c %s sui-code-v0.2-debug.apk)" = "$EXPECTED_APK_BYTES"
++          printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-v0.2-debug.apk | sha256sum --check --strict
++          test -s report.md
++          test -s changes.patch
++      - name: Verify upgrade identity and the original v0.1 signing certificate
++        shell: bash
++        run: |
++          set -euo pipefail
++          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
++          test -x "$signer"
++          old=.delivery/sui-code-v0.1/sui-code-v0.1-debug.apk
++          new=.delivery/sui-code-v0.2/sui-code-v0.2-debug.apk
++          printf '%s  %s\n' 1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06 "$old" | sha256sum --check --strict
++          old_cert=$("$signer" verify --print-certs "$old" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          new_cert=$("$signer" verify --print-certs "$new" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          test "$old_cert" = "$new_cert"
++          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
++          "$(dirname "$signer")/aapt" dump badging "$new" > "$RUNNER_TEMP/v02-badging.txt"
++          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070800' versionName='1.7.7-sui.0.2'" "$RUNNER_TEMP/v02-badging.txt"
++          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/v02-badging.txt"
++      - name: Upload original APK, report and source patch
++        id: upload
++        uses: actions/upload-artifact@v4
++        with:
++          name: sui-code-v0.2-java-quickrun-debug
++          path: |
++            .delivery/sui-code-v0.2/sui-code-v0.2-debug.apk
++            .delivery/sui-code-v0.2/report.md
++            .delivery/sui-code-v0.2/changes.patch
++          if-no-files-found: error
++          include-hidden-files: true
++          compression-level: 0
++          retention-days: 30
++      - name: Download uploaded artifact for verification
++        uses: actions/download-artifact@v4
++        with:
++          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
++          path: ${{ runner.temp }}/sui-code-v0.2-roundtrip
++          merge-multiple: true
++      - name: Verify downloaded APK and report delivery links
++        shell: bash
++        env:
++          DOWNLOAD_DIR: ${{ runner.temp }}/sui-code-v0.2-roundtrip
++          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
++          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
++          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
++        run: |
++          set -euo pipefail
++          test "$(find "$DOWNLOAD_DIR" -type f | wc -l)" -eq 3
++          test "$(stat -c %s "$DOWNLOAD_DIR/sui-code-v0.2-debug.apk")" = "$EXPECTED_APK_BYTES"
++          (cd "$DOWNLOAD_DIR" && printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-v0.2-debug.apk | sha256sum --check --strict)
++          for name in sui-code-v0.2-debug.apk report.md changes.patch; do
++            cmp ".delivery/sui-code-v0.2/$name" "$DOWNLOAD_DIR/$name"
++          done
++          {
++            echo '## Original v0.2 delivery verified'
++            printf '[Download artifact](%s) · [Workflow run](%s)\n\n' "$ARTIFACT_URL" "$RUN_URL"
++            printf 'APK size: **%s bytes**\n\n' "$EXPECTED_APK_BYTES"
++            printf 'APK SHA-256: `%s`\n\n' "$EXPECTED_APK_SHA256"
++            printf 'Artifact ID: `%s`\n\n' "$ARTIFACT_ID"
++            echo 'Upload/download round-trip passed: all three files match byte for byte. No APK rebuild or GitHub Release.'
++          } >> "$GITHUB_STEP_SUMMARY"
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 0d38ce1..bfd070b 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -96,7 +96,7 @@ android {
+         applicationId = jcodeApplicationId
+         minSdk = 33
+         targetSdk = 33
+-        versionCode = jcodeVersionCode
++        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: jcodeVersionCode
+         versionName = jcodeVersionName
+ 
+         buildConfigField("String", "UPDATE_CHANNEL", "\"$jcodeUpdateChannel\"")
+diff --git a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+index cb6b221..4561908 100644
+--- a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
++++ b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+@@ -942,7 +942,8 @@ fun JCodeApp(
+             onScanFonts = viewModel::refreshEnvironmentFonts,
+         )
+     }
+-    val editorSaveActions = remember(viewModel) {
++    val quickRunActive by viewModel.javaQuickRun.active.collectAsStateWithLifecycle()
++    val editorSaveActions = remember(viewModel, quickRunActive) {
+         EditorSaveActions(
+             onUndo = viewModel::undoActiveTab,
+             onRedo = viewModel::redoActiveTab,
+@@ -950,7 +951,11 @@ fun JCodeApp(
+             onSaveAll = viewModel::saveAllTabs,
+             onFormat = viewModel::formatActiveTab,
+             onSaveAllAwait = viewModel::saveAllDirtyAwait,
+-        )
++        ).apply {
++            onQuickRun = viewModel::quickRunActiveFile
++            onStopQuickRun = viewModel.javaQuickRun::stop
++            this.quickRunActive = quickRunActive
++        }
+     }
+     // Completion items for the focused file, resolved from its installed language pack (if any).
+     val activeFileName = editorGroup.activeTab?.filePath?.name
+@@ -1703,7 +1708,7 @@ fun JCodeApp(
+         LocalPendingReload provides pendingReloadUi,
+         LocalRunConfigPresets provides contributedRunPresets,
+         LocalSetupTerminalSessionId provides setupTerminalSessionId,
+-        LocalSetupTerminalFocusRequests provides viewModel.setupTerminalRunner.focusRequests,
++        LocalSetupTerminalFocusRequests provides remember(viewModel) { kotlinx.coroutines.flow.merge(viewModel.setupTerminalRunner.focusRequests, viewModel.javaQuickRun.focusRequests) },
+         LocalDebugSession provides debugSessionUi,
+         LocalPerformanceSettings provides performanceSettings,
+         LocalEnvVarSettings provides envVarSettings,
+@@ -2939,6 +2944,11 @@ private fun JCodeShell(
+     // Stop the current run: Ctrl-C the run terminal (graceful server/build shutdown) and reset run
+     // state. The terminal session is kept so its output stays visible and a re-run can reuse it.
+     fun handleStopRun() {
++        if (editorSaveActionsLocal.quickRunActive && editorSaveActionsLocal.onStopQuickRun()) {
++            terminalSessionIds = terminalSessionIds.filter { terminalSessionManager.getSession(it) != null }
++            if (selectedTerminalSessionId !in terminalSessionIds) selectedTerminalSessionId = terminalSessionIds.firstOrNull().orEmpty()
++            return
++        }
+         OutputLog.append("■ Stopped run")
+         runSessionIds.forEach { id ->
+             if (id in terminalSessionIds && terminalSessionManager.getSession(id) != null) {
+@@ -3652,7 +3662,7 @@ private fun JCodeShell(
+                                 topBarRunConfigs.getOrNull(index)?.let { config -> handleRun(project, config) }
+                             }
+                         },
+-                        isRunning = runningProjectId != null,
++                        isRunning = runningProjectId != null || editorSaveActionsLocal.quickRunActive,
+                         terminalBusy = terminalBusy,
+                         terminalHasUnseen = terminalHasUnseen,
+                         terminalSessions = terminalInstances,
+diff --git a/app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt b/app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt
+new file mode 100644
+index 0000000..9e1ad83
+--- /dev/null
++++ b/app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt
+@@ -0,0 +1,116 @@
++package dev.blamspot.jcode
++
++import android.content.Context
++import dev.blamspot.jcode.core.distro.DistroBind
++import dev.blamspot.jcode.core.distro.DistroService
++import dev.blamspot.jcode.core.distro.QuickRunGate
++import dev.blamspot.jcode.core.distro.QuickRunLanguages
++import dev.blamspot.jcode.core.distro.prepareQuickRun
++import java.io.File
++import java.util.UUID
++import java.util.concurrent.atomic.AtomicLong
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.delay
++import kotlinx.coroutines.ensureActive
++import kotlinx.coroutines.flow.MutableSharedFlow
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.asSharedFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.launch
++import kotlin.coroutines.coroutineContext
++
++/** Owns only QuickRun sessions; ProjectRunner and Setup sessions are never stopped or reused. */
++class JavaQuickRunController(
++    private val context: Context,
++    private val distro: DistroService,
++    private val scope: CoroutineScope,
++    private val message: suspend (String) -> Unit,
++) {
++    private val gate = QuickRunGate()
++    private val generation = AtomicLong()
++    private val mutableActive = MutableStateFlow(false)
++    val active = mutableActive.asStateFlow()
++    private val focus = MutableSharedFlow<String>(extraBufferCapacity = 1)
++    val focusRequests = focus.asSharedFlow()
++    private var job: Job? = null
++    @Volatile private var sessionId: String? = null
++    private val terminals get() = TerminalSessionHost.manager(context)
++
++    fun start(file: File, repeatCount: Int, save: suspend () -> Boolean): Boolean {
++        val adapter = QuickRunLanguages.forFile(file.name) ?: return false
++        if (!gate.begin(repeatCount)) return true
++        val ticket = generation.incrementAndGet()
++        mutableActive.value = true
++        job = scope.launch {
++            try {
++                check(distro.isRuntimeReady()) { "QuickRun requires the existing Ubuntu environment. Finish environment setup first." }
++                val runtime = distro.environmentState.value.runtime
++                val path = prepareQuickRun(save) {
++                    val actual = file.canonicalFile
++                    check(actual.isFile && actual.canRead()) { "QuickRun cannot read the saved Java file." }
++                    actual.path
++                }
++                coroutineContext.ensureActive()
++                check(distro.environmentState.value.runtime.selectedDistro.id == runtime.selectedDistro.id) { "Ubuntu environment changed while saving. Run again." }
++                sessionId?.let { close(it) }
++                val actual = File(path)
++                val token = UUID.randomUUID().toString()
++                val guestFile = "/sui-quickrun/${actual.name}"
++                val scriptPath = "/tmp/sui-quickrun-$token.sh"
++                val mountPoint = File(distro.activeRootfsPath(), "sui-quickrun")
++                check(mountPoint.isDirectory || mountPoint.mkdirs()) { "Cannot prepare the QuickRun mount point in Ubuntu." }
++                check(distro.stageGuestFile(scriptPath, adapter.command(guestFile))) { "Cannot stage the QuickRun script in Ubuntu." }
++                val session = terminals.createOwnedSession(
++                    distroId = runtime.selectedDistro.id,
++                    binds = listOf(DistroBind(actual.parentFile!!.path, "/sui-quickrun")),
++                    workdir = "/sui-quickrun",
++                    user = runtime.user,
++                    rootfsArch = runtime.selectedDistro.arch,
++                    label = "Java · ${actual.name}",
++                    processOwner = "sui-quickrun:$token",
++                ) ?: error("Cannot create the QuickRun terminal (check Ubuntu and the session limit).")
++                sessionId = session.id
++                TerminalSessionHost.onSessionStarted(context, session.id, session.label)
++                OutputLog.append("[QuickRun] ${actual.path}")
++                OutputLog.captureSession(session.id)
++                terminals.sendInput(session.id, "/bin/bash $scriptPath; result=\$?; rm -f $scriptPath; printf '\\033]7713;quickrun;%s\\007' \"\$result\"\n")
++                focus.emit(session.id)
++                while (generation.get() == ticket && mutableActive.value && terminals.getSession(session.id) != null) delay(150)
++            } catch (cancel: CancellationException) {
++                throw cancel
++            } catch (error: Exception) {
++                message(error.message ?: "Java QuickRun failed.")
++            } finally {
++                if (generation.get() == ticket) { mutableActive.value = false; gate.finish() }
++            }
++        }
++        return true
++    }
++
++    fun complete(id: String, payload: String) {
++        if (id == sessionId && payload.substringBefore(';') == "quickrun") {
++            mutableActive.value = false
++            gate.finish()
++        }
++    }
++
++    /** Closing invokes the existing tagged-tree cleanup, including Java children ignoring SIGINT. */
++    fun stop(): Boolean {
++        val wasActive = mutableActive.value
++        generation.incrementAndGet()
++        job?.cancel()
++        sessionId?.let { close(it) }
++        sessionId = null
++        mutableActive.value = false
++        gate.finish()
++        return wasActive
++    }
++
++    private fun close(id: String) {
++        OutputLog.releaseSession(id)
++        terminals.closeSession(id)
++        TerminalSessionHost.onSessionStopped(id)
++    }
++}
+diff --git a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
+index f0f9300..ee2e8b8 100644
+--- a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
++++ b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
+@@ -286,6 +286,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+     val scaffoldState = templateScaffolder.state
+ 
+     /** Shared "Setup" terminal in the right drawer that runs toolchain installs and scaffolds. */
++    val javaQuickRun = JavaQuickRunController(appContext, distroService, viewModelScope, ::emitMessage)
++
++    fun quickRunActiveFile(repeatCount: Int): Boolean {
++        val tab = _editorGroup.value.activeTab ?: return false
++        if (tab.isPage || tab.editorState == null) return false
++        return javaQuickRun.start(tab.filePath, repeatCount) { saveTabAwait(tab) }
++    }
++
+     val setupTerminalRunner = SetupTerminalRunner(appContext, distroService)
+ 
+     private val _runTerminalCompletions = MutableSharedFlow<Pair<String, Int>>(extraBufferCapacity = 16)
+@@ -298,6 +306,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+     init {
+         TerminalSessionHost.manager(appContext).onTaskComplete = { sessionId, payload ->
+             setupTerminalRunner.handleTaskComplete(sessionId, payload)
++            javaQuickRun.complete(sessionId, payload)
+             _runTerminalCompletions.tryEmit(sessionId to (payload.substringAfter(';').trim().toIntOrNull() ?: -1))
+         }
+         TerminalSessionHost.manager(appContext).onTaskProgress = setupTerminalRunner::handleTaskProgress
+@@ -5343,6 +5352,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+ 
+     /** Reap every runtime service (called on project/workspace close and ViewModel teardown). */
+     fun stopAllRuntimeServices() {
++        javaQuickRun.stop()
+         runtimeServices.values.forEach { GuestProcessTree.destroy(it) }
+         runtimeServices.clear()
+     }
+diff --git a/app/src/main/java/dev/blamspot/jcode/OutputLog.kt b/app/src/main/java/dev/blamspot/jcode/OutputLog.kt
+index 31e81f3..4782c65 100644
+--- a/app/src/main/java/dev/blamspot/jcode/OutputLog.kt
++++ b/app/src/main/java/dev/blamspot/jcode/OutputLog.kt
+@@ -56,6 +56,14 @@ object OutputLog {
+         synchronized(lock) { captured = captured + sessionId }
+     }
+ 
++    /** Retire one capture without resetting another owner's running project output. */
++    fun releaseSession(sessionId: String) {
++        synchronized(lock) {
++            captured = captured - sessionId
++            partial.remove(sessionId)
++        }
++    }
++
+     /** Append an app-authored status line (run lifecycle, snackbar messages, errors). */
+     fun append(text: String, kind: OutputKind = OutputKind.Info) {
+         synchronized(lock) { addLine(OutputLine(text, kind)) }
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
+index 23d47c9..2085952 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
+@@ -306,8 +306,8 @@ internal fun WorkbenchTopBar(
+             // Run toggles to Stop while a run is active. A tap runs the single/first config; with more
+             // than one config it opens a picker instead. Long-press always opens the menu — the list of
+             // run configs to launch, plus the debug/session controls.
+-            // Only shown when a project is open and focused — there's nothing to run otherwise.
+-            if (selectedProject != null) {
++            // A running single-file QuickRun also needs the existing Stop control without a project.
++            if (selectedProject != null || isRunning) {
+                 var runMenuOpen by remember { mutableStateOf(false) }
+                 val hasMultipleRuns = runConfigNames.size > 1
+                 // A debug session owns this button while it lasts, but it stays a three-state control:
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
+index 12f9312..90e89bf 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
+@@ -89,7 +89,7 @@ internal val LocalExtensionDevState = compositionLocalOf { ExtensionDevState() }
+ 
+ /** Session id of the background "Setup" terminal (toolchain installs / project scaffolds), or null
+  *  while none has been started. Same register-limit rationale as above. */
+-internal val LocalSetupTerminalFocusRequests = compositionLocalOf<kotlinx.coroutines.flow.SharedFlow<String>?> { null }
++internal val LocalSetupTerminalFocusRequests = compositionLocalOf<kotlinx.coroutines.flow.Flow<String>?> { null }
+ 
+ internal val LocalSetupTerminalSessionId = compositionLocalOf<String?> { null }
+ 
+diff --git a/app/src/test/java/dev/blamspot/jcode/ProjectRunnerQuickRunRegressionTest.kt b/app/src/test/java/dev/blamspot/jcode/ProjectRunnerQuickRunRegressionTest.kt
+new file mode 100644
+index 0000000..3eeaf38
+--- /dev/null
++++ b/app/src/test/java/dev/blamspot/jcode/ProjectRunnerQuickRunRegressionTest.kt
+@@ -0,0 +1,33 @@
++package dev.blamspot.jcode
++
++import dev.blamspot.jcode.core.config.RunConfig
++import dev.blamspot.jcode.core.config.RunConfigTerminal
++import dev.blamspot.jcode.fs.Project
++import dev.blamspot.jcode.fs.ProjectKind
++import dev.blamspot.jcode.run.ProjectRunner
++import java.io.File
++import java.nio.file.Files
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Test
++
++/** An existing non-Java run config still stages and executes without the managed Java environment. */
++class ProjectRunnerQuickRunRegressionTest {
++    @Test fun projectRecipeExecutesUnchangedWithoutJavaEnvironment() {
++        val root = Files.createTempDirectory("project-run-regression").toFile()
++        try {
++            val project = Project(1, ProjectKind.Local, root.path, "Existing project", root.path, 0)
++            val config = RunConfig("Existing run", 0, terminals = listOf(RunConfigTerminal("Console", "printf 'PROJECT_RUN_OK\\n'\n")))
++            val terminal = ProjectRunner.runConfigToPlan(config).terminals.single()
++            val invocation = ProjectRunner.runInvocation(project, terminal)
++            val process = ProcessBuilder("bash", "-c", invocation).apply {
++                environment().remove("JAVA_HOME")
++                redirectErrorStream(true)
++            }.start()
++            val output = process.inputStream.bufferedReader().readText()
++            assertEquals(0, process.waitFor())
++            assertEquals("PROJECT_RUN_OK\n", output)
++            assertFalse(File(root, ".jcode/run-console.sh").readText().contains("/opt/sui-code/java.env"))
++        } finally { root.deleteRecursively() }
++    }
++}
+diff --git a/core/design/src/main/java/dev/blamspot/jcode/design/EditorSaveActions.kt b/core/design/src/main/java/dev/blamspot/jcode/design/EditorSaveActions.kt
+index 64a51f0..4c4b471 100644
+--- a/core/design/src/main/java/dev/blamspot/jcode/design/EditorSaveActions.kt
++++ b/core/design/src/main/java/dev/blamspot/jcode/design/EditorSaveActions.kt
+@@ -17,6 +17,11 @@ class EditorSaveActions(
+      *  only proceeds once the buffers are safely on disk. Returns true only if every tab is now clean
+      *  (false if any couldn't be saved, so the caller can avoid tearing down unsaved work). */
+     val onSaveAllAwait: suspend () -> Boolean = { true },
+-)
++) {
++    // Additive properties keep the exported design SDK's existing constructor ABI intact.
++    var onQuickRun: (Int) -> Boolean = { false }
++    var onStopQuickRun: () -> Boolean = { false }
++    var quickRunActive: Boolean = false
++}
+ 
+ val LocalEditorSaveActions = compositionLocalOf { EditorSaveActions() }
+diff --git a/core/design/src/test/java/dev/blamspot/jcode/design/ExtensionAbiSurfaceTest.kt b/core/design/src/test/java/dev/blamspot/jcode/design/ExtensionAbiSurfaceTest.kt
+index 5828a72..61b5e50 100644
+--- a/core/design/src/test/java/dev/blamspot/jcode/design/ExtensionAbiSurfaceTest.kt
++++ b/core/design/src/test/java/dev/blamspot/jcode/design/ExtensionAbiSurfaceTest.kt
+@@ -24,6 +24,16 @@ import org.junit.Test
+  */
+ class ExtensionAbiSurfaceTest {
+ 
++    @Test
++    fun `editor save actions retains the pre QuickRun constructor descriptor`() {
++        val zero = Class.forName("kotlin.jvm.functions.Function0")
++        val suspendZero = Class.forName("kotlin.jvm.functions.Function1")
++        assertNotNull(EditorSaveActions::class.java.getDeclaredConstructor(
++            zero, zero, zero, zero, zero, suspendZero,
++        ))
++    }
++
++
+     /**
+      * Every `dev.blamspot.jcode.design` class the published extensions reference.
+      *
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/GuestProcessTree.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/GuestProcessTree.kt
+index 7856919..a02b408 100644
+--- a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/GuestProcessTree.kt
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/GuestProcessTree.kt
+@@ -90,6 +90,17 @@ object GuestProcessTree {
+         pidsCarrying(INSTANCE_ENV, instance).forEach { runCatching { Os.kill(it, OsConstants.SIGKILL) } }
+     }
+ 
++    /** Stop one uniquely tagged terminal tree before its proot launcher is closed. Off-main only. */
++    fun terminateOwnerBlocking(owner: String) {
++        require(owner.startsWith("sui-quickrun:"))
++        QuickRunCleanup.stop(
++            owned = { pidsOwnedBy(owner).toSet() }, parents = ::parentByPid,
++            terminate = { runCatching { Os.kill(it, OsConstants.SIGTERM) } },
++            kill = { runCatching { Os.kill(it, OsConstants.SIGKILL) } },
++            pause = { Thread.sleep(20) },
++        )
++    }
++
+     /** Every app-owned process still running on [owner]'s behalf, whatever it is parented to now. */
+     fun pidsOwnedBy(owner: String): List<Int> = pidsCarrying(OWNER_ENV, owner)
+ 
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt
+index eb10295..c918cb7 100644
+--- a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt
+@@ -110,7 +110,7 @@ object JavaLanguageAdapter : NativeLanguageAdapter {
+     override fun command(guestFile: String): String {
+         require(guestFile.startsWith('/') && guestFile.endsWith(".java") && '\u0000' !in guestFile)
+         // Source-file launch handles packages and keeps generated classes off shared storage.
+-        return "set -e; . /opt/sui-code/java.env; exec \"\$JAVA_HOME/bin/java\" ${shellQuote(guestFile)}"
++        return JavaQuickRunScript.build(guestFile)
+     }
+ }
+ 
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/QuickRun.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/QuickRun.kt
+new file mode 100644
+index 0000000..f964138
+--- /dev/null
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/QuickRun.kt
+@@ -0,0 +1,112 @@
++package dev.blamspot.jcode.core.distro
++
++import java.util.concurrent.atomic.AtomicBoolean
++
++/** A registry, not a project recipe: future adapters can opt in without changing keyboard handling. */
++object QuickRunLanguages {
++    private val adapters: List<NativeLanguageAdapter> = listOf(JavaLanguageAdapter)
++    fun forFile(name: String): NativeLanguageAdapter? = adapters.firstOrNull {
++        name.substringAfterLast('.', "") in it.extensions
++    }
++}
++
++class QuickRunGate {
++    private val held = AtomicBoolean(false)
++    fun begin(repeatCount: Int): Boolean = repeatCount == 0 && held.compareAndSet(false, true)
++    fun finish() { held.set(false) }
++}
++
++/** Saving must succeed before resolving a path or creating any process. Captures one editor tab. */
++suspend fun prepareQuickRun(save: suspend () -> Boolean, resolve: () -> String): String {
++    check(save()) { "QuickRun cancelled: the current file could not be saved, or changed during saving." }
++    return resolve()
++}
++
++/** Source launch preserves package/entry-point semantics and a real PTY stdin. javac preflight
++ * classifies compile errors; all its class output goes into a disposable directory, never the source. */
++object JavaQuickRunScript {
++    fun build(guestFile: String): String {
++        require(guestFile.startsWith('/') && guestFile.endsWith(".java") && '\u0000' !in guestFile)
++        val directory = guestFile.substringBeforeLast('/').ifEmpty { "/" }
++        return """
++            #!/bin/bash
++            set -u
++            fail_env() { echo "[QuickRun environment error] ${'$'}*" >&2; exit 78; }
++            MANAGED_ENV=/opt/sui-code/java.env
++            [ -r "${'$'}MANAGED_ENV" ] || fail_env 'Missing /opt/sui-code/java.env. Install Java in Toolchains; no fallback JDK will be used.'
++            unset JAVA_HOME
++            . "${'$'}MANAGED_ENV" || fail_env 'Cannot load managed Java environment.'
++            [ -n "${'$'}{JAVA_HOME:-}" ] || fail_env 'JAVA_HOME is not configured.'
++            [ -x "${'$'}JAVA_HOME/bin/java" ] && [ -x "${'$'}JAVA_HOME/bin/javac" ] || fail_env 'Managed java or javac is missing.'
++            "${'$'}JAVA_HOME/bin/java" -version || fail_env 'Managed Java cannot run.'
++            cd -- ${shellQuote(directory)} || { echo '[QuickRun file error] Cannot open source directory.' >&2; exit 66; }
++            [ -f ${shellQuote(guestFile)} ] && [ -r ${shellQuote(guestFile)} ] || { echo '[QuickRun file error] Source is not readable.' >&2; exit 66; }
++            BUILD=${'$'}(mktemp -d /tmp/sui-quickrun-XXXXXX) || exit 73
++            trap 'rm -rf -- "${'$'}BUILD"' EXIT
++            trap 'exit 130' INT
++            trap 'exit 143' TERM
++            mkdir "${'$'}BUILD/input" "${'$'}BUILD/classes" "${'$'}BUILD/source" || exit 73
++            INPUT="${'$'}BUILD/input/"${shellQuote(guestFile.substringAfterLast('/'))}
++            cp -- ${shellQuote(guestFile)} "${'$'}INPUT" || exit 66
++            echo '[QuickRun] Checking Java source (temporary output only)'
++            if ! "${'$'}JAVA_HOME/bin/javac" -proc:none -d "${'$'}BUILD/classes" "${'$'}INPUT"; then
++                echo '[QuickRun compilation failed]' >&2
++                exit 65
++            fi
++            # Java 27 requires a source path matching its package. Use the JDK parser, not a
++            # regex over Java comments/strings. Both the snapshot and generated classes stay private.
++            cat > "${'$'}BUILD/SuiQuickRunSource.java" <<'SUI_SOURCE_INFO'
++            import java.nio.file.*;
++            import java.util.*;
++            import javax.tools.*;
++            import com.sun.source.util.JavacTask;
++            public class SuiQuickRunSource {
++                public static void main(String[] args) throws Exception {
++                    var compiler = ToolProvider.getSystemJavaCompiler();
++                    if (compiler == null) throw new IllegalStateException("JDK compiler unavailable");
++                    try (var files = compiler.getStandardFileManager(null, null, null)) {
++                        var input = Path.of(args[0]);
++                        var task = (JavacTask) compiler.getTask(null, files, null, List.of("-proc:none"), null, files.getJavaFileObjects(input));
++                        var unit = task.parse().iterator().next();
++                        var base = Path.of(args[1]).toAbsolutePath().normalize();
++                        var folder = unit.getPackageName() == null ? base : base.resolve(unit.getPackageName().toString().replace('.', '/')).normalize();
++                        if (!folder.startsWith(base)) throw new IllegalArgumentException("Invalid package path");
++                        Files.createDirectories(folder);
++                        var source = folder.resolve(input.getFileName());
++                        Files.copy(input, source);
++                        System.out.print(source);
++                    }
++                }
++            }
++            SUI_SOURCE_INFO
++            RUN_SOURCE=${'$'}("${'$'}JAVA_HOME/bin/java" "${'$'}BUILD/SuiQuickRunSource.java" "${'$'}INPUT" "${'$'}BUILD/source") || {
++                echo '[QuickRun preparation failed] Cannot prepare Java source package.' >&2; exit 73;
++            }
++            echo '[QuickRun] Running Java source; terminal input is connected'
++            "${'$'}JAVA_HOME/bin/java" --class-path "${'$'}BUILD/classes" "${'$'}RUN_SOURCE"
++            RESULT=${'$'}?
++            if [ "${'$'}RESULT" -ne 0 ]; then
++                echo "[QuickRun runtime failed] Java exit code: ${'$'}RESULT" >&2
++                exit 70
++            fi
++            echo '[QuickRun completed] exit 0'
++        """.trimIndent() + "\n"
++    }
++}
++
++/** Shared, bounded shutdown policy; inventory is refreshed to catch descendants and detached children. */
++internal object QuickRunCleanup {
++    fun stop(
++        owned: () -> Set<Int>, parents: () -> Map<Int, Int>,
++        terminate: (Int) -> Unit, kill: (Int) -> Unit, pause: () -> Unit,
++    ) {
++        val initial = owned()
++        val ancestry = parents()
++        initial.filter { ancestry[it] !in initial }.forEach(terminate)
++        repeat(25) {
++            if (owned().isEmpty()) return
++            pause()
++        }
++        owned().forEach(kill)
++    }
++}
+diff --git a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt
+index b2ccbf6..319ffd0 100644
+--- a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt
++++ b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt
+@@ -45,8 +45,8 @@ class JavaEnvironmentTest {
+     @Test fun quickRunUsesManagedEnvironmentAndQuotesTheFile() {
+         assertEquals(setOf("java"), JavaLanguageAdapter.extensions)
+         val command = JavaLanguageAdapter.command("/workspace/a b/it's.java")
+-        assertTrue(command.contains(". /opt/sui-code/java.env"))
+-        assertTrue(command.endsWith("'/workspace/a b/it'\\''s.java'"))
++        assertTrue(command.contains("MANAGED_ENV=/opt/sui-code/java.env"))
++        assertTrue(command.contains("'/workspace/a b/it'\\''s.java'"))
+         assertFailsWith<IllegalArgumentException> { JavaLanguageAdapter.command("relative.java") }
+     }
+ 
+diff --git a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaQuickRunTest.kt b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaQuickRunTest.kt
+new file mode 100644
+index 0000000..9c3b6cd
+--- /dev/null
++++ b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaQuickRunTest.kt
+@@ -0,0 +1,232 @@
++package dev.blamspot.jcode.core.distro
++
++import kotlinx.coroutines.async
++import java.io.File
++import java.nio.file.Files
++import java.util.concurrent.TimeUnit
++import kotlin.coroutines.Continuation
++import kotlin.coroutines.EmptyCoroutineContext
++import kotlin.coroutines.startCoroutine
++import kotlin.test.Test
++import kotlin.test.assertEquals
++import kotlin.test.assertFailsWith
++import kotlin.test.assertFalse
++import kotlin.test.assertNull
++import kotlin.test.assertTrue
++
++class JavaQuickRunTest {
++    private fun <T> sync(block: suspend () -> T): T {
++        var result: Result<T>? = null
++        block.startCoroutine(object : Continuation<T> {
++            override val context = EmptyCoroutineContext
++            override fun resumeWith(value: Result<T>) { result = value }
++        })
++        return result!!.getOrThrow()
++    }
++
++    @Test fun dispatchIsJavaOnlyAndDoesNotNeedAProject() {
++        assertEquals(JavaLanguageAdapter, QuickRunLanguages.forFile("HelloWorld.java"))
++        assertNull(QuickRunLanguages.forFile("hello.py"))
++        assertNull(QuickRunLanguages.forFile("page"))
++    }
++
++    @Test fun repeatedAndConcurrentKeysCannotStartAnotherTask() {
++        val gate = QuickRunGate()
++        assertFalse(gate.begin(1))
++        assertTrue(gate.begin(0))
++        assertFalse(gate.begin(0))
++        assertFalse(gate.begin(9))
++        gate.finish()
++        assertTrue(gate.begin(0))
++    }
++
++    @Test fun failedSaveNeverResolvesOrRunsStaleContent() {
++        var resolved = false
++        assertFailsWith<IllegalStateException> {
++            sync { prepareQuickRun({ false }) { resolved = true; "stale.java" } }
++        }
++        assertFalse(resolved)
++    }
++
++    @Test fun executionWaitsForAnActuallySuspendedSave() = kotlinx.coroutines.runBlocking {
++        val saved = kotlinx.coroutines.CompletableDeferred<Unit>()
++        var resolved = false
++        val task = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
++            prepareQuickRun({ saved.await(); true }) { resolved = true; "/saved.java" }
++        }
++        assertFalse(resolved)
++        saved.complete(Unit)
++        assertEquals("/saved.java", task.await())
++        assertTrue(resolved)
++    }
++
++    @Test fun dirtyFileIsSavedBeforeItsPathIsUsed() {
++        val events = mutableListOf<String>()
++        assertEquals("/saved.java", sync { prepareQuickRun({ events += "saved"; true }) { events += "resolved"; "/saved.java" } })
++        assertEquals(listOf("saved", "resolved"), events)
++    }
++
++    @Test fun stopKillsTheTraceeFirstAndReapsStubbornAndDetachedChildren() {
++        val live = mutableSetOf(10, 11, 12)
++        val signals = mutableListOf<String>()
++        var waits = 0
++        QuickRunCleanup.stop(
++            owned = { live.toSet() }, parents = { mapOf(10 to 1, 11 to 10, 12 to 1, 99 to 1) },
++            terminate = { signals += "term:$it" },
++            kill = { signals += "kill:$it"; live.remove(it) },
++            pause = { waits++ },
++        )
++        assertEquals(listOf("term:10", "term:12", "kill:10", "kill:11", "kill:12"), signals)
++        assertTrue(live.isEmpty())
++        assertEquals(25, waits)
++        assertFalse(signals.any { it.endsWith(":99") }) // unrelated ProjectRunner process
++    }
++
++    @Test fun gracefulStopDoesNotEscalateAndCloseUsesTheSamePolicy() {
++        val live = mutableSetOf(10, 11)
++        val signals = mutableListOf<Int>()
++        QuickRunCleanup.stop(
++            owned = { live.toSet() }, parents = { mapOf(10 to 1, 11 to 10) },
++            terminate = { signals += it; live.clear() },
++            kill = { error("No escalation should be needed") }, pause = { error("Already stopped") },
++        )
++        assertEquals(listOf(10), signals)
++    }
++
++    private class Sandbox : AutoCloseable {
++        val root = Files.createTempDirectory("quickrun 中文 空格 '$;").toFile()
++        val env = File(root, "java.env")
++        init { env.writeText("export JAVA_HOME=${shellQuote(System.getenv("SUI_QUICKRUN_TEST_JAVA_HOME") ?: System.getProperty("java.home"))}\n") }
++        fun source(text: String, name: String = "HelloWorld.java"): File = File(root, name).apply { writeText(text) }
++        fun start(file: File, stdin: String = "", pty: Boolean = false): Pair<Int, String> {
++            val script = File(root, "runner.sh").apply {
++                writeText(JavaLanguageAdapter.command(file.path).replace("MANAGED_ENV=/opt/sui-code/java.env", "MANAGED_ENV=${shellQuote(env.path)}"))
++            }
++            val output = File(root, "output.log")
++            val command = if (pty) listOf("script", "-qefc", "bash ${shellQuote(script.path)}", "/dev/null") else listOf("bash", script.path)
++            val p = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output).start()
++            p.outputStream.use { it.write(stdin.toByteArray()) }
++            check(p.waitFor(45, TimeUnit.SECONDS)) { p.destroyForcibly(); "QuickRun test timed out" }
++            return p.exitValue() to output.readText()
++        }
++        override fun close() { root.deleteRecursively() }
++    }
++
++    @Test fun helloWorldFromUnicodeQuotedDirectoryHasNoClassGarbage() = Sandbox().use { s ->
++        val file = s.source("public class HelloWorld { public static void main(String[] a) { System.out.println(\"Hello from sui-code!\"); } }")
++        val (exit, out) = s.start(file)
++        assertEquals(0, exit, out)
++        assertTrue(out.contains("Hello from sui-code!"))
++        assertTrue(out.contains("[QuickRun completed]"))
++        assertFalse(s.root.walk().any { it.extension == "class" })
++    }
++
++    @Test fun packageAndRelativeResourcesWorkFromTheSourceDirectory() = Sandbox().use { s ->
++        File(s.root, "message.txt").writeText("source directory OK")
++        val f = s.source("package demo; public class HelloWorld { public static void main(String[] a) throws Exception { System.out.println(java.nio.file.Files.readString(java.nio.file.Path.of(\"message.txt\"))); } }")
++        val (exit, out) = s.start(f)
++        assertEquals(0, exit, out)
++        assertTrue(out.contains("source directory OK"))
++    }
++
++    @Test fun specialFileNameIsNeverShellCode() = Sandbox().use { s ->
++        val f = s.source("class HelloWorld { public static void main(String[] a) { System.out.println(\"safe filename\"); } }", "中文 ' ; \$ (合法).java")
++        val (exit, out) = s.start(f)
++        assertEquals(0, exit, out)
++        assertTrue(out.contains("safe filename"))
++    }
++
++    @Test fun missingManagedEnvironmentDoesNotFallBackToHostJava() = Sandbox().use { s ->
++        s.env.delete()
++        val (exit, out) = s.start(s.source("class HelloWorld {}"))
++        assertEquals(78, exit)
++        assertTrue(out.contains("Missing"))
++        assertFalse(out.contains("Checking Java source"))
++    }
++
++    @Test fun brokenManagedJavaDoesNotFallBack() = Sandbox().use { s ->
++        s.env.writeText("JAVA_HOME=/missing/jdk\n")
++        val (exit, out) = s.start(s.source("class HelloWorld {}"))
++        assertEquals(78, exit)
++        assertTrue(out.contains("Managed java or javac is missing"))
++    }
++
++    @Test fun compilationFailureIsDifferentFromRuntimeFailure() = Sandbox().use { s ->
++        val (compileExit, compileOut) = s.start(s.source("public class HelloWorld { invalid syntax }"))
++        assertEquals(65, compileExit, compileOut)
++        assertTrue(compileOut.contains("compilation failed"))
++        val (runExit, runOut) = s.start(s.source("public class HelloWorld { public static void main(String[] a) { throw new IllegalStateException(\"boom\"); } }"))
++        assertEquals(70, runExit, runOut)
++        assertTrue(runOut.contains("IllegalStateException: boom"))
++        assertTrue(runOut.contains("runtime failed"))
++    }
++
++    @Test fun interactiveStdinUsesARealHostPty() = Sandbox().use { s ->
++        val f = s.source("public class HelloWorld { public static void main(String[] a) { var scanner = new java.util.Scanner(System.in); System.out.println(\"INPUT=\" + scanner.nextLine()); } }")
++        val (exit, out) = s.start(f, "平板 input\n", pty = true)
++        assertEquals(0, exit, out)
++        assertTrue(out.contains("INPUT=平板 input"), out)
++    }
++
++    @Test fun stoppingALongRunningHostPtyReapsJavaAndItsChildWithoutTouchingOtherTasks() = Sandbox().use { s ->
++        val file = s.source("""public class HelloWorld {
++            public static void main(String[] a) throws Exception {
++                new ProcessBuilder("sleep", "120").start();
++                Runtime.getRuntime().addShutdownHook(new Thread(() -> { try { Thread.sleep(60000); } catch (Exception ignored) {} }));
++                System.out.println("SUI_LONG_READY");
++                Thread.sleep(120000);
++            }
++        }""")
++        val runner = File(s.root, "long-runner.sh").apply {
++            writeText(JavaLanguageAdapter.command(file.path).replace("MANAGED_ENV=/opt/sui-code/java.env", "MANAGED_ENV=${shellQuote(s.env.path)}"))
++        }
++        val token = "sui-quickrun:test-" + java.util.UUID.randomUUID()
++        val output = File(s.root, "long-output.log")
++        val process = ProcessBuilder("script", "-qefc", "bash ${shellQuote(runner.path)}", "/dev/null").apply {
++            environment()["JCODE_EXT_ID"] = token
++            redirectErrorStream(true); redirectOutput(output)
++        }.start()
++        val unrelated = ProcessBuilder("sleep", "120").start()
++        fun owned(): Set<Int> = File("/proc").listFiles().orEmpty().mapNotNull { entry ->
++            val pid = entry.name.toIntOrNull() ?: return@mapNotNull null
++            if (runCatching { File(entry, "environ").readText().split('\u0000').contains("JCODE_EXT_ID=$token") }.getOrDefault(false)) pid else null
++        }.toSet()
++        fun signal(pid: Int, name: String) {
++            ProcessBuilder("kill", "-$name", pid.toString()).start().waitFor()
++        }
++        fun parents(): Map<Int, Int> = File("/proc").listFiles().orEmpty().mapNotNull { entry ->
++            val pid = entry.name.toIntOrNull() ?: return@mapNotNull null
++            val parent = runCatching { File(entry, "stat").readText().substringAfterLast(") ").split(' ')[1].toInt() }.getOrNull() ?: return@mapNotNull null
++            pid to parent
++        }.toMap()
++        try {
++            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(40)
++            while (!output.readText().contains("SUI_LONG_READY") && System.nanoTime() < deadline) Thread.sleep(50)
++            assertTrue(output.readText().contains("SUI_LONG_READY"), output.readText())
++            assertTrue(owned().size >= 3)
++            QuickRunCleanup.stop(
++                owned = ::owned,
++                parents = ::parents,
++                terminate = { pid -> signal(pid, "TERM") },
++                kill = { pid -> signal(pid, "KILL") },
++                pause = { Thread.sleep(20) },
++            )
++            process.waitFor(5, TimeUnit.SECONDS)
++            repeat(50) { if (owned().isNotEmpty()) Thread.sleep(20) }
++            assertTrue(owned().isEmpty(), "Tagged Java/children survived stop")
++            assertTrue(unrelated.isAlive, "An unrelated task was stopped")
++        } finally {
++            owned().forEach { pid -> signal(pid, "KILL") }
++            process.destroyForcibly(); unrelated.destroyForcibly()
++        }
++    }
++
++    @Test fun consecutiveDifferentFilesRunIndependently() = Sandbox().use { s ->
++        for (name in listOf("One", "Two")) {
++            val (exit, out) = s.start(s.source("class $name { public static void main(String[] a) { System.out.println(\"$name OK\"); } }", "$name.java"))
++            assertEquals(0, exit, out)
++            assertTrue(out.contains("$name OK"))
++        }
++        assertFalse(s.root.walk().any { it.extension == "class" })
++    }
++}
+diff --git a/core/editor/src/main/java/dev/blamspot/jcode/core/editor/EditorView.kt b/core/editor/src/main/java/dev/blamspot/jcode/core/editor/EditorView.kt
+index 4ebdc06..b7307f3 100644
+--- a/core/editor/src/main/java/dev/blamspot/jcode/core/editor/EditorView.kt
++++ b/core/editor/src/main/java/dev/blamspot/jcode/core/editor/EditorView.kt
+@@ -183,6 +183,8 @@ class EditorView @JvmOverloads constructor(
+     }
+ 
+     /** Invoked when the user requests a save (Ctrl+S); the host writes the buffer to disk. */
++    var onQuickRunRequest: ((Int) -> Boolean)? = null
++
+     var onSaveRequest: (() -> Unit)? = null
+ 
+     /** Invoked when the user requests Save All (Ctrl+Shift+S); the host saves every open tab. */
+@@ -1137,6 +1139,11 @@ class EditorView @JvmOverloads constructor(
+     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+         val state = editorState ?: return super.dispatchKeyEvent(event)
+ 
++        if (event.isCtrlPressed && !event.isShiftPressed && !event.isAltPressed && event.keyCode == KeyEvent.KEYCODE_F5) {
++            if (event.action == KeyEvent.ACTION_DOWN) return onQuickRunRequest?.invoke(event.repeatCount) ?: false
++            return true
++        }
++
+         // Ctrl+Z / Ctrl+Shift+Z for undo/redo
+         if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_Z) {
+             if (event.action == KeyEvent.ACTION_DOWN) {
+diff --git a/core/term/src/main/java/dev/blamspot/jcode/core/term/TerminalSessionManager.kt b/core/term/src/main/java/dev/blamspot/jcode/core/term/TerminalSessionManager.kt
+index e0fcb53..ba8e094 100644
+--- a/core/term/src/main/java/dev/blamspot/jcode/core/term/TerminalSessionManager.kt
++++ b/core/term/src/main/java/dev/blamspot/jcode/core/term/TerminalSessionManager.kt
+@@ -4,6 +4,7 @@ import dev.blamspot.jcode.core.distro.Arch
+ import dev.blamspot.jcode.core.distro.DistroBind
+ import dev.blamspot.jcode.core.distro.ProotManager
+ import dev.blamspot.jcode.core.distro.RootfsManager
++import dev.blamspot.jcode.core.distro.GuestProcessTree
+ import java.io.File
+ import java.util.UUID
+ import kotlinx.coroutines.CoroutineScope
+@@ -76,6 +77,7 @@ class TerminalSessionManager(
+         /** Spawn parameters captured so a nested-shell child can be created cloning this session's
+          *  distro/binds/user/arch/workdir (OSC 7715). Null for sessions created before this existed. */
+         @Volatile var spawnSpec: SpawnSpec? = null
++        var processOwner: String? = null
+ 
+         /** Resize both the PTY and the parser together (parser realloc is synchronized against the
+          *  reader's feed). Safe to call from the UI thread. */
+@@ -301,6 +303,7 @@ class TerminalSessionManager(
+      * Create a new terminal session spawning the configured shell via proot as the distro user.
+      * Returns null if max sessions reached or proot/rootfs are not available.
+      */
++    // Preserve the original public/default-argument ABI for existing callers and extensions.
+     fun createSession(
+         distroId: String,
+         binds: List<DistroBind>,
+@@ -309,7 +312,19 @@ class TerminalSessionManager(
+         shellCommand: String = "/bin/bash --login",
+         rootfsArch: Arch = Arch.ARM64,
+         label: String? = null,
++    ): Session? = createOwnedSession(distroId, binds, workdir, user, shellCommand, rootfsArch, label, null)
++
++    fun createOwnedSession(
++        distroId: String,
++        binds: List<DistroBind>,
++        workdir: String,
++        user: String,
++        shellCommand: String = "/bin/bash --login",
++        rootfsArch: Arch = Arch.ARM64,
++        label: String? = null,
++        processOwner: String? = null,
+     ): Session? {
++        require(processOwner == null || processOwner.startsWith("sui-quickrun:"))
+         if (sessionCount >= maxSessions) return null
+         if (!prootManager.isProotInstalled) return null
+ 
+@@ -453,11 +468,12 @@ class TerminalSessionManager(
+             "BROWSER" to "/usr/local/bin/xdg-open",
+         ) + adbEnvVars() + androidSdkEnvVars(rootfsPath) + userEnvVars.filterKeys { ENV_NAME_RE.matches(it) }
+ 
++        val taggedEnv = if (processOwner != null) envVars + (GuestProcessTree.OWNER_ENV to processOwner) else envVars
+         val prootArgs = prootManager.buildShellCommand(
+             rootfsPath = rootfsPath,
+             shellCommand = shellCommand,
+             binds = binds,
+-            env = envVars,
++            env = taggedEnv,
+             workdir = workdir,
+             user = user,
+             rootfsArch = rootfsArch,
+@@ -477,6 +493,7 @@ class TerminalSessionManager(
+             )
+             val session = Session(sessionId, sessionLabel, pty)
+             session.spawnSpec = SpawnSpec(distroId, binds, user, rootfsArch, workdir)
++            session.processOwner = processOwner
+             synchronized(sessionsLock) { _sessions[sessionId] = session }
+             activeSessionId = sessionId
+             startReader(session)
+@@ -620,6 +637,7 @@ class TerminalSessionManager(
+         // still be drawing it on the main thread, and closing native parser state from this IO thread
+         // would race onDraw. The parser is freed on the main thread by closeSession(), or by its
+         // Cleaner once the view unbinds and the Session becomes unreachable.
++        session.processOwner?.let { owner -> runCatching { GuestProcessTree.terminateOwnerBlocking(owner) } }
+         runCatching { session.pty.close() }
+         if (activeSessionId == id) {
+             activeSessionId = synchronized(sessionsLock) { _sessions.keys.firstOrNull() }
+@@ -668,6 +686,10 @@ class TerminalSessionManager(
+         // the PTY dies (the parent would otherwise only get EOF → exit 0). No-op for normal sessions.
+         writeRelocationBackstop(session, "E 143\n")
+         val readerJob = session.readerJob
++        // Bounded cleanup must finish before the launcher closes, including explicit app exit.
++        session.processOwner?.let { owner ->
++            runCatching { GuestProcessTree.terminateOwnerBlocking(owner) }
++        }
+         readerJob?.cancel()
+         session.onUpdate = null
+         synchronized(session) { session.parser.close() }
+diff --git a/docs/sui-code-v0.2.md b/docs/sui-code-v0.2.md
+new file mode 100644
+index 0000000..6476d06
+--- /dev/null
++++ b/docs/sui-code-v0.2.md
+@@ -0,0 +1,155 @@
++# sui-code v0.2 — 原生 Java QuickRun 开发与验收报告
++
++日期：2026-11-08（Asia/Shanghai）。状态：代码、云端测试、Debug 构建通过；ARM64 平板操作与覆盖升级待实机确认。
++
++## 1. 本轮实现的功能
++
++- 从 v0.1 最新有效提交 `5496f14a1d4a3dfa3a9c3528fbe3f8ce154e1f4d` 创建 `sui-code/v0.2-java-quickrun`，没有基于缺少 v0.1 的 main 重新开发。
++- 编辑器获得焦点时，物理键盘 `Ctrl+F5` 通过 `EditorView.dispatchKeyEvent` 调用原生 QuickRun，不经过工程/Run Configuration。
++- 从 ViewModel 当时的激活标签捕获文件与编辑状态，只接收 `.java` 文件。先等待 `saveTabAwait` 完成；保存失败、保存期间又有编辑、无法读取本地文件或 Ubuntu 改变时，不创建运行进程。
++- 非 Java 标签不启动其他运行任务。长按 repeatCount 和运行中重复启动由原子门闩拦截；再次运行前关闭上一条已完成的 QuickRun 会话，避免累积会话及 Output 捕获记录。
++- 每次启动明确加载 `/opt/sui-code/java.env`，清除继承的 JAVA_HOME 后读取受管理的配置，使用绝对路径 java/javac。没有环境文件、JDK 工具缺失或 Java 启动失败时明确报错；不改用 Android Java、其他 JDK，不调用 apt、不触发安装器。
++- 通过既有 PRoot/PTY/TerminalSessionManager 创建独立可管理终端，将真实文件父目录绑定到 guest `/sui-quickrun`；该目录作为工作目录，因而相对资源仍来自当前文件目录。命令里的用户路径一律 shellQuote，长脚本先暂存，不把源码或长命令灌入 PTY。
++- 快捷键会自动打开并聚焦既有 Terminal 面板。stdin 直接连接 PTY，stdout、stderr 和异常堆栈原样显示，并汇入已有 Output 通道。
++- 先将已保存文件快照复制到私有临时目录，执行 `javac -proc:none -d <临时目录>` 做编译诊断；编译失败返回 65。随后使用同一 JDK 的源文件启动；运行失败返回 70，并保留原 Java 退出码及堆栈。环境错误返回 78，文件错误 66，准备失败 73。
++- 云端 Java 27 测试证明：源文件路径不匹配 package 时，Java 27 会拒绝源文件启动。本实现用 JDK 自带的 JavacTask AST 解析包名，将快照放到匹配包名的私有目录再源文件启动，不用正则猜 Java 语法。工作目录保持为原文件父目录。生成的 `.class`、辅助源码和快照都在临时目录，正常退出由 trap 清理。
++- 使用已有 Stop 控件停止 QuickRun；即使没有工程，运行期间该原有控件也可用。停止会关闭 QuickRun PTY，先按唯一 owner 标记终止 guest tracee，再清理不响应终止的 Java/子进程，然后关闭 PRoot launcher。手动关闭会话、明确退出应用及 ViewModel 释放也走此清理路径。
++- QuickRun 的会话、门闩、标记与 ProjectRunner 分开管理。停止 QuickRun 不停止现有工程任务。Java 原生适配器通过 registry 分发，后续可添加 C/GCC、C++/G++、Python 适配器；本轮未实现或安装这些语言环境。
++- 未重设 JCode 名称、图标、主题和布局。仅接入快捷键及复用现有 Stop/Terminal 功能，没有视觉重设计。
++
++## 2. 修改的关键文件
++
++| 文件 | 用途 |
++| --- | --- |
++| `core/distro/.../QuickRun.kt` | 语言 registry、重复触发门闩、保存完成门控、Java 临时编译/源启动计划、可测试的停止策略。 |
++| `core/distro/.../JavaEnvironment.kt` | 复用 JavaLanguageAdapter 接口，接入实际 Java 执行计划。 |
++| `app/.../JavaQuickRunController.kt` | 当前文件生命周期、保存等待、文件绑定、创建/聚焦/停止独立终端、会话回收。 |
++| `app/.../MainViewModel.kt` | 捕获激活标签，连接保存与 QuickRun，转发完成事件，退出清理。 |
++| `core/editor/.../EditorView.kt`、`feature/editor-pane/.../EditorPane.kt` | 焦点内 Ctrl+F5 和 repeatCount 传递；真实连接 Controller，而非空处理器。 |
++| `core/design/.../EditorSaveActions.kt` | 附加 QuickRun 操作属性；保留原设计 SDK 构造函数的 JVM 描述符。 |
++| `core/term/.../TerminalSessionManager.kt`、`core/distro/.../GuestProcessTree.kt` | 可选的专属 owner 标记与先杀 tracee 后关 launcher；原 createSession 及默认参数 ABI 保留，普通终端行为不变。 |
++| `app/.../JCodeShell.kt`、`workbench/WorkbenchModel.kt`、`workbench/WorkbenchChromeBars.kt` | 合并既有终端聚焦通道，连接 Stop 和无工程运行状态。 |
++| `app/.../OutputLog.kt` | 关闭 QuickRun 会话时回收自身捕获状态，不清空其他工程输出。 |
++| `feature/sdk-manager/.../JavaEnvironmentPage.kt` | 更新原管理器中的功能说明；安装器、JDK 存储和日志流程不变。 |
++| `app/build.gradle.kts` | 提供明确的正整数 versionCode 构建覆盖项。 |
++| `core/distro/.../JavaQuickRunTest.kt`、`JavaEnvironmentTest.kt` | 新执行链路测试与 v0.1 回归。 |
++| `core/design/.../ExtensionAbiSurfaceTest.kt` | 扩展 ABI 检查及原构造签名回归。 |
++| `app/src/test/.../ProjectRunnerQuickRunRegressionTest.kt` | 原有工程命令暂存与真实 shell 执行回归。 |
++| `.github/workflows/deliver-sui-code-v0.2.yml`、`.delivery/sui-code-v0.2/` | 原 APK 上传、下载回验及升级身份/签名检查，仅用于 v0.2 分支。 |
++
++完整源码差异以交付的 `changes.patch` 为准；原 `ProjectRunner.kt` 未修改。v0.1 的 APK、报告、补丁及交付工作流未覆盖。
++
++## 3. 分支名称与提交 SHA
++
++分支：`sui-code/v0.2-java-quickrun`。
++
++- `95d5ae2`：Java 计划、键盘入口、停止策略及测试。
++- `6421a95`：当前编辑文件保存—运行—停止链路、独立升级身份及工程回归。
++- `e8697745ad769fb6180c7dd0355c63f41a357d8d`：保留扩展/终端 ABI，回收 Output 捕获。最终 APK 源码对应此提交。
++- 后续文档/工作流/交付提交不改变上述 APK 源码；最终分支 HEAD 在 GitHub 可查。
++
++## 4. 构建结果
++
++`BUILD SUCCESSFUL`，Android Debug APK 已生成。使用已验证云端工具链：JDK 21、Gradle 8.14.3、SDK 36、NDK 27.2.12479018、CMake 3.30.5。既有 Cargo JNI 输出已保留，APK 包含 `libripgrep_ffi.so`、`libjcode_wasm.so`，仅 arm64-v8a。
++
++```bash
++cd /workspace/j-code-android
++source /workspace/setup/env.sh
++export SUI_QUICKRUN_TEST_JAVA_HOME=/workspace/toolchains/temurin27/jdk-27.0.1.0.2+1
++bash gradlew --no-daemon --max-workers=4 \
++  -PjcodeApplicationId=dev.suicode.ide \
++  -PsuiVersionCode=1070800 -PjcodeVersionName=1.7.7-sui.0.2 \
++  :core:design:testDebugUnitTest --tests '*ExtensionAbiSurfaceTest' \
++  :core:distro:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug
++```
++
++本轮功能包由本机保留的 v0.1 Debug 密钥签名；Actions 只搬运已验证 APK，不重新构建、不生成另一把签名密钥。
++
++## 5. 测试用例、数量及通过结果
++
++共 **52 项通过，0 失败、0 错误、0 跳过**。core/distro 的 29 项在功能验收构建实际执行；兼容性最终构建对未变化的该模块复用有效结果，core/design 和 app 实际执行。没有将旧 v0.1 快照的测试结果当成本轮新结果。
++
++| 测试组 | 数量 | 结果 |
++| --- | ---: | --- |
++| JavaQuickRunTest | 16 | 全部通过，真实 JVM/PTY 与策略测试，见下表。 |
++| JavaEnvironmentTest（v0.1） | 10 | 全部通过：GA 解析、校验、并存安装、失败/取消等。 |
++| GuestShellScriptTest | 3 | 全部通过：用户环境经 su 传递、root 路径等。 |
++| ExtensionAbiSurfaceTest | 5 | 全部通过：原扩展引用表面与设计 SDK 构造签名。 |
++| ProjectRunnerQuickRunRegressionTest | 1 | 真实执行原工程 Run Configuration 的暂存脚本，未加载 Java 环境，输出 `PROJECT_RUN_OK`。 |
++| ManagedCacheTest / MemoryPressureTest / UpdateCheckerTest | 6 / 4 / 7 | 全部通过。 |
++
++JavaQuickRunTest 的 16 个用例：
++
++1. 仅 Java 分发，无工程依赖。
++2. repeatCount 与并发门闩抑制重复启动。
++3. 保存失败后不解析/执行过期文件。
++4. 保存真正挂起时等待完成再解析文件。
++5. 保存与路径使用顺序。
++6. 中文、空格、引号目录中的 HelloWorld，无源码目录 class 垃圾。
++7. package 与当前目录相对资源读取。
++8. 中文、空格、单引号、分号、美元符等合法文件名不成为 shell 代码。
++9. 缺少 managed java.env 明确失败，不用主机 Java 回退。
++10. 配置内 JDK 损坏时明确失败，不回退。
++11. 编译失败 65 与运行失败 70 区分，异常堆栈保留。
++12. Linux 真实 PTY 标准输入，含中文输入。
++13. 连续运行不同文件，输出独立，无源码目录 class 文件。
++14. 停止策略首先终止 tracee，并清理不响应终止和脱离父进程的进程，不碰其他 owner。
++15. 正常停止不进行多余强杀。
++16. 真实 Linux PTY 长时 Java 程序创建 `sleep` 子进程并安装慢退出 hook；按生产同一停止策略清理后，owner 进程集合为空，另一个未标记任务仍存活。
++
++执行 Java 测试的是官方 **Temurin 27.0.1.0.2+1 / Linux x64**，归档来自 Adoptium GitHub 发布，下载后用官方 `.sha256.txt` 验证。构建 Gradle 使用 JDK 21；没有把构建用 JDK 21 误报为 Java 27 执行测试。
++
++## 6. APK 包身份、版本及签名兼容性
++
++| 项目 | v0.1 原交付 APK | v0.2 |
++| --- | --- | --- |
++| applicationId | dev.suicode.ide.debug | dev.suicode.ide.debug |
++| versionCode | 1070799 | **1070800** |
++| versionName | 1.7.7 | **1.7.7-sui.0.2** |
++| 签名证书 SHA-256 | 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0 | **完全一致** |
++| minSdk / targetSdk | 33 / 33 | 33 / 33 |
++| ABI | arm64-v8a | arm64-v8a |
++
++`apksigner verify` 与 `aapt dump badging` 均通过。核查的 v0.1 APK SHA-256 仍为 `1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06`。
++
++结论：与原交付 v0.1 满足同包名、同证书、更高 versionCode 的覆盖更新条件；没有数据清除、JDK 重装或 rootfs 迁移逻辑。预期保留应用内 Ubuntu 和 `/opt/sui-code/jdks/temurin-27.0.1.0-aarch64`。尚未在目标设备实际执行覆盖安装；如果系统报签名冲突或安装失败，停止并保留原应用，不卸载、不清除数据。
++
++## 7. APK 下载方式及 SHA-256
++
++交付文件：`sui-code-v0.2-debug.apk`、`report.md`、`changes.patch`。
++
++- APK 字节数：**88,733,580**。
++- APK SHA-256：**e0672c0823403c8176d1bf91d822cf143c0073186e4f35d9373d82b79d7c010e**。
++- Actions 工作流：`Deliver original sui-code v0.2 APK`，仅允许 Fork 的 v0.2 分支。
++- Artifact 名：`sui-code-v0.2-java-quickrun-debug`，保留 30 天，登录 GitHub 后下载 ZIP。
++- 源码补丁基线为 v0.1 最新提交 `5496f14`，不包含交付用 APK 二进制。
++- 最终工作流运行页及 Artifact 的真实入口在本次交付回复中提供；不会用容器内部路径冒充下载地址。
++
++## 8. 尚未验证或已知存在的问题
++
++- `adb devices` 没有连接设备。本轮所有运行测试均为云端 Linux x64；**没有宣称 ARM64 PRoot、物理键盘、Android UI 或更新安装实机通过**。
++- 用户提供的 v0.1 ARM64 实机验收是既有基线，本轮没有重新验证或破坏它，也不要求重装 JDK。
++- 必须实机确认：Ctrl+F5 的硬件键映射/焦点、dirty 文件自动保存、Terminal 自动聚焦、中文输入法与 stdin、Stop/关闭/退出时 Android `/proc` 可见性与 PRoot 清理、长时间运行及连续执行。
++- Linux host PTY 的停止测试使用生产同一清理策略，但信号和进程枚举适配器是 Linux host，不能替代 Android `Os.kill`/SELinux 的集成验收。
++- Java 预编译校验、JDK AST helper 和源启动会额外启动 JVM，优先保证错误分类与 Java 27 包名兼容，平板冷启动耗时尚待测量。
++- 正常退出会清除临时文件；被强杀、系统杀进程等情况下可能留下应用私有 `/tmp/sui-quickrun-*` 临时目录，不在源码目录生成 class，不改 JDK 安装目录。
++- 本轮只支持可读写的真实本地文件。无法保存、无真实文件路径的标签会报错，不静默运行旧内容。尚未实现远程文档/SAF-only 文档复制运行。
++- 无 main 方法等入口问题在预编译通过后报告为运行失败；本轮不做工程构建、依赖下载或复杂 classpath 配置。
++- Stop 会关闭该 QuickRun 会话；运行完成时会话保留输出。已有 Output 通道保留已收集输出；没有新增第二套终端或运行面板。
++- 其他语言、调试器和 UI 改造未开始。
++
++## 9. 用户 ARM64 平板逐步验收流程
++
++1. 下载本次 Actions Artifact ZIP，解压并核对 APK SHA-256。保留 v0.1 安装包；不要卸载 v0.1、清数据或重新配置 Ubuntu。
++2. 在系统安装器中对 `dev.suicode.ide.debug` 执行**更新**。若提示冲突/失败，停止并反馈错误，不卸载。安装后在应用信息确认版本 `1.7.7-sui.0.2`。
++3. 打开原有 Ubuntu 24.04 环境，确认已有文件、工程、终端配置和 JDK 目录仍在。可用原命令 `. /opt/sui-code/java.env; java -version; javac -version` 作保留验证；QuickRun 本身不需要手工执行这些命令。
++4. 新建或打开独立的 `HelloWorld.java`，不创建工程、不添加 Run Configuration。代码打印 `Hello from sui-code!`。点击编辑器使其获得焦点，按 Ctrl+F5，确认终端自动出现并输出该行及 `[QuickRun completed] exit 0`。
++5. 在编辑器修改输出文本但不点保存，再按 Ctrl+F5。应执行新内容；检查磁盘文件已保存。针对不可写文件应报错，不应启动旧文件。
++6. 将文件放到含中文、空格、单引号的目录中重复运行；再用合法的非 public 类/特殊文件名测试。测试带 package 的文件及从当前目录读取 `message.txt`。
++7. 加入语法错误，确认显示 `[QuickRun compilation failed]`；修复后让 main 抛异常，确认堆栈及 `[QuickRun runtime failed]`，两者能区分。
++8. 使用 Scanner/System.in 读取一行并打印，按 Ctrl+F5 后在 Terminal 内输入文字及回车，应显示输入结果。
++9. 使用循环打印或 sleep 的长运行程序。长按 Ctrl+F5，不应产生多个 QuickRun 终端。点既有 Stop；再用关闭相关终端和明确退出应用分别测试。返回后检查没有残留 Java/子进程，已有其他工程任务不应被 QuickRun 的 Stop 杀死。
++10. 在不同目录连续运行多个 Java 文件，再运行一个原有 ProjectRunner 工程，验证旧 Run/Debug 行为；再次打开 Java 环境管理器，确认原 JDK 状态及安装日志仍可访问。
++11. 关闭并重新打开应用，重复 HelloWorld，确认无须手工 source，已有 Ubuntu/JDK 数据仍保留。
++
++最终状态：**覆盖更新的包级条件通过；JDK 不迁移、不重装；Ctrl+F5 已接通真实保存—PRoot—Java—PTY 链路；交互输入和停止已实现并通过 host 测试；ARM64 平板上的更新、快捷键、交互及清理效果仍须按上述步骤确认。**
+diff --git a/feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt b/feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt
+index bc08d42..9da22ad 100644
+--- a/feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt
++++ b/feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt
+@@ -474,6 +474,7 @@ fun EditorViewHost(
+                     onContextRequest = { menu = it }
+                     onSaveRequest = { onSave() }
+                     onSaveAllRequest = { saveActions.onSaveAll() }
++                    onQuickRunRequest = { saveActions.onQuickRun(it) }
+                     onFindRequest = { onFind() }
+                     onGoToLineRequest = { menuExtras.onGoToLine?.invoke() }
+                     onCloseTabRequest = { onCloseTab() }
+@@ -505,6 +506,7 @@ fun EditorViewHost(
+                 v.onContextRequest = { menu = it }
+                 v.onSaveRequest = { onSave() }
+                 v.onSaveAllRequest = { saveActions.onSaveAll() }
++                v.onQuickRunRequest = { saveActions.onQuickRun(it) }
+                 v.onFindRequest = { onFind() }
+                 v.onGoToLineRequest = { menuExtras.onGoToLine?.invoke() }
+                 v.onCloseTabRequest = { onCloseTab() }
+diff --git a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt
+index d8b81e8..e95a273 100644
+--- a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt
++++ b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt
+@@ -64,7 +64,7 @@ internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier:
+             }
+         }
+         if (state.busy) TextButton(onClick = manager::cancel) { Text("Cancel") }
+-        Text("QuickRun: Java adapter prepared; Ctrl+F5 and current-file execution are not connected in v0.1.")
++        Text("QuickRun: open a .java file in the editor and press Ctrl+F5. The current file is saved before running in Ubuntu.")
+         Text("Language plugin: not enabled here. The official JCode marketplace lists Java Dev Pack (jcode.lang.java); device compatibility is unverified. Review it in Extensions. No third-party fallback is used.")
+         state.logPath?.let { Text("Install log in Ubuntu: $it") }
+         if (state.log.isNotBlank()) SelectionContainer { Text(state.log, style = MaterialTheme.typography.bodySmall) }
