@@ -1,3 +1,22 @@
+# sui-code 开发规范
+
+当前规范 **0.1.0（实验）**；Core API **1**；SUIC/SUIK **1.0**。
+
+- [Native Extension & IDE Kit Development Specification](SUIC-SUIK-Development-Specification.md)
+- [UI Extension & Design Specification](SuiCode-UI-Design-Specification.md)
+- [完整 Manifest 与组件 JSON Schema](schemas/)
+- [开发模板及可验证示例包](examples/)
+- [生产验证器与 host API](../../core/native-packages/src/main/java/dev/suicode/packages/)
+- [独立打包工具](../../tools/sui_packages/pack.py)
+
+这些是新协议的可验证实现和设计契约，不是新 Android 产品已完成的声明。应用接入、旧扩展解耦、真实语言Kit、官方签名目录和完整UI仍在开发。规范内不伪称缺失backend可用。
+
+---
+
+## 历史基础代码参考（不作为 sui-code 新扩展标准）
+
+以下原 JCode 工程文档作为迁移分析与合法复用参考保留。新 `.suic`/`.suik` 只采用上面的 sui-code 规范。
+
 # JCode — Engineering Specifications
 
 **As-built** specifications for JCode, a native Android IDE with an embedded Linux runtime.

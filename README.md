@@ -1,3 +1,5 @@
+> sui-code 独立开发分支：公开的 [扩展与 IDE Kit 开发规范](docs/specifications/SUIC-SUIK-Development-Specification.md)、[UI 设计与扩展规范](docs/specifications/SuiCode-UI-Design-Specification.md)及[规范索引与实现状态](docs/specifications/README.md)。
+
 <p align="center">
   <img src="media/jcode-app-icon.svg" width="96" alt="JCode icon" />
 </p>

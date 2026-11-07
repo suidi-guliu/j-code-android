@@ -1,0 +1,61 @@
+name: Verify independent native package protocol
+on:
+  push:
+    branches: [sui-code/native-ecosystem-ui]
+    paths:
+      - 'core/native-packages/**'
+      - 'docs/specifications/**'
+      - 'tools/sui_packages/**'
+      - '.github/workflows/verify-native-package-protocol.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protocol:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/native-ecosystem-ui'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check schemas and documentation consistency
+        run: |
+          python -m pip install -r tools/sui_packages/requirements-dev.txt
+          python tools/sui_packages/check_specifications.py
+      - name: Build and test production protocol
+        run: bash gradlew --no-daemon --max-workers=4 :core:native-packages:testDebugUnitTest :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/minimal.suic"
+      - name: Verify IDE Kit and reject illegal plugin
+        run: |
+          set -euo pipefail
+          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/minimal-kit.suik"
+          if bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/illegal-plugin.suic" > "$RUNNER_TEMP/illegal.log" 2>&1; then
+            echo 'Illegal plugin was accepted'; exit 1
+          fi
+          grep 'E_BOUNDARY' "$RUNNER_TEMP/illegal.log"
+      - name: Generate source patch against core-foundation
+        run: git diff --binary f4955b99d132d025c0478d5e64c15bfe6dfb860b HEAD -- . ':!.delivery' > native-protocol-changes.patch
+      - name: Upload protocol SDK and test evidence (not an APK)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sui-code-native-protocol-0.1-sdk
+          path: |
+            LICENSE
+            README.md
+            core/native-packages/build.gradle.kts
+            native-protocol-changes.patch
+            docs/specifications/
+            tools/sui_packages/
+            core/native-packages/src/
+            core/native-packages/build/test-results/testDebugUnitTest/
+          if-no-files-found: error
+          retention-days: 30
