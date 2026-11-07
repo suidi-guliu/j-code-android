@@ -58,6 +58,7 @@ class DistroService(
         appContext,
         RootfsDownloader(tmpDir = File(appContext.filesDir, "tmp")),
     )
+    val nativeEnvironmentManager by lazy { NativeEnvironmentManager(this) }
     val javaEnvironmentManager by lazy { JavaEnvironmentManager(this) }
 
     /** Java installs require the visible PTY runner, without an in-process fallback. */

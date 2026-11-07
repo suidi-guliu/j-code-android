@@ -24,9 +24,9 @@ class JavaQuickRunTest {
         return result!!.getOrThrow()
     }
 
-    @Test fun dispatchIsJavaOnlyAndDoesNotNeedAProject() {
+    @Test fun dispatchUsesNativeAdaptersAndDoesNotNeedAProject() {
         assertEquals(JavaLanguageAdapter, QuickRunLanguages.forFile("HelloWorld.java"))
-        assertNull(QuickRunLanguages.forFile("hello.py"))
+        assertEquals(PythonLanguageAdapter, QuickRunLanguages.forFile("hello.py"))
         assertNull(QuickRunLanguages.forFile("page"))
     }
 

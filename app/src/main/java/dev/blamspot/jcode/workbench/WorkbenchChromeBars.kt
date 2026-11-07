@@ -307,7 +307,11 @@ internal fun WorkbenchTopBar(
             // than one config it opens a picker instead. Long-press always opens the menu — the list of
             // run configs to launch, plus the debug/session controls.
             // A running single-file QuickRun also needs the existing Stop control without a project.
-            if (selectedProject != null || isRunning) {
+            val nativeRun = dev.blamspot.jcode.design.LocalEditorSaveActions.current
+            val nativeFile = activeTab?.takeIf { !it.isPage }?.filePath?.name?.let {
+                dev.blamspot.jcode.core.distro.QuickRunLanguages.forFile(it) != null
+            } == true
+            if (selectedProject != null || isRunning || nativeFile) {
                 var runMenuOpen by remember { mutableStateOf(false) }
                 val hasMultipleRuns = runConfigNames.size > 1
                 // A debug session owns this button while it lasts, but it stays a three-state control:
@@ -338,7 +342,7 @@ internal fun WorkbenchTopBar(
                                 debugging -> debug.onStop()
                                 isRunning -> onStop()
                                 hasMultipleRuns -> runMenuOpen = true
-                                else -> onRun()
+                                else -> if (selectedProject == null && nativeFile) nativeRun.onQuickRun(0) else onRun()
                             }
                         },
                         active = isRunning || debugging,
@@ -347,7 +351,8 @@ internal fun WorkbenchTopBar(
                     CompactContextMenu(
                         expanded = runMenuOpen,
                         onDismissRequest = { runMenuOpen = false },
-                        quickActions = listOf(
+                        quickActions = listOfNotNull(
+                            if (nativeFile) ContextAction(JCodeIcon.Run, "Run current file", enabled = !nativeRun.quickRunActive) { nativeRun.onQuickRun(0) } else null,
                             // The session controls, live only while it is paused — stepping a running
                             // debuggee is not a thing, and these were dead placeholders before the
                             // debugger existed.
@@ -361,7 +366,7 @@ internal fun WorkbenchTopBar(
                             if (debugging) {
                                 ContextAction(JCodeIcon.Stop, "Stop debugging") { debug.onStop() }
                             } else {
-                                ContextAction(JCodeIcon.Rerun, "Rerun") { onRerun() }
+                                ContextAction(JCodeIcon.Rerun, "Rerun") { if (selectedProject == null && nativeFile) nativeRun.onQuickRun(0) else onRerun() }
                             },
                         ),
                         // Each run config as its own row — tap to launch that one.

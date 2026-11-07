@@ -5365,6 +5365,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * request survives the immediate [Runtime.exit], which the system carries out in a new process.
      */
     fun restartApp() {
+        if (distroService.nativeEnvironmentManager.state.value.installing) {
+            distroService.nativeEnvironmentManager.cancel()
+            viewModelScope.launch { emitMessage("Restart postponed: wait for apt/dpkg to reach a safe cancellation boundary.") }
+            return
+        }
         runCatching { flushSessionNow() }
         runCatching { stopAllRuntimeServices() }
         runCatching { dev.blamspot.jcode.workbench.ScmWebViewHolder.destroyAll() }

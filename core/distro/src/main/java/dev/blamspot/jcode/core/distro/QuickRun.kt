@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** A registry, not a project recipe: future adapters can opt in without changing keyboard handling. */
 object QuickRunLanguages {
-    private val adapters: List<NativeLanguageAdapter> = listOf(JavaLanguageAdapter)
+    private val adapters: List<NativeLanguageAdapter> = listOf(JavaLanguageAdapter, CLanguageAdapter, CppLanguageAdapter, PythonLanguageAdapter)
     fun forFile(name: String): NativeLanguageAdapter? = adapters.firstOrNull {
         name.substringAfterLast('.', "") in it.extensions
     }
@@ -108,5 +108,19 @@ internal object QuickRunCleanup {
             pause()
         }
         owned().forEach(kill)
+    }
+}
+
+/** PRoot separates host:guest at the first colon. Bind an unambiguous ancestor, then address
+ * colon-containing directories inside the guest rather than misparsing a legal source path. */
+data class QuickRunFileMount(val hostDirectory: java.io.File, val guestFile: String) {
+    val guestDirectory: String get() = guestFile.substringBeforeLast('/')
+    companion object {
+        fun forFile(file: java.io.File): QuickRunFileMount {
+            val actual = file.canonicalFile
+            var parent = actual.parentFile ?: error("Source has no parent directory")
+            while (':' in parent.path) parent = parent.parentFile ?: error("Cannot map this source directory into Ubuntu")
+            return QuickRunFileMount(parent, "/sui-quickrun/" + actual.relativeTo(parent).invariantSeparatorsPath)
+        }
     }
 }

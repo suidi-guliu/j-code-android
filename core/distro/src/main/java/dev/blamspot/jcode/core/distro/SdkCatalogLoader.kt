@@ -33,7 +33,14 @@ internal class SdkCatalogLoader(
             verifyScript = "test -f /opt/sui-code/java.env && . /opt/sui-code/java.env && test -x \"\$JAVA_HOME/bin/javac\"",
             uninstallScript = "echo 'Managed JDK removal is not available in v0.1.'; exit 1",
             supportedArches = listOf("arm64"),
-        )) + document.list("entries").mapIndexedNotNull { index, rawEntry ->
+        )) + NativeEnvironment.entries.map { language -> SdkCatalogEntry(
+            id = language.catalogId, category = SdkCatalogCategory.Languages,
+            name = "${language.title} · Native QuickRun",
+            description = "Reviewed Ubuntu packages, verified runtime, safe cancellation and persistent installation logs.",
+            installScript = "echo 'Open the native environment detail page to review and confirm.'; exit 1",
+            verifyScript = "if [ -r /opt/sui-code/${language.key}.env ]; then . /opt/sui-code/${language.key}.env && test -x \"\${${language.variable}:-}\"; else test -x /usr/bin/${language.tool}; fi",
+            uninstallScript = "echo 'Removing shared Ubuntu runtimes is intentionally unavailable here.'; exit 1",
+        ) } + document.list("entries").mapIndexedNotNull { index, rawEntry ->
             val entry = (rawEntry as? Map<*, *>)?.toStringKeyMap() ?: return@mapIndexedNotNull null
             val id = entry.string("id") ?: return@mapIndexedNotNull null
             val category = SdkCatalogCategory.fromSerialized(entry.string("category"))

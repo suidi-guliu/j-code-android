@@ -3,6 +3,7 @@ package dev.blamspot.jcode
 import android.content.Context
 import dev.blamspot.jcode.core.distro.DistroBind
 import dev.blamspot.jcode.core.distro.DistroService
+import dev.blamspot.jcode.core.distro.QuickRunFileMount
 import dev.blamspot.jcode.core.distro.QuickRunGate
 import dev.blamspot.jcode.core.distro.QuickRunLanguages
 import dev.blamspot.jcode.core.distro.prepareQuickRun
@@ -49,7 +50,7 @@ class JavaQuickRunController(
                 val runtime = distro.environmentState.value.runtime
                 val path = prepareQuickRun(save) {
                     val actual = file.canonicalFile
-                    check(actual.isFile && actual.canRead()) { "QuickRun cannot read the saved Java file." }
+                    check(actual.isFile && actual.canRead()) { "QuickRun cannot read the saved source file." }
                     actual.path
                 }
                 coroutineContext.ensureActive()
@@ -57,18 +58,19 @@ class JavaQuickRunController(
                 sessionId?.let { close(it) }
                 val actual = File(path)
                 val token = UUID.randomUUID().toString()
-                val guestFile = "/sui-quickrun/${actual.name}"
+                val mount = QuickRunFileMount.forFile(actual)
+                val guestFile = mount.guestFile
                 val scriptPath = "/tmp/sui-quickrun-$token.sh"
                 val mountPoint = File(distro.activeRootfsPath(), "sui-quickrun")
                 check(mountPoint.isDirectory || mountPoint.mkdirs()) { "Cannot prepare the QuickRun mount point in Ubuntu." }
                 check(distro.stageGuestFile(scriptPath, adapter.command(guestFile))) { "Cannot stage the QuickRun script in Ubuntu." }
                 val session = terminals.createOwnedSession(
                     distroId = runtime.selectedDistro.id,
-                    binds = listOf(DistroBind(actual.parentFile!!.path, "/sui-quickrun")),
-                    workdir = "/sui-quickrun",
+                    binds = listOf(DistroBind(mount.hostDirectory.path, "/sui-quickrun")),
+                    workdir = mount.guestDirectory,
                     user = runtime.user,
                     rootfsArch = runtime.selectedDistro.arch,
-                    label = "Java · ${actual.name}",
+                    label = "${adapter.id} · ${actual.name}",
                     processOwner = "sui-quickrun:$token",
                 ) ?: error("Cannot create the QuickRun terminal (check Ubuntu and the session limit).")
                 sessionId = session.id
@@ -81,7 +83,7 @@ class JavaQuickRunController(
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (error: Exception) {
-                message(error.message ?: "Java QuickRun failed.")
+                message(error.message ?: "Native QuickRun failed.")
             } finally {
                 if (generation.get() == ticket) { mutableActive.value = false; gate.finish() }
             }

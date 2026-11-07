@@ -35,6 +35,10 @@ object SdkManagerFeature {
         onUseVersion: (String, String) -> Unit = { _, _ -> },
         modifier: Modifier = Modifier,
     ) {
+        dev.blamspot.jcode.core.distro.NativeEnvironment.entries.firstOrNull { it.catalogId == entry.id }?.let { language ->
+            NativeEnvironmentPage(language, environmentState, modifier)
+            return
+        }
         if (entry.id == "sui-java-ga") {
             JavaEnvironmentPage(environmentState, modifier)
             return
