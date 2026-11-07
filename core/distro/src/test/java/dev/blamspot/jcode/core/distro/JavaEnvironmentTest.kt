@@ -113,6 +113,22 @@ class JavaEnvironmentTest {
         assertTrue(File(f.base, "jdks").listFiles().orEmpty().isEmpty())
     }
 
+    @Test fun architectureMismatchFailsBeforeDownload() = Fixture().use { f ->
+        Fixture.executable(File(f.tools, "uname"), "echo x86_64")
+        assertEquals(1, f.start(release()).waitFor())
+        assertFalse(f.base.exists())
+        assertTrue(f.output().contains("architecture changed"))
+    }
+
+    @Test fun downloadFailurePreservesThePreviouslySelectedEnvironment() = Fixture().use { f ->
+        f.base.mkdirs()
+        val env = File(f.base, "java.env").apply { writeText("export JAVA_HOME=/existing/jdk\n") }
+        Fixture.executable(File(f.tools, "curl"), "exit 22")
+        assertEquals(22, f.start(release()).waitFor())
+        assertEquals("export JAVA_HOME=/existing/jdk\n", env.readText())
+        assertTrue(File(f.base, "jdks").listFiles().orEmpty().isEmpty())
+    }
+
     @Test fun terminationCleansStagingAndReleasesLockForRetry() = Fixture().use { f ->
         Fixture.executable(File(f.tools, "curl"), "kill -TERM \"\$PPID\"; exit 1")
         assertEquals(143, f.start(release()).waitFor(), f.output())

@@ -8,7 +8,10 @@ import dev.blamspot.jcode.core.distro.DistroService
 import dev.blamspot.jcode.core.distro.ExecResult
 import dev.blamspot.jcode.core.term.TerminalSessionManager
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,8 +22,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * Runs toolchain installs and project scaffolds inside one shared "Setup" terminal session, so the
  * user can watch (and scroll) the real output in the right drawer instead of a silent in-process
- * exec. The session is created on first use, reused afterwards, and never focused automatically —
- * the terminal panel's unseen-badge is the only attention cue.
+ * exec. The session is created on first use, reused afterwards, and focused only when explicitly requested —
+ * ordinary catalog jobs continue to use the terminal panel's unseen badge.
  *
  * Completion is detected via OSC 7713 (`ESC ] 7713 ; <token> ; <exitCode> BEL`), emitted by a
  * `printf` appended to each task. Tasks are serialized: the session is one shell.
@@ -34,6 +37,8 @@ class SetupTerminalRunner(
 
     private val mutex = Mutex()
     private val tokenCounter = AtomicInteger()
+    private val _focusRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val focusRequests = _focusRequests.asSharedFlow()
 
     private val _sessionId = MutableStateFlow<String?>(null)
 
@@ -84,8 +89,13 @@ class SetupTerminalRunner(
         asUser: String,
         timeoutMs: Long,
         onProgress: (Int, String) -> Unit = { _, _ -> },
+        focus: Boolean = false,
+        expectedDistroId: String? = null,
     ): ExecResult? = mutex.withLock {
-        val session = ensureSession() ?: return@withLock null
+        if (expectedDistroId != null && distroService.environmentState.value.runtime.selectedDistro.id != expectedDistroId) {
+            return@withLock ExecResult(internalError = "Environment changed while waiting for the Setup terminal. Query again.")
+        }
+        val session = ensureSession(expectedDistroId) ?: return@withLock null
         val token = "jc${tokenCounter.incrementAndGet()}"
         val input = buildTaskInput(label, script, workdir, asUser, token) ?: return@withLock null
         // The task is announced to the foreground notification as well as the caller: an install is
@@ -100,7 +110,23 @@ class SetupTerminalRunner(
         pending = task
         try {
             manager.sendInput(session.id, input)
-            awaitCompletion(task, session.id, label, timeoutMs)
+            if (focus) _focusRequests.tryEmit(session.id)
+            val result = awaitCompletion(task, session.id, label, timeoutMs)
+            if (focus && result.internalError != null) {
+                manager.closeSession(session.id)
+                TerminalSessionHost.onSessionStopped(session.id)
+                _sessionId.value = null
+            }
+            result
+        } catch (cancel: CancellationException) {
+            if (focus) {
+                // Closing this task's PTY also reaps its proot process tree; a retry cannot
+                // accidentally type its script into an installer that is still running.
+                manager.closeSession(session.id)
+                TerminalSessionHost.onSessionStopped(session.id)
+                _sessionId.value = null
+            }
+            throw cancel
         } finally {
             pending = null
             SessionRegistry.clearTask()
@@ -174,8 +200,12 @@ class SetupTerminalRunner(
     }
 
     /** Reuse the live Setup session or start a fresh one (root shell, /workspace mounted). */
-    private fun ensureSession(): TerminalSessionManager.Session? {
-        _sessionId.value?.let { id -> manager.getSession(id)?.let { return it } }
+    private fun ensureSession(expectedDistroId: String? = null): TerminalSessionManager.Session? {
+        _sessionId.value?.let { id ->
+            manager.getSession(id)?.let { session ->
+                if (expectedDistroId == null || session.spawnSpec?.distroId == expectedDistroId) return session
+            }
+        }
         val environment = distroService.environmentState.value
         if (environment.distroInstalled != true) return null
         val runtime = environment.runtime

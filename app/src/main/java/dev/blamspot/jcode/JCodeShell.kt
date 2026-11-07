@@ -312,6 +312,7 @@ import dev.blamspot.jcode.workbench.LocalUninstalledExtension
 import dev.blamspot.jcode.workbench.LocalPendingReload
 import dev.blamspot.jcode.workbench.PendingReloadUi
 import dev.blamspot.jcode.workbench.LocalRunConfigPresets
+import dev.blamspot.jcode.workbench.LocalSetupTerminalFocusRequests
 import dev.blamspot.jcode.workbench.LocalSetupTerminalSessionId
 import dev.blamspot.jcode.design.EnvVarSettings
 import dev.blamspot.jcode.design.PerformanceSettings
@@ -1702,6 +1703,7 @@ fun JCodeApp(
         LocalPendingReload provides pendingReloadUi,
         LocalRunConfigPresets provides contributedRunPresets,
         LocalSetupTerminalSessionId provides setupTerminalSessionId,
+        LocalSetupTerminalFocusRequests provides viewModel.setupTerminalRunner.focusRequests,
         LocalDebugSession provides debugSessionUi,
         LocalPerformanceSettings provides performanceSettings,
         LocalEnvVarSettings provides envVarSettings,
@@ -2653,6 +2655,17 @@ private fun JCodeShell(
 
     // Surface the background "Setup" terminal (toolchain installs / project scaffolds) as a tab
     // WITHOUT focusing it or opening the drawer — the unseen-badge is the only attention cue.
+    val setupFocusRequests = LocalSetupTerminalFocusRequests.current
+    LaunchedEffect(setupFocusRequests) {
+        setupFocusRequests?.collect { id ->
+            if (terminalSessionManager.getSession(id) != null) {
+                if (id !in terminalSessionIds) terminalSessionIds = terminalSessionIds + id
+                selectTerminalSession(id)
+                selectRightPanelTab(RightPanelTab.Terminal)
+                rightSidebarVisible = true
+            }
+        }
+    }
     val setupTerminalSessionId = LocalSetupTerminalSessionId.current
     LaunchedEffect(setupTerminalSessionId) {
         val id = setupTerminalSessionId ?: return@LaunchedEffect

@@ -58,6 +58,12 @@ class DistroService(
         appContext,
         RootfsDownloader(tmpDir = File(appContext.filesDir, "tmp")),
     )
+    val javaEnvironmentManager by lazy { JavaEnvironmentManager(this) }
+
+    /** Java installs require the visible PTY runner, without an in-process fallback. */
+    @Volatile
+    var interactiveJavaRunner: (suspend (String, String, Long, String) -> ExecResult?)? = null
+
     private val sdkCatalogLoader = SdkCatalogLoader(appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Mutex()

@@ -35,6 +35,10 @@ object SdkManagerFeature {
         onUseVersion: (String, String) -> Unit = { _, _ -> },
         modifier: Modifier = Modifier,
     ) {
+        if (entry.id == "sui-java-ga") {
+            JavaEnvironmentPage(environmentState, modifier)
+            return
+        }
         val environmentReady = environmentState.distroInstalled == true && environmentState.jcodeUserReady == true
         val running = state.runningEntryId == entry.id
         // This page is also "busy" while a toolchain it requires is being installed on its behalf.

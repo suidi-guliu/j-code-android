@@ -25,7 +25,15 @@ internal class SdkCatalogLoader(
             }
         }
 
-        return document.list("entries").mapIndexedNotNull { index, rawEntry ->
+        return listOf(SdkCatalogEntry(
+            id = "sui-java-ga", category = SdkCatalogCategory.Languages,
+            name = "Java (latest GA · Temurin)",
+            description = "Native Java environment manager. Review a verified Linux ARM64 JDK before installing alongside existing JDKs.",
+            installScript = "echo 'Open the Java GA detail page to review and confirm installation.'; exit 1",
+            verifyScript = "test -f /opt/sui-code/java.env && . /opt/sui-code/java.env && test -x \"\$JAVA_HOME/bin/javac\"",
+            uninstallScript = "echo 'Managed JDK removal is not available in v0.1.'; exit 1",
+            supportedArches = listOf("arm64"),
+        )) + document.list("entries").mapIndexedNotNull { index, rawEntry ->
             val entry = (rawEntry as? Map<*, *>)?.toStringKeyMap() ?: return@mapIndexedNotNull null
             val id = entry.string("id") ?: return@mapIndexedNotNull null
             val category = SdkCatalogCategory.fromSerialized(entry.string("category"))

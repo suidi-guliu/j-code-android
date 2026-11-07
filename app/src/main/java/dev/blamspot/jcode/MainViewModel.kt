@@ -301,6 +301,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _runTerminalCompletions.tryEmit(sessionId to (payload.substringAfter(';').trim().toIntOrNull() ?: -1))
         }
         TerminalSessionHost.manager(appContext).onTaskProgress = setupTerminalRunner::handleTaskProgress
+        distroService.interactiveJavaRunner = { label, script, timeoutMs, distroId ->
+            setupTerminalRunner.run(label, script, null, "root", timeoutMs, focus = true, expectedDistroId = distroId)
+        }
         distroService.interactiveCatalogRunner = { label, script, timeoutMs, onProgress ->
             setupTerminalRunner.run(
                 label = label,
