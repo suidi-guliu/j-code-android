@@ -8,9 +8,6 @@ import androidx.compose.runtime.compositionLocalOf
  * verifier's register limit). Each defaults to a no-op.
  */
 class EditorSaveActions(
-    val onQuickRun: (Int) -> Boolean = { false },
-    val onStopQuickRun: () -> Boolean = { false },
-    val quickRunActive: Boolean = false,
     val onUndo: () -> Unit = {},
     val onRedo: () -> Unit = {},
     val onDiscard: () -> Unit = {},
@@ -20,6 +17,11 @@ class EditorSaveActions(
      *  only proceeds once the buffers are safely on disk. Returns true only if every tab is now clean
      *  (false if any couldn't be saved, so the caller can avoid tearing down unsaved work). */
     val onSaveAllAwait: suspend () -> Boolean = { true },
-)
+) {
+    // Additive properties keep the exported design SDK's existing constructor ABI intact.
+    var onQuickRun: (Int) -> Boolean = { false }
+    var onStopQuickRun: () -> Boolean = { false }
+    var quickRunActive: Boolean = false
+}
 
 val LocalEditorSaveActions = compositionLocalOf { EditorSaveActions() }

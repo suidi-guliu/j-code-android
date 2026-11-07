@@ -945,16 +945,17 @@ fun JCodeApp(
     val quickRunActive by viewModel.javaQuickRun.active.collectAsStateWithLifecycle()
     val editorSaveActions = remember(viewModel, quickRunActive) {
         EditorSaveActions(
-            onQuickRun = viewModel::quickRunActiveFile,
-            onStopQuickRun = viewModel.javaQuickRun::stop,
-            quickRunActive = quickRunActive,
             onUndo = viewModel::undoActiveTab,
             onRedo = viewModel::redoActiveTab,
             onDiscard = viewModel::discardActiveTab,
             onSaveAll = viewModel::saveAllTabs,
             onFormat = viewModel::formatActiveTab,
             onSaveAllAwait = viewModel::saveAllDirtyAwait,
-        )
+        ).apply {
+            onQuickRun = viewModel::quickRunActiveFile
+            onStopQuickRun = viewModel.javaQuickRun::stop
+            this.quickRunActive = quickRunActive
+        }
     }
     // Completion items for the focused file, resolved from its installed language pack (if any).
     val activeFileName = editorGroup.activeTab?.filePath?.name

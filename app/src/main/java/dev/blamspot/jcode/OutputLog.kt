@@ -56,6 +56,14 @@ object OutputLog {
         synchronized(lock) { captured = captured + sessionId }
     }
 
+    /** Retire one capture without resetting another owner's running project output. */
+    fun releaseSession(sessionId: String) {
+        synchronized(lock) {
+            captured = captured - sessionId
+            partial.remove(sessionId)
+        }
+    }
+
     /** Append an app-authored status line (run lifecycle, snackbar messages, errors). */
     fun append(text: String, kind: OutputKind = OutputKind.Info) {
         synchronized(lock) { addLine(OutputLine(text, kind)) }

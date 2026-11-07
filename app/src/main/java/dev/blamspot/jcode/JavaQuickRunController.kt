@@ -62,7 +62,7 @@ class JavaQuickRunController(
                 val mountPoint = File(distro.activeRootfsPath(), "sui-quickrun")
                 check(mountPoint.isDirectory || mountPoint.mkdirs()) { "Cannot prepare the QuickRun mount point in Ubuntu." }
                 check(distro.stageGuestFile(scriptPath, adapter.command(guestFile))) { "Cannot stage the QuickRun script in Ubuntu." }
-                val session = terminals.createSession(
+                val session = terminals.createOwnedSession(
                     distroId = runtime.selectedDistro.id,
                     binds = listOf(DistroBind(actual.parentFile!!.path, "/sui-quickrun")),
                     workdir = "/sui-quickrun",
@@ -109,6 +109,7 @@ class JavaQuickRunController(
     }
 
     private fun close(id: String) {
+        OutputLog.releaseSession(id)
         terminals.closeSession(id)
         TerminalSessionHost.onSessionStopped(id)
     }

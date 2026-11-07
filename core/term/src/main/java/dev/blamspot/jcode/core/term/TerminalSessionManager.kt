@@ -303,7 +303,18 @@ class TerminalSessionManager(
      * Create a new terminal session spawning the configured shell via proot as the distro user.
      * Returns null if max sessions reached or proot/rootfs are not available.
      */
+    // Preserve the original public/default-argument ABI for existing callers and extensions.
     fun createSession(
+        distroId: String,
+        binds: List<DistroBind>,
+        workdir: String,
+        user: String,
+        shellCommand: String = "/bin/bash --login",
+        rootfsArch: Arch = Arch.ARM64,
+        label: String? = null,
+    ): Session? = createOwnedSession(distroId, binds, workdir, user, shellCommand, rootfsArch, label, null)
+
+    fun createOwnedSession(
         distroId: String,
         binds: List<DistroBind>,
         workdir: String,
@@ -313,6 +324,7 @@ class TerminalSessionManager(
         label: String? = null,
         processOwner: String? = null,
     ): Session? {
+        require(processOwner == null || processOwner.startsWith("sui-quickrun:"))
         if (sessionCount >= maxSessions) return null
         if (!prootManager.isProotInstalled) return null
 

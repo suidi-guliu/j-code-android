@@ -24,6 +24,16 @@ import org.junit.Test
  */
 class ExtensionAbiSurfaceTest {
 
+    @Test
+    fun `editor save actions retains the pre QuickRun constructor descriptor`() {
+        val zero = Class.forName("kotlin.jvm.functions.Function0")
+        val suspendZero = Class.forName("kotlin.jvm.functions.Function1")
+        assertNotNull(EditorSaveActions::class.java.getDeclaredConstructor(
+            zero, zero, zero, zero, zero, suspendZero,
+        ))
+    }
+
+
     /**
      * Every `dev.blamspot.jcode.design` class the published extensions reference.
      *
