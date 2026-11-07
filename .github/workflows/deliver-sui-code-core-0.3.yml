@@ -1,0 +1,90 @@
+name: Deliver integrated sui-code core 0.3 APK
+
+on:
+  push:
+    branches: [sui-code/core-foundation]
+    paths:
+      - .github/workflows/deliver-sui-code-core-0.3.yml
+      - .delivery/sui-code-core-0.3/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deliver:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/core-foundation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPECTED_APK_SHA256: 661bd7c90f06bf5630d0c4e73b85b378665a4baa4b51db0a7ce94af61ce9010e
+      EXPECTED_APK_BYTES: '88846380'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify preserved original APK (no rebuild)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .delivery/sui-code-core-0.3
+          test "$(stat -c %s sui-code-core-0.3-debug.apk)" = "$EXPECTED_APK_BYTES"
+          printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-core-0.3-debug.apk | sha256sum --check --strict
+          test -s report.md
+          test -s changes.patch
+      - name: Verify upgrade identity and the original v0.1 signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          test -x "$signer"
+          old=.delivery/sui-code-v0.1/sui-code-v0.1-debug.apk
+          new=.delivery/sui-code-core-0.3/sui-code-core-0.3-debug.apk
+          printf '%s  %s\n' 1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06 "$old" | sha256sum --check --strict
+          old_cert=$("$signer" verify --print-certs "$old" | awk '/certificate SHA-256 digest:/ {print $NF}')
+          new_cert=$("$signer" verify --print-certs "$new" | awk '/certificate SHA-256 digest:/ {print $NF}')
+          test "$old_cert" = "$new_cert"
+          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
+          "$(dirname "$signer")/aapt" dump badging "$new" > "$RUNNER_TEMP/core03-badging.txt"
+          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070801' versionName='1.7.7-sui.core.0.3'" "$RUNNER_TEMP/core03-badging.txt"
+          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/core03-badging.txt"
+      - name: Upload original APK, report and source patch
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sui-code-core-0.3-integrated-debug
+          path: |
+            .delivery/sui-code-core-0.3/sui-code-core-0.3-debug.apk
+            .delivery/sui-code-core-0.3/report.md
+            .delivery/sui-code-core-0.3/changes.patch
+          if-no-files-found: error
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 30
+      - name: Download uploaded artifact for verification
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
+          path: ${{ runner.temp }}/sui-code-core-0.3-roundtrip
+          merge-multiple: true
+      - name: Verify downloaded APK and report delivery links
+        shell: bash
+        env:
+          DOWNLOAD_DIR: ${{ runner.temp }}/sui-code-core-0.3-roundtrip
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          test "$(find "$DOWNLOAD_DIR" -type f | wc -l)" -eq 3
+          test "$(stat -c %s "$DOWNLOAD_DIR/sui-code-core-0.3-debug.apk")" = "$EXPECTED_APK_BYTES"
+          (cd "$DOWNLOAD_DIR" && printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-core-0.3-debug.apk | sha256sum --check --strict)
+          for name in sui-code-core-0.3-debug.apk report.md changes.patch; do
+            cmp ".delivery/sui-code-core-0.3/$name" "$DOWNLOAD_DIR/$name"
+          done
+          {
+            echo '## Integrated core 0.3 delivery verified'
+            printf '[Download artifact](%s) · [Workflow run](%s)\n\n' "$ARTIFACT_URL" "$RUN_URL"
+            printf 'APK size: **%s bytes**\n\n' "$EXPECTED_APK_BYTES"
+            printf 'APK SHA-256: `%s`\n\n' "$EXPECTED_APK_SHA256"
+            printf 'Artifact ID: `%s`\n\n' "$ARTIFACT_ID"
+            echo 'Upload/download round-trip passed: all three files match byte for byte. No APK rebuild or GitHub Release.'
+          } >> "$GITHUB_STEP_SUMMARY"
