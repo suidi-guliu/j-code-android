@@ -1,0 +1,73 @@
+name: Deliver original sui-code v0.1 APK
+
+on:
+  push:
+    branches: [sui-code/v0.1-java-environment]
+    paths:
+      - .github/workflows/deliver-sui-code-v0.1.yml
+      - .delivery/sui-code-v0.1/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deliver:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.1-java-environment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPECTED_APK_SHA256: 1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06
+      EXPECTED_APK_BYTES: '88683604'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify preserved original APK (no rebuild)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .delivery/sui-code-v0.1
+          test "$(stat -c %s sui-code-v0.1-debug.apk)" = "$EXPECTED_APK_BYTES"
+          printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-v0.1-debug.apk | sha256sum --check --strict
+          test -s report.md
+          test -s changes.patch
+      - name: Upload original APK, report and source patch
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sui-code-v0.1-original-debug
+          path: |
+            .delivery/sui-code-v0.1/sui-code-v0.1-debug.apk
+            .delivery/sui-code-v0.1/report.md
+            .delivery/sui-code-v0.1/changes.patch
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Download uploaded artifact for verification
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
+          path: ${{ runner.temp }}/sui-code-v0.1-roundtrip
+          merge-multiple: true
+      - name: Verify downloaded APK and report delivery links
+        shell: bash
+        env:
+          DOWNLOAD_DIR: ${{ runner.temp }}/sui-code-v0.1-roundtrip
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          test "$(find "$DOWNLOAD_DIR" -type f | wc -l)" -eq 3
+          test "$(stat -c %s "$DOWNLOAD_DIR/sui-code-v0.1-debug.apk")" = "$EXPECTED_APK_BYTES"
+          (cd "$DOWNLOAD_DIR" && printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-v0.1-debug.apk | sha256sum --check --strict)
+          for name in sui-code-v0.1-debug.apk report.md changes.patch; do
+            cmp ".delivery/sui-code-v0.1/$name" "$DOWNLOAD_DIR/$name"
+          done
+          {
+            echo '## Original v0.1 delivery verified'
+            printf '[Download artifact](%s) · [Workflow run](%s)\n\n' "$ARTIFACT_URL" "$RUN_URL"
+            printf 'APK size: **%s bytes**\n\n' "$EXPECTED_APK_BYTES"
+            printf 'APK SHA-256: `%s`\n\n' "$EXPECTED_APK_SHA256"
+            printf 'Artifact ID: `%s`\n\n' "$ARTIFACT_ID"
+            echo 'Upload/download round-trip passed: all three files match byte for byte. No APK rebuild or GitHub Release.'
+          } >> "$GITHUB_STEP_SUMMARY"

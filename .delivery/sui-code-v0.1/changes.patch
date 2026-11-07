@@ -1,0 +1,896 @@
+diff --git a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+index 535a4b7..cb6b221 100644
+--- a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
++++ b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+@@ -312,6 +312,7 @@ import dev.blamspot.jcode.workbench.LocalUninstalledExtension
+ import dev.blamspot.jcode.workbench.LocalPendingReload
+ import dev.blamspot.jcode.workbench.PendingReloadUi
+ import dev.blamspot.jcode.workbench.LocalRunConfigPresets
++import dev.blamspot.jcode.workbench.LocalSetupTerminalFocusRequests
+ import dev.blamspot.jcode.workbench.LocalSetupTerminalSessionId
+ import dev.blamspot.jcode.design.EnvVarSettings
+ import dev.blamspot.jcode.design.PerformanceSettings
+@@ -1702,6 +1703,7 @@ fun JCodeApp(
+         LocalPendingReload provides pendingReloadUi,
+         LocalRunConfigPresets provides contributedRunPresets,
+         LocalSetupTerminalSessionId provides setupTerminalSessionId,
++        LocalSetupTerminalFocusRequests provides viewModel.setupTerminalRunner.focusRequests,
+         LocalDebugSession provides debugSessionUi,
+         LocalPerformanceSettings provides performanceSettings,
+         LocalEnvVarSettings provides envVarSettings,
+@@ -2653,6 +2655,17 @@ private fun JCodeShell(
+ 
+     // Surface the background "Setup" terminal (toolchain installs / project scaffolds) as a tab
+     // WITHOUT focusing it or opening the drawer — the unseen-badge is the only attention cue.
++    val setupFocusRequests = LocalSetupTerminalFocusRequests.current
++    LaunchedEffect(setupFocusRequests) {
++        setupFocusRequests?.collect { id ->
++            if (terminalSessionManager.getSession(id) != null) {
++                if (id !in terminalSessionIds) terminalSessionIds = terminalSessionIds + id
++                selectTerminalSession(id)
++                selectRightPanelTab(RightPanelTab.Terminal)
++                rightSidebarVisible = true
++            }
++        }
++    }
+     val setupTerminalSessionId = LocalSetupTerminalSessionId.current
+     LaunchedEffect(setupTerminalSessionId) {
+         val id = setupTerminalSessionId ?: return@LaunchedEffect
+diff --git a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
+index dc03183..f0f9300 100644
+--- a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
++++ b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
+@@ -301,6 +301,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+             _runTerminalCompletions.tryEmit(sessionId to (payload.substringAfter(';').trim().toIntOrNull() ?: -1))
+         }
+         TerminalSessionHost.manager(appContext).onTaskProgress = setupTerminalRunner::handleTaskProgress
++        distroService.interactiveJavaRunner = { label, script, timeoutMs, distroId ->
++            setupTerminalRunner.run(label, script, null, "root", timeoutMs, focus = true, expectedDistroId = distroId)
++        }
+         distroService.interactiveCatalogRunner = { label, script, timeoutMs, onProgress ->
+             setupTerminalRunner.run(
+                 label = label,
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/SetupTerminalRunner.kt b/app/src/main/java/dev/blamspot/jcode/workbench/SetupTerminalRunner.kt
+index dbfd6dc..d2f8cbd 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/SetupTerminalRunner.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/SetupTerminalRunner.kt
+@@ -8,7 +8,10 @@ import dev.blamspot.jcode.core.distro.DistroService
+ import dev.blamspot.jcode.core.distro.ExecResult
+ import dev.blamspot.jcode.core.term.TerminalSessionManager
+ import java.util.concurrent.atomic.AtomicInteger
++import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.CompletableDeferred
++import kotlinx.coroutines.flow.MutableSharedFlow
++import kotlinx.coroutines.flow.asSharedFlow
+ import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.flow.asStateFlow
+@@ -19,8 +22,8 @@ import kotlinx.coroutines.withTimeoutOrNull
+ /**
+  * Runs toolchain installs and project scaffolds inside one shared "Setup" terminal session, so the
+  * user can watch (and scroll) the real output in the right drawer instead of a silent in-process
+- * exec. The session is created on first use, reused afterwards, and never focused automatically —
+- * the terminal panel's unseen-badge is the only attention cue.
++ * exec. The session is created on first use, reused afterwards, and focused only when explicitly requested —
++ * ordinary catalog jobs continue to use the terminal panel's unseen badge.
+  *
+  * Completion is detected via OSC 7713 (`ESC ] 7713 ; <token> ; <exitCode> BEL`), emitted by a
+  * `printf` appended to each task. Tasks are serialized: the session is one shell.
+@@ -34,6 +37,8 @@ class SetupTerminalRunner(
+ 
+     private val mutex = Mutex()
+     private val tokenCounter = AtomicInteger()
++    private val _focusRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
++    val focusRequests = _focusRequests.asSharedFlow()
+ 
+     private val _sessionId = MutableStateFlow<String?>(null)
+ 
+@@ -84,8 +89,13 @@ class SetupTerminalRunner(
+         asUser: String,
+         timeoutMs: Long,
+         onProgress: (Int, String) -> Unit = { _, _ -> },
++        focus: Boolean = false,
++        expectedDistroId: String? = null,
+     ): ExecResult? = mutex.withLock {
+-        val session = ensureSession() ?: return@withLock null
++        if (expectedDistroId != null && distroService.environmentState.value.runtime.selectedDistro.id != expectedDistroId) {
++            return@withLock ExecResult(internalError = "Environment changed while waiting for the Setup terminal. Query again.")
++        }
++        val session = ensureSession(expectedDistroId) ?: return@withLock null
+         val token = "jc${tokenCounter.incrementAndGet()}"
+         val input = buildTaskInput(label, script, workdir, asUser, token) ?: return@withLock null
+         // The task is announced to the foreground notification as well as the caller: an install is
+@@ -100,7 +110,23 @@ class SetupTerminalRunner(
+         pending = task
+         try {
+             manager.sendInput(session.id, input)
+-            awaitCompletion(task, session.id, label, timeoutMs)
++            if (focus) _focusRequests.tryEmit(session.id)
++            val result = awaitCompletion(task, session.id, label, timeoutMs)
++            if (focus && result.internalError != null) {
++                manager.closeSession(session.id)
++                TerminalSessionHost.onSessionStopped(session.id)
++                _sessionId.value = null
++            }
++            result
++        } catch (cancel: CancellationException) {
++            if (focus) {
++                // Closing this task's PTY also reaps its proot process tree; a retry cannot
++                // accidentally type its script into an installer that is still running.
++                manager.closeSession(session.id)
++                TerminalSessionHost.onSessionStopped(session.id)
++                _sessionId.value = null
++            }
++            throw cancel
+         } finally {
+             pending = null
+             SessionRegistry.clearTask()
+@@ -174,8 +200,12 @@ class SetupTerminalRunner(
+     }
+ 
+     /** Reuse the live Setup session or start a fresh one (root shell, /workspace mounted). */
+-    private fun ensureSession(): TerminalSessionManager.Session? {
+-        _sessionId.value?.let { id -> manager.getSession(id)?.let { return it } }
++    private fun ensureSession(expectedDistroId: String? = null): TerminalSessionManager.Session? {
++        _sessionId.value?.let { id ->
++            manager.getSession(id)?.let { session ->
++                if (expectedDistroId == null || session.spawnSpec?.distroId == expectedDistroId) return session
++            }
++        }
+         val environment = distroService.environmentState.value
+         if (environment.distroInstalled != true) return null
+         val runtime = environment.runtime
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
+index f75562c..12f9312 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
+@@ -89,6 +89,8 @@ internal val LocalExtensionDevState = compositionLocalOf { ExtensionDevState() }
+ 
+ /** Session id of the background "Setup" terminal (toolchain installs / project scaffolds), or null
+  *  while none has been started. Same register-limit rationale as above. */
++internal val LocalSetupTerminalFocusRequests = compositionLocalOf<kotlinx.coroutines.flow.SharedFlow<String>?> { null }
++
+ internal val LocalSetupTerminalSessionId = compositionLocalOf<String?> { null }
+ 
+ /** Editor-facing debug state (breakpoints + current stopped location + toggle), provided via a
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt
+index c551864..80a701a 100644
+--- a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt
+@@ -58,6 +58,12 @@ class DistroService(
+         appContext,
+         RootfsDownloader(tmpDir = File(appContext.filesDir, "tmp")),
+     )
++    val javaEnvironmentManager by lazy { JavaEnvironmentManager(this) }
++
++    /** Java installs require the visible PTY runner, without an in-process fallback. */
++    @Volatile
++    var interactiveJavaRunner: (suspend (String, String, Long, String) -> ExecResult?)? = null
++
+     private val sdkCatalogLoader = SdkCatalogLoader(appContext)
+     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+     private val lock = Mutex()
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt
+new file mode 100644
+index 0000000..eb10295
+--- /dev/null
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt
+@@ -0,0 +1,117 @@
++package dev.blamspot.jcode.core.distro
++
++import java.net.HttpURLConnection
++import java.net.URI
++import org.snakeyaml.engine.v2.api.Load
++import org.snakeyaml.engine.v2.api.LoadSettings
++
++/** A resolved GA release is immutable: confirmation installs exactly these bytes, never "latest". */
++data class JavaRelease(
++    val version: String,
++    val architecture: String,
++    val fileName: String,
++    val downloadUrl: String,
++    val sha256: String,
++    val size: Long,
++) {
++    init {
++        require(version.matches(Regex("[0-9][0-9A-Za-z.+_-]*")))
++        require(architecture in setOf("aarch64", "x64"))
++        require(fileName.matches(Regex("[A-Za-z0-9._+-]+\\.tar\\.gz")))
++        val uri = URI(downloadUrl)
++        require(uri.scheme == "https" && uri.host == "github.com" && uri.userInfo == null &&
++            uri.rawQuery == null && uri.fragment == null &&
++            uri.path.matches(Regex("/adoptium/temurin[0-9]+-binaries/releases/download/.+"))) {
++            "The JDK archive must come from an official Adoptium GitHub release."
++        }
++        require(sha256.matches(Regex("[a-fA-F0-9]{64}")))
++        require(size > 0)
++    }
++
++    val source: String get() = "Eclipse Adoptium / Temurin OpenJDK (GA, HotSpot, Linux $architecture)"
++    val home: String get() = "/opt/sui-code/jdks/temurin-$version-$architecture"
++}
++
++object JavaReleaseProvider {
++    const val API = "https://api.adoptium.net/v3"
++    private fun document(text: String): Any? = Load(
++        LoadSettings.builder().setAllowDuplicateKeys(false).build(),
++    ).loadFromString(text)
++
++    fun architecture(rootfsKey: String): String = when (rootfsKey) {
++        "arm64" -> "aarch64"
++        "amd64" -> "x64"
++        else -> error("Unsupported Linux architecture: $rootfsKey")
++    }
++
++    fun latestFeature(json: String): Int {
++        val releases = document(json) as? Map<*, *> ?: error("Invalid release information")
++        val feature = (releases["most_recent_feature_release"] as? Number)?.toInt()
++            ?: error("Missing latest GA release")
++        require(feature >= 21)
++        return feature
++    }
++
++    fun parseRelease(json: String, architecture: String, feature: Int): JavaRelease {
++        val assets = document(json) as? List<*> ?: error("Invalid JDK assets")
++        return assets.mapNotNull { it as? Map<*, *> }.mapNotNull { asset ->
++            val version = asset["version_data"] as? Map<*, *> ?: return@mapNotNull null
++            val binary = (asset["binaries"] as? List<*>)?.mapNotNull { it as? Map<*, *> }
++                ?.firstOrNull { it["os"] == "linux" && it["architecture"] == architecture &&
++                    it["image_type"] == "jdk" && it["jvm_impl"] == "hotspot" } ?: return@mapNotNull null
++            if (asset["release_type"] != "ga" || (version["major"] as? Number)?.toInt() != feature ||
++                binary["os"] != "linux" || binary["architecture"] != architecture ||
++                binary["image_type"] != "jdk" || binary["jvm_impl"] != "hotspot") return@mapNotNull null
++            val pkg = binary["package"] as? Map<*, *> ?: return@mapNotNull null
++            JavaRelease(
++                version["openjdk_version"] as? String ?: error("Missing JDK version"), architecture,
++                pkg["name"] as? String ?: error("Missing archive name"),
++                pkg["link"] as? String ?: error("Missing archive URL"),
++                pkg["checksum"] as? String ?: error("Missing SHA-256"),
++                (pkg["size"] as? Number)?.toLong() ?: error("Missing archive size"),
++            )
++        }.firstOrNull() ?: error("No compatible GA JDK is available; no third-party fallback is used.")
++    }
++
++    /** Runs on Dispatchers.IO. Timeouts bound discovery; redirects are rejected for metadata. */
++    fun latest(rootfsKey: String): JavaRelease {
++        val arch = architecture(rootfsKey)
++        val feature = latestFeature(get("$API/info/available_releases"))
++        return parseRelease(get("$API/assets/feature_releases/$feature/ga?architecture=$arch&image_type=jdk&jvm_impl=hotspot&os=linux&vendor=eclipse&page_size=1&sort_order=DESC"), arch, feature)
++    }
++
++    private fun get(url: String): String {
++        val connection = URI(url).toURL().openConnection() as HttpURLConnection
++        return try {
++            connection.connectTimeout = 15_000
++            connection.readTimeout = 20_000
++            connection.instanceFollowRedirects = false
++            connection.setRequestProperty("Accept", "application/json")
++            check(connection.responseCode == 200) { "Adoptium query failed (HTTP ${connection.responseCode}); retry when connected." }
++            connection.inputStream.bufferedReader().use { reader ->
++                val text = reader.readText()
++                require(text.length <= 2_000_000) { "Release response is too large" }
++                text
++            }
++        } finally { connection.disconnect() }
++    }
++}
++
++/** Contract shared with the future native QuickRun dispatcher; no extension marketplace needed. */
++interface NativeLanguageAdapter {
++    val id: String
++    val extensions: Set<String>
++    fun command(guestFile: String): String
++}
++
++object JavaLanguageAdapter : NativeLanguageAdapter {
++    override val id = "java"
++    override val extensions = setOf("java")
++    override fun command(guestFile: String): String {
++        require(guestFile.startsWith('/') && guestFile.endsWith(".java") && '\u0000' !in guestFile)
++        // Source-file launch handles packages and keeps generated classes off shared storage.
++        return "set -e; . /opt/sui-code/java.env; exec \"\$JAVA_HOME/bin/java\" ${shellQuote(guestFile)}"
++    }
++}
++
++internal fun shellQuote(value: String) = "'" + value.replace("'", "'\\''") + "'"
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironmentManager.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironmentManager.kt
+new file mode 100644
+index 0000000..5bb8998
+--- /dev/null
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironmentManager.kt
+@@ -0,0 +1,120 @@
++package dev.blamspot.jcode.core.distro
++
++import java.io.File
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.SupervisorJob
++import kotlinx.coroutines.delay
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.update
++import kotlinx.coroutines.NonCancellable
++import kotlinx.coroutines.withContext
++import kotlinx.coroutines.cancelAndJoin
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.ensureActive
++import kotlin.coroutines.coroutineContext
++
++/** Native workflow state survives closing its editor tab; no extension host or second PTY system. */
++data class JavaEnvironmentState(
++    val busy: Boolean = false,
++    val installing: Boolean = false,
++    val release: JavaRelease? = null,
++    val distroId: String? = null,
++    val message: String = "Query the latest GA JDK to review its source, file and installation steps.",
++    val log: String = "",
++    val logPath: String? = null,
++)
++
++class JavaEnvironmentManager(private val distro: DistroService) {
++    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
++    private val mutableState = MutableStateFlow(JavaEnvironmentState())
++    val state = mutableState.asStateFlow()
++    private var job: Job? = null
++
++    @Synchronized
++    fun query() {
++        if (job?.isActive == true) return
++        mutableState.value = JavaEnvironmentState(busy = true, message = "Querying Eclipse Adoptium GA releases…")
++        val runtime = distro.environmentState.value.runtime
++        job = scope.launch {
++            try {
++                check(runtime.selectedDistro.arch == Arch.ARM64) { "This first device milestone supports Linux ARM64 only." }
++                val release = JavaReleaseProvider.latest(runtime.selectedDistro.arch.rootfsKey)
++                coroutineContext.ensureActive()
++                mutableState.update { it.copy(release = release, distroId = runtime.selectedDistro.id, message = "Review the plan, then confirm installation in the Ubuntu Setup terminal.") }
++            } catch (cancel: CancellationException) {
++                mutableState.update { it.copy(message = "Query cancelled. You can retry.") }
++                throw cancel
++            } catch (error: Exception) {
++                mutableState.update { it.copy(message = error.message ?: "JDK query failed. Retry when connected.") }
++            } finally { mutableState.update { it.copy(busy = false) } }
++        }
++    }
++
++    /** The exact release displayed by the confirmation dialog is passed back, never re-resolved. */
++    @Synchronized
++    fun install(confirmed: JavaRelease) {
++        if (job?.isActive == true) return
++        val plan = mutableState.value
++        if (confirmed != plan.release) return
++        job = scope.launch {
++            var poller: Job? = null
++            var installLog: File? = null
++            try {
++                check(distro.isRuntimeReady()) { "Complete Ubuntu environment setup first." }
++                check(distro.environmentState.value.runtime.selectedDistro.id == plan.distroId) { "Environment changed. Query the JDK again." }
++                check(distro.environmentState.value.runtime.selectedDistro.arch == Arch.ARM64) { "Linux ARM64 is required." }
++                val run = distro.interactiveJavaRunner ?: error("The Setup terminal is unavailable. Reopen the workbench and retry.")
++                val logPath = "/opt/sui-code/logs/java-${System.currentTimeMillis()}.log"
++                val root = distro.activeRootfsPath()
++                val logFile = File(root, logPath.removePrefix("/"))
++                installLog = logFile
++                mutableState.update { it.copy(busy = true, installing = true, message = "Installing ${confirmed.version} — see Setup terminal. Cancel stops this install.", log = "", logPath = logPath) }
++                poller = scope.launch {
++                    while (true) {
++                        if (logFile.isFile) mutableState.update { it.copy(log = readLog(logFile)) }
++                        delay(750)
++                    }
++                }
++                // Bash pipefail preserves the install's status through tee. Nothing is installed quietly.
++                val body = "mkdir -p /opt/sui-code/logs && /bin/bash -o pipefail -c " + shellQuote(
++                    "/bin/bash -c ${shellQuote(JavaInstallScript.build(confirmed))} 2>&1 | tee ${shellQuote(logPath)}",
++                )
++                val result = run("Java GA ${confirmed.version}", body, 2_100_000L, plan.distroId ?: error("Query the JDK again."))
++                    ?: error("Could not open the Ubuntu Setup terminal. No silent fallback was used.")
++                mutableState.update { it.copy(message = if (result.succeeded) "Installed and verified java, javac, jshell and HelloWorld. Existing JDKs preserved." else "Install failed (${result.exitCode ?: "terminal unavailable"}). ${result.internalError.orEmpty()} Inspect the log, then retry.") }
++            } catch (cancel: CancellationException) {
++                mutableState.update { it.copy(message = "Install cancelled. Existing JDKs are preserved. Inspect the log before retrying.") }
++                throw cancel
++            } catch (error: Exception) {
++                mutableState.update { it.copy(message = error.message ?: "Installation failed; inspect the log and retry.") }
++            } finally {
++                withContext(NonCancellable) {
++                    poller?.cancelAndJoin()
++                    installLog?.takeIf { it.isFile }?.let { file ->
++                        mutableState.update { it.copy(log = readLog(file)) }
++                    }
++                    mutableState.update { it.copy(busy = false, installing = false) }
++                }
++            }
++        }
++    }
++
++    @Synchronized
++    fun cancel() {
++        if (job?.isActive == true) {
++            mutableState.update { it.copy(message = "Cancelling; waiting for the task to stop…") }
++            job?.cancel()
++        }
++    }
++
++    private fun readLog(file: File): String = runCatching {
++        java.io.RandomAccessFile(file, "r").use { input ->
++            input.seek((input.length() - 64 * 1024).coerceAtLeast(0))
++            ByteArray((input.length() - input.filePointer).toInt()).also { input.readFully(it) }.toString(Charsets.UTF_8)
++        }
++    }.getOrDefault("Unable to read the current install log; see Setup terminal.")
++}
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaInstallScript.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaInstallScript.kt
+new file mode 100644
+index 0000000..69b434c
+--- /dev/null
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaInstallScript.kt
+@@ -0,0 +1,75 @@
++package dev.blamspot.jcode.core.distro
++
++/** Versioned, staged install. Never uses apt alternatives or removes an existing JDK. */
++object JavaInstallScript {
++    fun build(release: JavaRelease): String = """
++        set -eu
++        umask 022
++        BASE=/opt/sui-code
++        DEST=${shellQuote(release.home)}
++        EXPECTED_ARCH=${shellQuote(release.architecture)}
++        case "${'$'}(uname -m)" in aarch64|arm64) ARCH=aarch64 ;; x86_64|amd64) ARCH=x64 ;; *) echo 'Unsupported Linux architecture'; exit 1 ;; esac
++        [ "${'$'}ARCH" = "${'$'}EXPECTED_ARCH" ] || { echo 'Environment architecture changed; query again.'; exit 1; }
++        for tool in curl sha256sum tar mktemp flock; do
++          command -v "${'$'}tool" >/dev/null || { echo "Missing prerequisite: ${'$'}tool"; exit 1; }
++        done
++        mkdir -p "${'$'}BASE/jdks" "${'$'}BASE/logs"
++        # A failed or cancelled prior install never owns the final destination.
++        [ ! -e "${'$'}DEST" ] || { echo "Preserving existing JDK at ${'$'}DEST; nothing overwritten."; exit 1; }
++        exec 9>"${'$'}BASE/.java-install.lock"
++        flock -n 9 || { echo 'Another Java install is running. Retry after it stops.'; exit 1; }
++        STAGE=''
++        cleanup() { [ -z "${'$'}STAGE" ] || rm -rf "${'$'}STAGE"; }
++        trap cleanup EXIT
++        trap 'exit 130' INT
++        trap 'exit 143' TERM
++        STAGE=${'$'}(mktemp -d "${'$'}BASE/jdks/.install-XXXXXX")
++        echo '1/5 Download ${release.fileName} from Eclipse Adoptium'
++        curl --fail --location --retry 2 --connect-timeout 20 --max-time 1800 --proto '=https' --proto-redir '=https' ${shellQuote(release.downloadUrl)} -o "${'$'}STAGE/archive.tar.gz"
++        echo '2/5 Verify SHA-256 before extraction'
++        printf '%s  %s\n' ${shellQuote(release.sha256.lowercase())} "${'$'}STAGE/archive.tar.gz" | sha256sum -c -
++        # Reject paths that could escape the private extraction directory.
++        tar -tzf "${'$'}STAGE/archive.tar.gz" > "${'$'}STAGE/members"
++        if grep -E '(^/|(^|/)\.\.(/|${'$'}))' "${'$'}STAGE/members"; then echo 'Unsafe archive path'; exit 1; fi
++        mkdir "${'$'}STAGE/jdk"
++        echo '3/5 Extract into a private staging directory'
++        tar -xzf "${'$'}STAGE/archive.tar.gz" --strip-components=1 --no-same-owner -C "${'$'}STAGE/jdk"
++        echo '4/5 Validate java, javac, jshell and HelloWorld'
++        JAVA_HOME="${'$'}STAGE/jdk"
++        export JAVA_HOME
++        export PATH="${'$'}JAVA_HOME/bin:${'$'}PATH"
++        "${'$'}JAVA_HOME/bin/java" -version
++        "${'$'}JAVA_HOME/bin/javac" -version
++        "${'$'}JAVA_HOME/bin/jshell" --version
++        mkdir "${'$'}STAGE/smoke"
++        printf '%s\n' 'public class HelloWorld { public static void main(String[] args) { System.out.println("HelloWorld from sui-code"); } }' > "${'$'}STAGE/smoke/HelloWorld.java"
++        "${'$'}JAVA_HOME/bin/javac" -d "${'$'}STAGE/smoke" "${'$'}STAGE/smoke/HelloWorld.java"
++        OUTPUT=${'$'}("${'$'}JAVA_HOME/bin/java" -cp "${'$'}STAGE/smoke" HelloWorld)
++        [ "${'$'}OUTPUT" = 'HelloWorld from sui-code' ] || { echo 'HelloWorld output mismatch'; exit 1; }
++        printf '%s\n' "${'$'}OUTPUT"
++        printf 'System.out.println("SUI_JSHELL_OK");\n/exit\n' | "${'$'}JAVA_HOME/bin/jshell" - > "${'$'}STAGE/jshell.log" 2>&1
++        cat "${'$'}STAGE/jshell.log"
++        grep -qx 'SUI_JSHELL_OK' "${'$'}STAGE/jshell.log"
++        # Restore PATH before deciding whether an existing usable default needs preserving.
++        PATH=${'$'}{PATH#*:}
++        unset JAVA_HOME
++        PRESERVE_DEFAULT=false
++        if command -v java >/dev/null && command -v javac >/dev/null && java -version >/dev/null 2>&1 && javac -version >/dev/null 2>&1; then PRESERVE_DEFAULT=true; fi
++        echo '5/5 Commit the validated JDK and configure the managed Java environment'
++        mv -T -n "${'$'}STAGE/jdk" "${'$'}DEST"
++        [ ! -d "${'$'}STAGE/jdk" ] || { echo 'Destination appeared during install; preserved it.'; exit 1; }
++        printf 'export JAVA_HOME=%s\nexport PATH="${'$'}JAVA_HOME/bin:${'$'}PATH"\n' "${'$'}DEST" > "${'$'}STAGE/java.env"
++        chmod 644 "${'$'}STAGE/java.env"
++        mv -f "${'$'}STAGE/java.env" "${'$'}BASE/java.env"
++        if [ "${'$'}PRESERVE_DEFAULT" = false ]; then
++          # Only fill an absent default; never replace an existing profile file.
++          if [ ! -e /etc/profile.d/sui-code-java.sh ]; then
++            printf '%s\n' 'if ! command -v java >/dev/null 2>&1 || ! command -v javac >/dev/null 2>&1; then' '  . /opt/sui-code/java.env' 'fi' > /etc/profile.d/sui-code-java.sh
++          fi
++        else
++          echo 'Existing system JDK and default preserved. Use the managed Java environment for QuickRun.'
++        fi
++        echo "JAVA_HOME=${'$'}DEST"
++        echo 'Java verified. New terminals can source /opt/sui-code/java.env explicitly.'
++    """.trimIndent()
++}
+diff --git a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt
+index 7e126df..f22c166 100644
+--- a/core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt
++++ b/core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt
+@@ -25,7 +25,15 @@ internal class SdkCatalogLoader(
+             }
+         }
+ 
+-        return document.list("entries").mapIndexedNotNull { index, rawEntry ->
++        return listOf(SdkCatalogEntry(
++            id = "sui-java-ga", category = SdkCatalogCategory.Languages,
++            name = "Java (latest GA · Temurin)",
++            description = "Native Java environment manager. Review a verified Linux ARM64 JDK before installing alongside existing JDKs.",
++            installScript = "echo 'Open the Java GA detail page to review and confirm installation.'; exit 1",
++            verifyScript = "test -f /opt/sui-code/java.env && . /opt/sui-code/java.env && test -x \"\$JAVA_HOME/bin/javac\"",
++            uninstallScript = "echo 'Managed JDK removal is not available in v0.1.'; exit 1",
++            supportedArches = listOf("arm64"),
++        )) + document.list("entries").mapIndexedNotNull { index, rawEntry ->
+             val entry = (rawEntry as? Map<*, *>)?.toStringKeyMap() ?: return@mapIndexedNotNull null
+             val id = entry.string("id") ?: return@mapIndexedNotNull null
+             val category = SdkCatalogCategory.fromSerialized(entry.string("category"))
+diff --git a/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt
+new file mode 100644
+index 0000000..b2ccbf6
+--- /dev/null
++++ b/core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt
+@@ -0,0 +1,140 @@
++package dev.blamspot.jcode.core.distro
++
++import java.io.File
++import java.nio.file.Files
++import java.security.MessageDigest
++import kotlin.test.Test
++import kotlin.test.assertEquals
++import kotlin.test.assertFailsWith
++import kotlin.test.assertFalse
++import kotlin.test.assertTrue
++
++class JavaEnvironmentTest {
++    private val checksum = "a".repeat(64)
++    private fun assets(type: String = "ga", arch: String = "aarch64", checksum: String = this.checksum) = """
++        [{"release_type":"$type","version_data":{"major":25,"openjdk_version":"25.0.1+8"},
++          "binaries":[{"os":"linux","architecture":"$arch","image_type":"jdk","jvm_impl":"hotspot",
++          "package":{"name":"OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.1_8.tar.gz",
++          "link":"https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/jdk.tar.gz",
++          "checksum":"$checksum","size":123456789}}]}]
++    """.trimIndent()
++
++    private fun release(checksum: String = this.checksum) = JavaReleaseProvider.parseRelease(assets(checksum = checksum), "aarch64", 25)
++
++    @Test fun selectsLatestGaRatherThanLatestLtsOrTip() {
++        assertEquals(26, JavaReleaseProvider.latestFeature("""{"most_recent_feature_release":26,"most_recent_lts":25,"tip_version":27}"""))
++        assertEquals("aarch64", JavaReleaseProvider.architecture("arm64"))
++        assertFailsWith<IllegalStateException> { JavaReleaseProvider.architecture("riscv64") }
++        assertEquals("25.0.1+8", release().version)
++    }
++
++    @Test fun rejectsEaWrongArchitectureAndWrongMajor() {
++        assertFailsWith<IllegalStateException> { JavaReleaseProvider.parseRelease(assets("ea"), "aarch64", 25) }
++        assertFailsWith<IllegalStateException> { JavaReleaseProvider.parseRelease(assets(arch = "x64"), "aarch64", 25) }
++        assertFailsWith<IllegalStateException> { JavaReleaseProvider.parseRelease(assets(), "aarch64", 26) }
++    }
++
++    @Test fun failsClosedOnMissingChecksumAndUntrustedSource() {
++        assertFailsWith<IllegalArgumentException> { release("invalid") }
++        assertFailsWith<IllegalArgumentException> { release().copy(downloadUrl = "https://example.com/jdk.tar.gz") }
++        assertFailsWith<IllegalArgumentException> { release().copy(downloadUrl = "http://github.com/adoptium/temurin25-binaries/releases/download/x/x.tar.gz") }
++        assertFailsWith<IllegalArgumentException> { release().copy(fileName = "../jdk.tar.gz") }
++        assertFailsWith<IllegalArgumentException> { release().copy(version = "25'; touch /tmp/injected") }
++    }
++
++    @Test fun quickRunUsesManagedEnvironmentAndQuotesTheFile() {
++        assertEquals(setOf("java"), JavaLanguageAdapter.extensions)
++        val command = JavaLanguageAdapter.command("/workspace/a b/it's.java")
++        assertTrue(command.contains(". /opt/sui-code/java.env"))
++        assertTrue(command.endsWith("'/workspace/a b/it'\\''s.java'"))
++        assertFailsWith<IllegalArgumentException> { JavaLanguageAdapter.command("relative.java") }
++    }
++
++    /** Exercises the production shell's download, checksum, staging, commit, log and failure paths.
++     * Fake JDK tools isolate installer semantics; the real JDK smoke is validated separately. */
++    private class Fixture : AutoCloseable {
++        val root = Files.createTempDirectory("sui-java-test").toFile()
++        val base = File(root, "managed")
++        val tools = File(root, "tools").apply { mkdirs() }
++        val archive = File(root, "jdk.tar.gz")
++        init {
++            val jdk = File(root, "archive/jdk/bin").apply { mkdirs() }
++            executable(File(jdk, "java"), "[ \"\${1:-}\" = '-version' ] && exit 0; echo 'HelloWorld from sui-code'")
++            executable(File(jdk, "javac"), "exit 0")
++            executable(File(jdk, "jshell"), "[ \"\${1:-}\" = '--version' ] && exit 0; cat >/dev/null; echo SUI_JSHELL_OK")
++            check(ProcessBuilder("tar", "-czf", archive.path, "-C", File(root, "archive").path, "jdk").start().waitFor() == 0)
++            executable(File(tools, "uname"), "echo aarch64")
++            executable(File(tools, "curl"), "while [ \"\$1\" != '-o' ]; do shift; done; cp '${archive.path}' \"\$2\"")
++        }
++        fun checksum(): String = MessageDigest.getInstance("SHA-256").digest(archive.readBytes()).joinToString("") { "%02x".format(it) }
++        fun script(release: JavaRelease): String = JavaInstallScript.build(release)
++            .replace("/opt/sui-code", base.path)
++            .replace("/etc/profile.d/sui-code-java.sh", File(root, "profile.sh").path)
++        fun start(release: JavaRelease): Process {
++            val script = File(root, "install.sh").apply { writeText(script(release)) }
++            return ProcessBuilder("bash", script.path).apply {
++                environment()["PATH"] = tools.path + ":" + System.getenv("PATH")
++                redirectErrorStream(true)
++                redirectOutput(File(root, "output.log"))
++            }.start()
++        }
++        fun output() = File(root, "output.log").readText()
++        override fun close() { root.deleteRecursively() }
++        companion object {
++            fun executable(file: File, body: String) { file.writeText("#!/bin/sh\n$body\n"); file.setExecutable(true) }
++        }
++    }
++
++    @Test fun installsAfterChecksumAndSmokeWithoutOverwritingExistingJdk() = Fixture().use { f ->
++        val r = release(f.checksum())
++        assertEquals(0, f.start(r).waitFor(), f.output())
++        val home = File(f.base, "jdks/temurin-${r.version}-aarch64")
++        assertTrue(File(home, "bin/java").isFile)
++        assertTrue(File(f.base, "java.env").readText().contains(home.path))
++        assertTrue(f.output().contains("HelloWorld from sui-code"))
++        File(home, "keep").writeText("original")
++        assertEquals(1, f.start(r).waitFor())
++        assertEquals("original", File(home, "keep").readText())
++    }
++
++    @Test fun checksumFailureLeavesNoInstalledJdkAndCanRetry() = Fixture().use { f ->
++        assertEquals(1, f.start(release()).waitFor())
++        assertFalse(File(f.base, "java.env").exists())
++        assertTrue(File(f.base, "jdks").listFiles().orEmpty().isEmpty())
++        assertEquals(0, f.start(release(f.checksum())).waitFor(), f.output())
++    }
++
++    @Test fun failedJavaValidationNeverActivatesOrLeavesPartialInstall() = Fixture().use { f ->
++        val source = File(f.root, "archive/jdk/bin/java")
++        Fixture.executable(source, "exit 42")
++        check(ProcessBuilder("tar", "-czf", f.archive.path, "-C", File(f.root, "archive").path, "jdk").start().waitFor() == 0)
++        assertEquals(42, f.start(release(f.checksum())).waitFor(), f.output())
++        assertFalse(File(f.base, "java.env").exists())
++        assertTrue(File(f.base, "jdks").listFiles().orEmpty().isEmpty())
++    }
++
++    @Test fun architectureMismatchFailsBeforeDownload() = Fixture().use { f ->
++        Fixture.executable(File(f.tools, "uname"), "echo x86_64")
++        assertEquals(1, f.start(release()).waitFor())
++        assertFalse(f.base.exists())
++        assertTrue(f.output().contains("architecture changed"))
++    }
++
++    @Test fun downloadFailurePreservesThePreviouslySelectedEnvironment() = Fixture().use { f ->
++        f.base.mkdirs()
++        val env = File(f.base, "java.env").apply { writeText("export JAVA_HOME=/existing/jdk\n") }
++        Fixture.executable(File(f.tools, "curl"), "exit 22")
++        assertEquals(22, f.start(release()).waitFor())
++        assertEquals("export JAVA_HOME=/existing/jdk\n", env.readText())
++        assertTrue(File(f.base, "jdks").listFiles().orEmpty().isEmpty())
++    }
++
++    @Test fun terminationCleansStagingAndReleasesLockForRetry() = Fixture().use { f ->
++        Fixture.executable(File(f.tools, "curl"), "kill -TERM \"\$PPID\"; exit 1")
++        assertEquals(143, f.start(release()).waitFor(), f.output())
++        assertFalse(File(f.base, "java.env").exists())
++        assertTrue(File(f.base, "jdks").listFiles().orEmpty().isEmpty())
++        Fixture.executable(File(f.tools, "curl"), "while [ \"\$1\" != '-o' ]; do shift; done; cp '${f.archive.path}' \"\$2\"")
++        assertEquals(0, f.start(release(f.checksum())).waitFor(), f.output())
++    }
++}
+diff --git a/docs/sui-code-v0.1.md b/docs/sui-code-v0.1.md
+new file mode 100644
+index 0000000..a3fca81
+--- /dev/null
++++ b/docs/sui-code-v0.1.md
+@@ -0,0 +1,107 @@
++# sui-code v0.1：Java 环境管理器首轮开发报告
++
++日期：2026-11-07。状态：可构建的首个功能切片，尚未完成 ARM64 平板验收。
++
++## 基线与开发约束
++
++- Fork：`https://github.com/suidi-guliu/j-code-android.git`；基线 `e1a14ba2199af6ed3c13c185dcca197cb70fe8e2`。开始时工作区干净，云端恢复分支为 `work`。
++- 独立分支：`sui-code/v0.1-java-environment`。只作本地提交；未修改或推送官方上游，未创建正式 Release，未发布环境配置。
++- 源码提交：`28e511b`（GA 解析、安装脚本和测试）、`0c63847`（Toolchains/PTY 集成及额外失败路径测试）。
++- 本轮保留 JCode 名称、图标、主题和布局；新增页面复用原有 Toolchains 详情槽位，不做第四阶段 UI 改造。
++- 构建通过 `-PjcodeApplicationId=dev.suicode.ide` 隔离身份，产物包名为 `dev.suicode.ide.debug`，显示名为 `JCode (debug)`。manifest 验证 minSdk/targetSdk 为 33、仅 arm64-v8a。
++- `v0.1` 是 sui-code 本轮里程碑；APK 的 versionName/versionCode 暂沿用上游 `1.7.7 / 1070799`，没有伪装成正式发布版本。
++
++## 源码分析与最小设计
++
++| 已有机制 | 实际实现与本轮复用 |
++| --- | --- |
++| Toolchains | `SdkCatalogLoader` 从 assets YAML 加载 SDK 项，`DistroService` 维护安装状态，`SdkManagerFeature.DetailPage` 提供详情。本轮新增 `sui-java-ga`，不破坏依赖旧 `jdk` ID 的现有流程。旧 apt Java 入口仍保留。 |
++| 原有 Java 安装 | YAML 中 `jdk` 使用 apt-cache/apt-get、update-alternatives 和 `/etc/profile.d/jcode-java.sh`，还关联 ktlint；它不等同于动态上游 GA 发现，也会切换系统默认 JDK。本轮独立并存安装避免这两个行为。 |
++| Ubuntu / PRoot / PTY | `DistroService` 与 `ProotManager` 管理 guest；`TerminalSessionManager` 创建真实 PTY，PRoot 使用 `--kill-on-exit`；`SetupTerminalRunner` 暂存脚本并用 OSC 7713 报告退出状态。本轮直接复用，不创建第二套终端。 |
++| 环境变量 | 用户登录 shell 通过 `su -` 和 profile 取环境，非交互命令不保证读取全部 profile。本轮写 `/opt/sui-code/java.env`，原生 Java 适配器显式 source；只有不存在可用系统 JDK 时才添加专属登录 profile，不替换原有 JDK/default/profile 文件。 |
++| 扩展管理 | 官方市场基址在 `ExtensionInstaller.BASE_URL`，现有代码还支持通用 VSIX/来源功能。本轮 Java 管理器完全不调用这些入口，不下载语言插件，不引入 VS Code Marketplace、Open VSX 或第三方替代源；本轮页面说明该流程未启用插件，并指向原有 Extensions 中的官方 Java Dev Pack；未宣称设备兼容性已经验证。现有全局扩展来源策略尚未改造，不能据此声称整个应用已强制拦截所有第三方导入。 |
++| Build & Run | `ProjectRunner` 通过项目探测及 `.jcode/run.yaml` 生成 RunPlan，由现有终端运行并保存项目改动。本轮不重复建设此系统；新增 `NativeLanguageAdapter` 和 Java 适配器契约，后续可接入当前文件 QuickRun 分发。 |
++
++交互路径：Toolchains → **Java (latest GA · Temurin)** → Query latest GA → 查看版本/来源/文件/URL/SHA-256/安装目录/步骤 → 确认 → 自动打开 Ubuntu Setup 终端。
++
++元数据来自 Eclipse Adoptium API：先查询 `/v3/info/available_releases` 的 `most_recent_feature_release`，再请求 `/v3/assets/feature_releases/{feature}/ga`，过滤 Linux、aarch64、JDK、HotSpot、Eclipse。EA、错误主版本/架构、缺失校验值、非官方归档地址均失败关闭，不退回第三方源。确认安装固定到已展示的版本及摘要，不在执行时偷偷重新解析 latest。
++
++API 字段已对照 Adoptium 官方 API 源码模型和路由核查：仓库 `adoptium/api.adoptium.net`，核查时提交 `14e1ee64fb8aec1c5aecb4aeedefeaa8dd52329c`；这属于契约核查，不是实时 API 请求通过的证据。
++
++## 已实现
++
++- 根据当前 guest 架构解析 aarch64；安装脚本再次检查 `uname -m`，拒绝环境变化后的架构错配。本轮页面仅允许 ARM64。
++- 查询/失败重试、完整安装计划、独立的用户确认；确认取消不触发安装。
++- 在真实 Setup PTY 安装；没有静默 exec 回退。等待 PTY 后再次核对 distro ID，避免复用其他发行版的 Setup 会话。
++- HTTPS 下载，严格使用元数据 SHA-256，校验通过后才解包；失败不降低 TLS/摘要要求。
++- 在 `/opt/sui-code/jdks` 私有临时目录验证，再移动到版本化目录；已存在的目的目录直接保留并报错，不覆盖。
++- 验证 `java -version`、`javac -version`、`jshell --version`，实际执行 jshell 表达式、编译并运行 HelloWorld，检查精确输出。
++- 写入独立 JAVA_HOME/PATH 配置；已有可运行系统 java/javac 时保持系统默认不变。使用新 JDK可在终端执行 `. /opt/sui-code/java.env`；适配器会自动读取该文件。
++- 安装日志在 PTY 与 `/opt/sui-code/logs/java-<timestamp>.log` 保留，详情页轮询最后 64 KiB；重试产生新日志，不丢弃旧文件。
++- 取消/超时接入现有 PTY 关闭及会话通知清理；安装脚本用 flock 防止并发写入，支持终止后重新取锁。退出码经 Bash pipefail/tee 保留。
++- Java 原生适配器识别 `.java`，使用已管理 JDK的 source-file launch 命令，正确引用含空格/单引号的路径。它尚未连接编辑器事件。
++
++## 验证与未完成项
++
++| 检查 | 结果与边界 |
++| --- | --- |
++| 云端恢复的构建环境 | JDK 21、Gradle 8.14.3、SDK 36、NDK 27.2.12479018、CMake 3.30.5、Rust 1.99.1/cargo-ndk 4.1.2 可用；实际构建验证通过。 |
++| 原生 ARM64 库 | 两个 Cargo JNI 构建成功；APK 包含 `libripgrep_ffi.so` 与 `libjcode_wasm.so`。 |
++| `:app:assembleDebug` | 通过，独立应用 ID；只构建 Debug。 |
++| JavaEnvironmentTest | 10 项通过，0 失败/错误/跳过。覆盖 GA/EA/主版本/架构、来源与摘要验证、QuickRun 引号、安装成功、已有目录保护、校验失败后重试、JDK 验证失败、终止后重试、架构变化、下载失败时保护已选环境。安装器契约测试使用模拟归档/工具，不能替代设备验证。 |
++| GuestShellScriptTest | 本次执行 3 项通过，0 失败/错误/跳过。 |
++| EffectiveWordWrapTest | 2 项单独强制重跑通过，0 失败/错误/跳过；不是把旧快照的 UP-TO-DATE 当作本轮执行。 |
++| 真实 JDK 安装器主机冒烟 | 用生产脚本在独立工作区路径、Linux x64 上下载官方 Temurin 21.0.9+10；SHA-256 与官方 `.sha256.txt` 一致，java/javac/jshell、HelloWorld 全部通过，原系统 JDK保留。它不是最新 GA、不是 ARM64、不是 PRoot 实测。 |
++| APK | apksigner 校验通过（v2）；aapt 校验独立包名、显示名及 ARM64；产物摘要见下文。 |
++| 实时最新 GA 查询 | **未通过云端实测**：云网络代理对 `api.adoptium.net` CONNECT 返回 403。没有更换第三方查询源或硬编码“最新”。如需在云端复测，需在环境设置允许该域名后重试；本轮未修改或发布环境配置。平板端使用自身网络，仍须验收。 |
++| 设备 UI / Ubuntu PRoot 安装 / 取消 | **未执行**：`adb devices` 没有设备。尚未验证平板端终端自动聚焦、生命周期、进程终止和 ARM64 JDK/JDI 行为。强杀可能留下私有 staging 目录，后续重试不会覆盖它或已装 JDK；设备验收需检查并整理残留。 |
++| QuickRun | **未接入**：Ctrl+F5、当前文件选择、自动保存、统一输入/输出及停止任务尚未实现。只有原生适配器接口/Java 命令构造；C/C++、Python 等适配器未实现。 |
++| 语言插件 | 官方市场索引查询通过，列出 `Java Dev Pack / jcode.lang.java 0.2.3`，指向官方 `dist_v2/jcode.lang.java-0.2.3.jext`，metadata min/target JCode 1.3.5。**本轮未安装、未验证平板兼容性**，管理流程未启用插件；没有以第三方市场替代。 |
++| 工程调试、平板美化 | 未开始，遵守阶段顺序。 |
++
++现有 Gradle/Kotlin 弃用警告仍存在；Android metrics 无法写只读用户目录的警告不影响本轮构建。主机 jshell 用户首选项目录也有只读警告，表达式输出及退出状态已单独验证。
++
++## 复现构建
++
++```bash
++cd /workspace/j-code-android
++source /workspace/setup/env.sh
++bash gradlew --no-daemon --max-workers=4 \
++  :native:ripgrep-ffi:cargoBuildDebugJniLibs \
++  :native:wasmtime-ffi:cargoBuildDebugJniLibs
++bash gradlew --no-daemon --max-workers=4 \
++  -PjcodeApplicationId=dev.suicode.ide \
++  :app:assembleDebug :core:distro:testDebugUnitTest
++bash gradlew --no-daemon --max-workers=4 \
++  :core:config:testDebugUnitTest --rerun-tasks
++```
++
++Java 安装前 guest 需已有 `bash/curl/ca-certificates/sha256sum/tar/mktemp/flock`。缺失时日志明确报错；本轮不擅自修订 apt 源或安装其他插件。
++
++## 产物
++
++- 路径：`/workspace/artifacts/sui-code-v0.1/sui-code-v0.1-debug.apk`
++- SHA-256：`1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06`
++- 目录中一并交付签名/manifest 检查、构建与主机验证日志、JUnit XML、SHA256SUMS 和设备验收清单。
++- APK 使用本机 Debug 签名，仅用于测试；没有上传商店或创建 Release。
++
++## 修改文件清单
++
++| 文件 | 修改目的 |
++| --- | --- |
++| `core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironment.kt` | GA 元数据、官方来源限制、JavaRelease、原生适配器接口/Java 命令。 |
++| `core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaInstallScript.kt` | 下载、校验、并存安装、验证和环境配置。 |
++| `core/distro/src/main/java/dev/blamspot/jcode/core/distro/JavaEnvironmentManager.kt` | 查询/确认安装生命周期、任务取消、日志、发行版绑定。 |
++| `core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt` | 原有 distro 服务提供 Java 管理器及 PTY 回调。 |
++| `core/distro/src/main/java/dev/blamspot/jcode/core/distro/SdkCatalogLoader.kt` | 新增独立 Java GA Toolchains 项。 |
++| `core/distro/src/test/java/dev/blamspot/jcode/core/distro/JavaEnvironmentTest.kt` | 10 项行为/失败路径测试。 |
++| `feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt` | 安装计划、确认、重试、取消和日志入口。 |
++| `feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt` | 复用既有详情路由。 |
++| `feature/sdk-manager/build.gradle.kts` | 使用已有版本目录中的协程依赖。 |
++| `app/src/main/java/dev/blamspot/jcode/MainViewModel.kt` | 将 Java 安装接入既有 Setup runner。 |
++| `app/src/main/java/dev/blamspot/jcode/workbench/SetupTerminalRunner.kt` | 显式聚焦、任务取消/超时、当前 distro 校验。 |
++| `app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt` | 传递 Setup 聚焦事件。 |
++| `app/src/main/java/dev/blamspot/jcode/JCodeShell.kt` | 收到用户确认后的事件才打开既有终端抽屉。 |
++| `docs/sui-code-v0.1.md` | 本设计、结果、限制及文件清单。 |
++
++下一步应先完成目标平板的 Ubuntu/ARM64 安装与取消验收，再连接 Java 当前文件 QuickRun；不提前进入整体 UI 重构。
+diff --git a/feature/sdk-manager/build.gradle.kts b/feature/sdk-manager/build.gradle.kts
+index 52b7755..c53140c 100644
+--- a/feature/sdk-manager/build.gradle.kts
++++ b/feature/sdk-manager/build.gradle.kts
+@@ -32,6 +32,7 @@ dependencies {
+     implementation(platform(libs.compose.bom))
+     implementation(libs.compose.ui)
+     implementation(libs.compose.material3)
++    implementation(libs.coroutines.android)
+     implementation(libs.hilt.android)
+     ksp(libs.hilt.compiler)
+     implementation(project(":core:distro"))
+diff --git a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt
+new file mode 100644
+index 0000000..d8b81e8
+--- /dev/null
++++ b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt
+@@ -0,0 +1,81 @@
++package dev.blamspot.jcode.feature.sdkmanager
++
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.text.selection.SelectionContainer
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.material3.AlertDialog
++import androidx.compose.material3.Button
++import androidx.compose.material3.CircularProgressIndicator
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Text
++import androidx.compose.material3.TextButton
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.unit.dp
++import dev.blamspot.jcode.core.distro.Arch
++import dev.blamspot.jcode.core.distro.DistroEnvironmentState
++import dev.blamspot.jcode.core.distro.DistroServiceLocator
++import dev.blamspot.jcode.core.distro.JavaRelease
++
++/** Uses the current Toolchains detail slot and theme; no tablet layout redesign. */
++@Composable
++internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: Modifier = Modifier) {
++    val context = LocalContext.current
++    val manager = remember(context) { DistroServiceLocator.distroService(context).javaEnvironmentManager }
++    val state by manager.state.collectAsState()
++    var confirmation by remember { mutableStateOf<JavaRelease?>(null) }
++    val supported = environment.runtime.selectedDistro.arch == Arch.ARM64
++    val ready = environment.distroInstalled == true && environment.jcodeUserReady == true && supported
++    Column(
++        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
++        verticalArrangement = Arrangement.spacedBy(12.dp),
++    ) {
++        Text("Java · latest GA", style = MaterialTheme.typography.titleLarge)
++        Text("Native language environment · Eclipse Temurin OpenJDK")
++        Text("Environment: ${environment.runtime.selectedDistro.label} · Linux ${environment.runtime.selectedDistro.arch.rootfsKey}")
++        if (!ready) Text(if (!supported) "Unavailable: this milestone requires a Linux ARM64 environment." else "Complete Ubuntu setup before installing Java.")
++        Text(state.message)
++        if (state.busy) CircularProgressIndicator()
++        Button(onClick = manager::query, enabled = ready && !state.busy) { Text("Query latest GA / retry query") }
++        state.release?.let { release ->
++            SelectionContainer {
++                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                    Text("Version: ${release.version}")
++                    Text("Source: ${release.source}")
++                    Text("File: ${release.fileName} (${release.size / 1024 / 1024} MiB)")
++                    Text("Download: ${release.downloadUrl}")
++                    Text("SHA-256: ${release.sha256}")
++                    Text("Install location: ${release.home}")
++                    Text("1. Download the reviewed archive over HTTPS.\n2. Check SHA-256 before extraction.\n3. Stage alongside existing JDKs.\n4. Verify java, javac, jshell; compile and run HelloWorld.\n5. Configure the managed JAVA_HOME and PATH. Preserve an existing usable system default.")
++                }
++            }
++            Button(onClick = { confirmation = release }, enabled = ready && !state.busy && state.distroId == environment.runtime.selectedDistro.id) {
++                Text("Review and install / retry")
++            }
++        }
++        if (state.busy) TextButton(onClick = manager::cancel) { Text("Cancel") }
++        Text("QuickRun: Java adapter prepared; Ctrl+F5 and current-file execution are not connected in v0.1.")
++        Text("Language plugin: not enabled here. The official JCode marketplace lists Java Dev Pack (jcode.lang.java); device compatibility is unverified. Review it in Extensions. No third-party fallback is used.")
++        state.logPath?.let { Text("Install log in Ubuntu: $it") }
++        if (state.log.isNotBlank()) SelectionContainer { Text(state.log, style = MaterialTheme.typography.bodySmall) }
++    }
++    confirmation?.let { release ->
++        AlertDialog(
++            onDismissRequest = { confirmation = null },
++            title = { Text("Install Java ${release.version}?") },
++            text = { Text("${release.source}\n${release.fileName}\n\nThe Ubuntu Setup terminal will open. Download, checksum verification and HelloWorld must succeed before activation. Existing JDKs and an existing usable system default will be kept.\n\nNo language plugin will be downloaded.") },
++            confirmButton = { TextButton(onClick = { confirmation = null; manager.install(release) }) { Text("Confirm and open terminal") } },
++            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancel") } },
++        )
++    }
++}
+diff --git a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt
+index 1415ed0..caaa508 100644
+--- a/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt
++++ b/feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/SdkManagerFeature.kt
+@@ -35,6 +35,10 @@ object SdkManagerFeature {
+         onUseVersion: (String, String) -> Unit = { _, _ -> },
+         modifier: Modifier = Modifier,
+     ) {
++        if (entry.id == "sui-java-ga") {
++            JavaEnvironmentPage(environmentState, modifier)
++            return
++        }
+         val environmentReady = environmentState.distroInstalled == true && environmentState.jcodeUserReady == true
+         val running = state.runningEntryId == entry.id
+         // This page is also "busy" while a toolchain it requires is being installed on its behalf.
