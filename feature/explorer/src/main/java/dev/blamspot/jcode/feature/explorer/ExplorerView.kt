@@ -303,7 +303,14 @@ fun ExplorerView(
         }
     }
 
+    val protectedProjects = LocalProtectedProjectRoots.current
+    fun isProtectedPath(path: FsPath): Boolean = path.stableId == project.fsPath.stableId ||
+        (path as? FsPath.Local)?.let { dev.blamspot.jcode.fs.InternalFiles.protectsProject(it.file, protectedProjects) } == true
     fun runRowAction(row: TreeRow, action: RowAction) {
+        if (isProtectedPath(row.node.path) && action in setOf(RowAction.Rename, RowAction.Cut, RowAction.Delete)) {
+            onSnackbar?.invoke("The root folder is permanent. Manage project names through Project management.")
+            return
+        }
         when (action) {
             RowAction.Open -> onFileSelected?.invoke(row.node)
             RowAction.NewFile -> showCreateDialog = CreateTarget(row.node.path, isDirectory = false)
@@ -360,6 +367,7 @@ fun ExplorerView(
                 clipboard?.let { entry ->
                     scope.launch {
                         runCatching {
+                            if (entry.isCut) check(!isProtectedPath(entry.sourcePath)) { "Manage registered project folders through Project management" }
                             val targetParent = resolveCreateParent()
                             copyFileOrDir(fs, context, entry.sourcePath, targetParent)
                             viewModel.refresh()
@@ -464,6 +472,7 @@ fun ExplorerView(
             onConfirm = { newName ->
                 scope.launch {
                     runCatching {
+                        check(!isProtectedPath(target.path)) { "Manage registered project folders through Project management" }
                         renameFile(fs, context, target.path, newName)
                         viewModel.refresh()
                         scmUi.onFsActivity?.invoke()
@@ -507,6 +516,7 @@ fun ExplorerView(
                     showDeleteConfirm = null
                     scope.launch {
                         runCatching {
+                            check(!isProtectedPath(node.path)) { "Manage registered project folders through Project management" }
                             if (toTrash) {
                                 trash.put(
                                     context = context,
@@ -583,7 +593,8 @@ private fun RowOverflowMenu(
     val isDir = row.node.kind == FsKind.Directory
     val scmUi = LocalExplorerScmUi.current
     // The project root must not be moved or deleted from the tree, so Cut/Delete are hidden on it.
-    val isProjectRoot = LocalProjectRootId.current == row.node.path.stableId
+    val protectedProjects = LocalProtectedProjectRoots.current
+    val isProjectRoot = LocalProjectRootId.current == row.node.path.stableId || (row.node.path as? FsPath.Local)?.let { dev.blamspot.jcode.fs.InternalFiles.protectsProject(it.file, protectedProjects) } == true
     Box {
         JcTooltip("More actions") {
             IconButton(
@@ -604,7 +615,7 @@ private fun RowOverflowMenu(
             quickActions = buildList {
                 add(ContextAction(JCodeIcon.Copy, "Copy") { onAction(row, RowAction.Copy) })
                 if (!isProjectRoot) add(ContextAction(JCodeIcon.Cut, "Cut") { onAction(row, RowAction.Cut) })
-                add(ContextAction(JCodeIcon.Rename, "Rename") { onAction(row, RowAction.Rename) })
+                if (!isProjectRoot) add(ContextAction(JCodeIcon.Rename, "Rename") { onAction(row, RowAction.Rename) })
                 if (!isProjectRoot) {
                     add(ContextAction(JCodeIcon.Delete, "Delete", destructive = true) { onAction(row, RowAction.Delete) })
                 }

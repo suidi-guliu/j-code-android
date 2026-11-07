@@ -2671,6 +2671,7 @@ private fun JCodeShell(
             }
         }
     }
+    val nativeEnvironmentManager = remember(appContext) { dev.blamspot.jcode.core.distro.DistroServiceLocator.distroService(appContext).nativeEnvironmentManager }
     val setupTerminalSessionId = LocalSetupTerminalSessionId.current
     LaunchedEffect(setupTerminalSessionId) {
         val id = setupTerminalSessionId ?: return@LaunchedEffect
@@ -2961,6 +2962,11 @@ private fun JCodeShell(
     }
 
     fun closeTerminalSession(sessionId: String) {
+        if (sessionId == setupTerminalSessionId && nativeEnvironmentManager.state.value.installing) {
+            nativeEnvironmentManager.cancel()
+            scope.launch { snackbarHostState.showSnackbar("Package cancellation requested. Setup stays open until apt/dpkg reaches a safe boundary.") }
+            return
+        }
         val parentId = terminalSessionManager.relocationParentOf(sessionId)
         // Closing a parent strands its blocked relocated child(ren); close them first (this recurses and
         // mutates terminalSessionIds), then compute the remaining list from the current state.
@@ -2983,16 +2989,18 @@ private fun JCodeShell(
 
     fun closeAllTerminalSessions() {
         // Kill every live PTY (the tracked ids may drift from the manager's sessions), then clear state.
-        val ids = (terminalSessionIds + terminalSessionManager.sessions.keys).distinct()
+        val packageSession = setupTerminalSessionId?.takeIf { nativeEnvironmentManager.state.value.installing }
+        if (packageSession != null) nativeEnvironmentManager.cancel()
+        val ids = (terminalSessionIds + terminalSessionManager.sessions.keys).distinct().filterNot { it == packageSession }
         ids.forEach { id ->
             terminalSessionManager.closeSession(id)
             TerminalSessionHost.onSessionStopped(id)
             terminalSessionManager.clearRelocation(id)
             onRunSessionGone(id)
         }
-        terminalSessionIds = emptyList()
-        terminalTitles.clear()
-        selectedTerminalSessionId = ""
+        terminalSessionIds = listOfNotNull(packageSession).filter { terminalSessionManager.getSession(it) != null }
+        terminalTitles.keys.retainAll(terminalSessionIds.toSet())
+        selectedTerminalSessionId = terminalSessionIds.firstOrNull().orEmpty()
     }
 
     // A `.vsix` extension calling vscode.window.createTerminal / sendText / show. The extension host
@@ -4332,6 +4340,20 @@ private fun WorkspacePanel(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val protectedProjectRoots by workspaceManager.registeredLocalRoots.collectAsStateWithLifecycle()
+    var browseInternalFiles by rememberSaveable { mutableStateOf(false) }
+    val internalRoot = remember(context) {
+        dev.blamspot.jcode.fs.InternalFiles.root(context.filesDir)
+    }
+    val internalProject = remember(internalRoot) {
+        Project(dev.blamspot.jcode.fs.InternalFiles.ROOT_NODE_ID, dev.blamspot.jcode.fs.ProjectKind.Local, internalRoot.path, "Internal Files", "/workspace", 0)
+    }
+    LaunchedEffect(internalRoot) {
+        if (!internalRoot.isDirectory) onSnackbar("Internal Files is unavailable: check free space and app storage permissions.", null, null)
+    }
+    val internalAction = remember { MainViewModel.ShellContribution("sui-code", "files.internalRoot", "Internal Files") }
+    val activeProjectAction = remember { MainViewModel.ShellContribution("sui-code", "files.activeProject", "Current Project Files") }
+
 
     Surface(
         modifier = modifier,
@@ -4350,10 +4372,16 @@ private fun WorkspacePanel(
                 scmAvailable = installedExtensions.hasScmClient(),
                 vmManagerAvailable = installedExtensions.hasVmManagerClient(),
                 onSelectTool = onSelectTool,
-                onCreateProject = onCreateProject,
+                onCreateProject = { browseInternalFiles = false; onCreateProject() },
                 onOpenExternalFolder = onOpenExternalFolder,
-                contributedDrawerActions = contributedDrawerActions,
-                onDrawerAction = onDrawerAction,
+                contributedDrawerActions = listOf(internalAction) + (if (selectedProject != null) listOf(activeProjectAction) else emptyList()) + contributedDrawerActions,
+                onDrawerAction = { action ->
+                    when (action.id) {
+                        "files.internalRoot" -> { browseInternalFiles = true; onSelectTool(WorkbenchTool.Explorer) }
+                        "files.activeProject" -> { browseInternalFiles = false; onSelectTool(WorkbenchTool.Explorer) }
+                        else -> onDrawerAction(action)
+                    }
+                },
                 onCloseWorkspace = onCloseWorkspace,
                 onCloseProject = onCloseProject,
                 onCollapseSidebar = onCollapseSidebar,
@@ -4373,7 +4401,7 @@ private fun WorkspacePanel(
                                 ProjectRoster(
                                     projects = rosterProjects,
                                     selectedProjectId = selectedProject?.id ?: -1L,
-                                    onOpenProject = onOpenProject,
+                                    onOpenProject = { project -> browseInternalFiles = false; onOpenProject(project) },
                                     onRenameProject = onRenameProject,
                                     onRemoveProject = onRemoveProject,
                                     onOpenProjectSettings = { id -> onSelectProject(id); onOpenProjectConfig() },
@@ -4383,7 +4411,22 @@ private fun WorkspacePanel(
                             }
 
                             when {
-                                selectedProject != null -> {
+                                selectedProject == null || browseInternalFiles -> {
+                                    CompositionLocalProvider(dev.blamspot.jcode.feature.explorer.LocalProtectedProjectRoots provides protectedProjectRoots) {
+                                    ExplorerFeature.Content(
+                                        workspace = null,
+                                        project = internalProject,
+                                        fs = workspaceManager.fsFor(internalProject.fsPath),
+                                        context = context,
+                                        modifier = Modifier.weight(1f),
+                                        viewMode = explorerViewModeOf(effectiveConfig.explorer.viewMode),
+                                        autoRefreshEnabled = explorerAutoRefresh,
+                                        onFileSelected = onOpenFile,
+                                        onSnackbar = { message -> onSnackbar(message, null, null) },
+                                    )
+                                    }
+                                }
+                                else -> {
                                     // Key on id + location so roster mutations never remount/reload the tree,
                                     // but a REUSED row id (SQLite hands the deleted max rowid to the next
                                     // insert — routine in the single-slot Default workspace) still remounts
@@ -4405,13 +4448,6 @@ private fun WorkspacePanel(
                                             )
                                         }
                                     }
-                                }
-                                // User Workspace with nothing selected: roster only, tree hidden.
-                                inUserWorkspace -> Spacer(modifier = Modifier.weight(1f))
-                                // Default Workspace with nothing open: says so, and leaves the doing
-                                // to the header's + and folder buttons right above it.
-                                else -> Box(modifier = Modifier.weight(1f)) {
-                                    WorkspaceEmptyState(workspace = workspace)
                                 }
                             }
                         }

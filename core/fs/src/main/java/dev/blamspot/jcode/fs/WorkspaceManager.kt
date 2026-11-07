@@ -57,6 +57,11 @@ class WorkspaceManager @Inject constructor(
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /** Protect DB-backed project roots (and their ancestors) when browsing the internal file tree. */
+    val registeredLocalRoots: StateFlow<Set<String>> = workspaceDao.observeWorkspaces()
+        .map { workspaces -> workspaces.flatMap { it.projects }.filter { it.kind == ProjectKind.Local }.map { it.location }.toSet() }
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
     val rememberedSafTreeUris: StateFlow<Set<Uri>> = safPermissionStore.rememberedTrees
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 

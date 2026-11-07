@@ -33,8 +33,7 @@ suspend fun createDirectory(fs: Fs, context: Context, parent: FsPath, name: Stri
 
 private suspend fun createDirectoryPosix(parent: FsPath, name: String): FsNode {
     val parentFile = parent.requireLocal()
-    val newDir = File(parentFile, name)
-    newDir.mkdirs()
+    val newDir = SafeLocalFiles.create(parentFile, name, directory = true)
     return FsNode(
         path = FsPath.Local(newDir),
         name = newDir.name,
@@ -59,11 +58,7 @@ private suspend fun createDirectorySaf(context: Context, parent: FsPath, name: S
 
 private suspend fun createFilePosix(parent: FsPath, name: String): FsNode {
     val parentFile = parent.requireLocal()
-    val newFile = File(parentFile, name)
-    newFile.parentFile?.mkdirs()
-    if (!newFile.exists()) {
-        newFile.writeText("")
-    }
+    val newFile = SafeLocalFiles.create(parentFile, name, directory = false)
     return FsNode(
         path = FsPath.Local(newFile),
         name = newFile.name,
@@ -104,8 +99,7 @@ suspend fun renameFile(fs: Fs, context: Context, from: FsPath, newName: String):
 
 private suspend fun renamePosix(from: FsPath, newName: String): FsNode {
     val oldFile = from.requireLocal()
-    val newFile = File(oldFile.parentFile, newName)
-    check(oldFile.renameTo(newFile)) { "Rename failed: ${oldFile.path} -> $newName" }
+    val newFile = SafeLocalFiles.rename(oldFile, newName)
     return FsNode(
         path = FsPath.Local(newFile),
         name = newName,
@@ -135,7 +129,7 @@ suspend fun deletePermanently(fs: Fs, context: Context, path: FsPath) {
     when (fs) {
         is PosixFs -> {
             val file = path.requireLocal()
-            check(file.deleteRecursively()) { "Delete failed: ${file.path}" }
+            SafeLocalFiles.remove(file)
         }
         is SafFs -> {
             val doc = path.toDocumentFile(context)
@@ -157,14 +151,7 @@ private suspend fun copyPosix(source: FsPath, targetParent: FsPath, newName: Str
     val sourceFile = source.requireLocal()
     val parentFile = targetParent.requireLocal()
     val targetName = newName ?: sourceFile.name
-    val targetFile = File(parentFile, targetName)
-
-    if (sourceFile.isDirectory) {
-        sourceFile.copyRecursively(targetFile, overwrite = true)
-    } else {
-        sourceFile.copyTo(targetFile, overwrite = true)
-    }
-
+    val targetFile = SafeLocalFiles.copy(sourceFile, parentFile, targetName)
     return FsPath.Local(targetFile)
 }
 
@@ -210,7 +197,7 @@ suspend fun importContentUris(fs: Fs, context: Context, uris: List<Uri>, targetD
                     var suffix = 1
                     while (dest.exists()) dest = File(parent, uniquifiedName(name, suffix++))
                     context.contentResolver.openInputStream(uri)?.use { input ->
-                        dest.outputStream().use { input.copyTo(it) }
+                        SafeLocalFiles.importNew(parent, dest.name) { output -> input.copyTo(output) }
                     } ?: error("Cannot read '$name'")
                     dest.name
                 }

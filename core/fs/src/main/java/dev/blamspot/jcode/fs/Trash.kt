@@ -183,18 +183,18 @@ class Trash(private val root: File) {
         val payload = payloadOf(File(root, entry.id)) ?: error("'${entry.name}' is no longer in the Trash")
         val landed =
             if (entry.saf) restoreSaf(context, entry, payload) else restoreLocal(entry, payload)
-        File(root, entry.id).deleteRecursively()
+        SafeLocalFiles.remove(File(root, entry.id))
         landed
     }
 
     /** Destroy one entry for good. */
     suspend fun purge(id: String) = withContext(Dispatchers.IO) {
-        File(root, id).deleteRecursively()
+        SafeLocalFiles.remove(File(root, id))
         Unit
     }
 
     suspend fun empty() = withContext(Dispatchers.IO) {
-        root.listFiles().orEmpty().forEach { it.deleteRecursively() }
+        root.listFiles().orEmpty().forEach { SafeLocalFiles.remove(it) }
         Unit
     }
 
@@ -213,7 +213,7 @@ class Trash(private val root: File) {
             // An entry too damaged to read is swept too — it can never be restored, and leaving it
             // means the bin only ever grows.
             if (entry == null || entry.deletedAtMillis < cutoff) {
-                dir.deleteRecursively()
+                SafeLocalFiles.remove(dir)
                 dropped++
             }
         }
@@ -242,12 +242,8 @@ class Trash(private val root: File) {
         // live under filesDir and so does this. It costs nothing whatever the folder weighs; the
         // copy below is the fallback for a project still on the legacy shared storage.
         if (file.renameTo(target)) return taken
-        if (file.isDirectory) {
-            file.copyRecursively(target, overwrite = true)
-        } else {
-            file.copyTo(target, overwrite = true)
-        }
-        check(file.deleteRecursively()) { "Could not remove '${file.name}' after copying it to the Trash" }
+        SafeLocalFiles.copy(file, data, file.name)
+        SafeLocalFiles.remove(file)
         return taken
     }
 
@@ -284,8 +280,7 @@ class Trash(private val root: File) {
         parent.mkdirs()
         val target = freeName(parent, payload.name)
         if (!payload.renameTo(target)) {
-            if (payload.isDirectory) payload.copyRecursively(target, overwrite = true)
-            else payload.copyTo(target, overwrite = true)
+            SafeLocalFiles.copy(payload, parent, target.name)
         }
         return target.absolutePath
     }

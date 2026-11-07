@@ -54,8 +54,7 @@ class PosixFs @Inject constructor() : Fs {
 
     override suspend fun write(path: FsPath, bytes: ByteArray) = withContext(Dispatchers.IO) {
         val file = path.requireLocal()
-        file.parentFile?.mkdirs()
-        file.writeBytes(bytes)
+        SafeLocalFiles.write(file, bytes)
     }
 
     override fun watch(path: FsPath): Flow<FsWatchEvent> = callbackFlow {

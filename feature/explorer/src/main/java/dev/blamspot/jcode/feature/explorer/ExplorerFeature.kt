@@ -13,6 +13,9 @@ import dev.blamspot.jcode.fs.Workspace
  * Provides the file/folder explorer with tree and list views, file operations,
  * and drag-and-drop scaffolding.
  */
+/** Additional roots whose movement would orphan Project database references. */
+val LocalProtectedProjectRoots = androidx.compose.runtime.compositionLocalOf<Set<String>> { emptySet() }
+
 object ExplorerFeature {
 
     /**
