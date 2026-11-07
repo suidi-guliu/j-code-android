@@ -286,6 +286,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val scaffoldState = templateScaffolder.state
 
     /** Shared "Setup" terminal in the right drawer that runs toolchain installs and scaffolds. */
+    val javaQuickRun = JavaQuickRunController(appContext, distroService, viewModelScope, ::emitMessage)
+
+    fun quickRunActiveFile(repeatCount: Int): Boolean {
+        val tab = _editorGroup.value.activeTab ?: return false
+        if (tab.isPage || tab.editorState == null) return false
+        return javaQuickRun.start(tab.filePath, repeatCount) { saveTabAwait(tab) }
+    }
+
     val setupTerminalRunner = SetupTerminalRunner(appContext, distroService)
 
     private val _runTerminalCompletions = MutableSharedFlow<Pair<String, Int>>(extraBufferCapacity = 16)
@@ -298,6 +306,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         TerminalSessionHost.manager(appContext).onTaskComplete = { sessionId, payload ->
             setupTerminalRunner.handleTaskComplete(sessionId, payload)
+            javaQuickRun.complete(sessionId, payload)
             _runTerminalCompletions.tryEmit(sessionId to (payload.substringAfter(';').trim().toIntOrNull() ?: -1))
         }
         TerminalSessionHost.manager(appContext).onTaskProgress = setupTerminalRunner::handleTaskProgress
@@ -5343,6 +5352,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Reap every runtime service (called on project/workspace close and ViewModel teardown). */
     fun stopAllRuntimeServices() {
+        javaQuickRun.stop()
         runtimeServices.values.forEach { GuestProcessTree.destroy(it) }
         runtimeServices.clear()
     }

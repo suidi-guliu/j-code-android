@@ -64,7 +64,7 @@ internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: 
             }
         }
         if (state.busy) TextButton(onClick = manager::cancel) { Text("Cancel") }
-        Text("QuickRun: Java adapter prepared; Ctrl+F5 and current-file execution are not connected in v0.1.")
+        Text("QuickRun: open a .java file in the editor and press Ctrl+F5. The current file is saved before running in Ubuntu.")
         Text("Language plugin: not enabled here. The official JCode marketplace lists Java Dev Pack (jcode.lang.java); device compatibility is unverified. Review it in Extensions. No third-party fallback is used.")
         state.logPath?.let { Text("Install log in Ubuntu: $it") }
         if (state.log.isNotBlank()) SelectionContainer { Text(state.log, style = MaterialTheme.typography.bodySmall) }

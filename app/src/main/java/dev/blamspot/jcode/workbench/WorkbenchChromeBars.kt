@@ -306,8 +306,8 @@ internal fun WorkbenchTopBar(
             // Run toggles to Stop while a run is active. A tap runs the single/first config; with more
             // than one config it opens a picker instead. Long-press always opens the menu — the list of
             // run configs to launch, plus the debug/session controls.
-            // Only shown when a project is open and focused — there's nothing to run otherwise.
-            if (selectedProject != null) {
+            // A running single-file QuickRun also needs the existing Stop control without a project.
+            if (selectedProject != null || isRunning) {
                 var runMenuOpen by remember { mutableStateOf(false) }
                 val hasMultipleRuns = runConfigNames.size > 1
                 // A debug session owns this button while it lasts, but it stays a three-state control:

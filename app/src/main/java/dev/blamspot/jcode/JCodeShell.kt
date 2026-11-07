@@ -942,8 +942,12 @@ fun JCodeApp(
             onScanFonts = viewModel::refreshEnvironmentFonts,
         )
     }
-    val editorSaveActions = remember(viewModel) {
+    val quickRunActive by viewModel.javaQuickRun.active.collectAsStateWithLifecycle()
+    val editorSaveActions = remember(viewModel, quickRunActive) {
         EditorSaveActions(
+            onQuickRun = viewModel::quickRunActiveFile,
+            onStopQuickRun = viewModel.javaQuickRun::stop,
+            quickRunActive = quickRunActive,
             onUndo = viewModel::undoActiveTab,
             onRedo = viewModel::redoActiveTab,
             onDiscard = viewModel::discardActiveTab,
@@ -1703,7 +1707,7 @@ fun JCodeApp(
         LocalPendingReload provides pendingReloadUi,
         LocalRunConfigPresets provides contributedRunPresets,
         LocalSetupTerminalSessionId provides setupTerminalSessionId,
-        LocalSetupTerminalFocusRequests provides viewModel.setupTerminalRunner.focusRequests,
+        LocalSetupTerminalFocusRequests provides remember(viewModel) { kotlinx.coroutines.flow.merge(viewModel.setupTerminalRunner.focusRequests, viewModel.javaQuickRun.focusRequests) },
         LocalDebugSession provides debugSessionUi,
         LocalPerformanceSettings provides performanceSettings,
         LocalEnvVarSettings provides envVarSettings,
@@ -2939,6 +2943,11 @@ private fun JCodeShell(
     // Stop the current run: Ctrl-C the run terminal (graceful server/build shutdown) and reset run
     // state. The terminal session is kept so its output stays visible and a re-run can reuse it.
     fun handleStopRun() {
+        if (editorSaveActionsLocal.quickRunActive && editorSaveActionsLocal.onStopQuickRun()) {
+            terminalSessionIds = terminalSessionIds.filter { terminalSessionManager.getSession(it) != null }
+            if (selectedTerminalSessionId !in terminalSessionIds) selectedTerminalSessionId = terminalSessionIds.firstOrNull().orEmpty()
+            return
+        }
         OutputLog.append("■ Stopped run")
         runSessionIds.forEach { id ->
             if (id in terminalSessionIds && terminalSessionManager.getSession(id) != null) {
@@ -3652,7 +3661,7 @@ private fun JCodeShell(
                                 topBarRunConfigs.getOrNull(index)?.let { config -> handleRun(project, config) }
                             }
                         },
-                        isRunning = runningProjectId != null,
+                        isRunning = runningProjectId != null || editorSaveActionsLocal.quickRunActive,
                         terminalBusy = terminalBusy,
                         terminalHasUnseen = terminalHasUnseen,
                         terminalSessions = terminalInstances,

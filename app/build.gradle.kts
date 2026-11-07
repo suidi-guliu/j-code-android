@@ -96,7 +96,7 @@ android {
         applicationId = jcodeApplicationId
         minSdk = 33
         targetSdk = 33
-        versionCode = jcodeVersionCode
+        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: jcodeVersionCode
         versionName = jcodeVersionName
 
         buildConfigField("String", "UPDATE_CHANNEL", "\"$jcodeUpdateChannel\"")
