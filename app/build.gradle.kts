@@ -215,6 +215,8 @@ dependencies {
     implementation(project(":core:search"))
     implementation(project(":core:config"))
     implementation(project(":core:ext-api"))
+    // sui-code native .suic/.suik package protocol; independent of the JCode extension API.
+    implementation(project(":core:native-packages"))
     implementation(project(":core:diag"))
 
     // Feature modules
