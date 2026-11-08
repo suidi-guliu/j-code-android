@@ -1,8 +1,8 @@
 package dev.suicode.packages
 
-/** Read-only public design contract. Actual Compose screens are migrated separately. */
+/** Read-only public design contract. Consumed by the native Compose theme and layout. */
 object DesignSystem {
-    const val VERSION = "0.1.0"
+    const val VERSION = "0.2.0"
     val spacing = listOf(0,4,8,12,16,20,24,32,40,48)
     val radius = mapOf("small" to 4,"medium" to 8)
     val typographySp = mapOf("title" to 22,"section" to 18,"body" to 14,"label" to 12,"editor" to 14,"terminal" to 14)

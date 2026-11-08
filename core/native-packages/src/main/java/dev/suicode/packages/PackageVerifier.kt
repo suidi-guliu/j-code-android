@@ -55,8 +55,14 @@ class VerifiedPack internal constructor(
     val kind: PackKind, val id: String, val version: String, val digest: String,
     val official: Boolean, val signer: String?,
     permissions: Set<Capability>, components: Map<String, Operation?>,
-    manifest: JsonObject
+    manifest: JsonObject, payload: Map<String,ByteArray>
 ) {
+    private val payload = payload.mapValues { it.value.copyOf() }
+    fun content(path: String): ByteArray = payload[path]?.copyOf() ?: fail("E_COMPONENT", "Missing package content: $path")
+    fun declarations(): List<PackageComponent> = manifest.array("components").map { c ->
+        val entry=c.jsonObject
+        PackageComponent(entry.string("id"),entry.string("type"),jsonObject(content(entry.string("entry"))))
+    }
     val permissions: Set<Capability> = permissions.toSet()
     internal val components: Map<String, Operation?> = components.toMap()
     val manifest: JsonObject = Json.parseToJsonElement(manifest.toString()).jsonObject
@@ -107,7 +113,7 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
         api.keysExactly(setOf("min","max"))
         val min=(api["min"] as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull ?: fail("E_API","min")
         val max=(api["max"] as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull ?: fail("E_API","max")
-        if (min<1 || min>max || CoreApi.VERSION !in min..max) fail("E_API", "Incompatible Core API")
+        if (!CoreApi.compatible(min,max)) fail("E_API", "Incompatible Core API")
         val permissions=m.array("permissions").map { p -> Capability.entries.firstOrNull { p is JsonPrimitive && p.isString && it.wire==p.content } ?: fail("E_PERMISSION","Unknown permission") }
         if (permissions.distinct().size!=permissions.size) fail("E_PERMISSION","Duplicate permission")
         if (kind==PackKind.PLUGIN && permissions.any { it !in setOf(Capability.FILE_READ,Capability.RUN) }) fail("E_BOUNDARY","Plugin permission outside SimpleRun scope")
@@ -133,6 +139,15 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
             if (!entry.startsWith(prefix) || entry !in files || !entry.endsWith(".json")) fail("E_COMPONENT","Missing declarative component $entry")
             componentIds[comp.string("id")]=validateDescriptor(comp.string("type"), jsonObject(files.getValue(entry)))
         }
+        m.array("components").forEach { c ->
+            if(c.jsonObject.string("type")=="panel") {
+                val d=jsonObject(files.getValue(c.jsonObject.string("entry")))
+                if("nodes" in d) {
+                    if(min<2) fail("E_API","Native UI nodes require minimum Core API 2")
+                    UiNodes.validate(d.array("nodes"),componentIds.filterValues { it!=null && it!=Operation.PANEL_OPEN }.keys)
+                }
+            }
+        }
         val prefixes=if(kind==PackKind.PLUGIN) setOf("plugin","resources","assets") else setOf("ide","components","adapters","workflows","resources","assets")
         if (files.keys.any { it !in setOf("manifest.json","checksums.sha256","signature.sig") && it.substringBefore('/') !in prefixes }) fail("E_STRUCTURE","Unknown root directory")
         val sig=files["signature.sig"]?.let(::jsonObject)
@@ -154,7 +169,7 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
                 official=officialKeys[fingerprint]?.encoded?.contentEquals(der)==true
             } catch(e: PackageFailure) { throw e } catch(_: Exception) { fail("E_SIGNATURE","Malformed signature") }
         }
-        return VerifiedPack(kind,id,m.string("version"),sha(bytes),official,fingerprint,permissions.toSet(),componentIds,m)
+        return VerifiedPack(kind,id,m.string("version"),sha(bytes),official,fingerprint,permissions.toSet(),componentIds,m,files)
     }
 }
 
@@ -164,3 +179,5 @@ class PluginParser(private val verifier: PackageVerifier = PackageVerifier()) {
 class IdeKitParser(private val verifier: PackageVerifier = PackageVerifier()) {
     fun parse(bytes: ByteArray, installed: Map<String,String> = emptyMap()): VerifiedPack = verifier.verify(bytes,"suik",installed)
 }
+
+data class PackageComponent(val id: String, val type: String, val descriptor: JsonObject)

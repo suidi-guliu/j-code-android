@@ -1,0 +1,1 @@
+{"environmentId":"java","languageId":"java","prepare":[],"run":["/bin/bash","${resource:resources/run-java.sh}","${source}"]}

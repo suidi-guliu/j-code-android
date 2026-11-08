@@ -1,0 +1,1 @@
+{"environmentId":"cpp","languageId":"c","prepare":[],"run":["/bin/bash","${resource:resources/run-c.sh}","${source}"]}

@@ -1,1 +1,0 @@
-{"environmentId":"python","languageId":"python","prepare":[],"run":["${tool}","${source}"]}

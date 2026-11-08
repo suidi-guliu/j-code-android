@@ -36,8 +36,8 @@ internal fun validateDescriptor(type: String, d: JsonObject): Operation? {
             return Operation.SIMPLE_RUN
         }
         "panel" -> {
-            d.keysExactly(setOf("title","text","status"))
-            PanelState("panel",d.string("title"),d.string("text"),d.string("status"))
+            d.keysExactly(setOf("title","text","status"),setOf("nodes"))
+            PanelState("panel",d.string("title"),d.string("text"),d.string("status"),(d["nodes"] as? JsonArray) ?: JsonArray(emptyList()))
             return Operation.PANEL_OPEN
         }
         else -> {

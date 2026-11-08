@@ -13,8 +13,9 @@ android {
     kotlinOptions { jvmTarget = "21" }
 }
 dependencies {
-    implementation(libs.kotlinx.serialization.json)
+    api(libs.kotlinx.serialization.json)
     testImplementation(kotlin("test"))
+    testImplementation(libs.coroutines.core)
 }
 
 // Reuse the exact production verifier on the host rather than maintaining a second parser.
@@ -30,4 +31,11 @@ tasks.register<JavaExec>("validatePackage") {
     doFirst {
         args = listOf(providers.gradleProperty("suiPackage").get()) + providers.gradleProperty("suiInstalled").orNull.orEmpty().split(',').filter(String::isNotEmpty)
     }
+}
+
+// Fixture changes must invalidate tests even when Kotlin classes did not change.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    inputs.dir(rootProject.file("native-library"))
+    inputs.dir(rootProject.file("docs/specifications/examples"))
+    inputs.property("suiTestJdk",System.getenv("SUI_QUICKRUN_TEST_JAVA_HOME") ?: "unset")
 }

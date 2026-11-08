@@ -1,1 +1,1 @@
-{"arguments":{"analysis":"project-statistics"},"operation":"LINT"}
+{"arguments":{"action":"statistics"},"operation":"PROJECT_READ"}

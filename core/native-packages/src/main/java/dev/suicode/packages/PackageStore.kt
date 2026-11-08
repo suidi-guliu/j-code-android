@@ -27,6 +27,17 @@ class PackageStore(private val root: Path, private val verifier: PackageVerifier
         } finally { Files.deleteIfExists(temp) }
     }
     private fun publishState(s: JsonObject) = publish(root.resolve("state.json"),(canonical(s)+"\n").toByteArray())
+    @Synchronized fun records(): List<InstalledPackage> = state().map { (id,value) ->
+        val r=value.jsonObject
+        InstalledPackage(id,r.string("version"),r.string("digest"),r.string("kind"),r.getValue("enabled").jsonPrimitive.boolean,
+            r.array("grants").map { v -> Capability.entries.first { it.wire==v.jsonPrimitive.content } }.toSet())
+    }
+    @Synchronized fun load(id: String): VerifiedPack {
+        val r=state()[id]?.jsonObject ?: fail("E_NOT_INSTALLED",id)
+        val p=verifier.verify(Files.readAllBytes(root.resolve("${r.string("digest")}.${r.string("kind")}")),r.string("kind"),installed())
+        if(p.id!=id || p.digest!=r.string("digest")) fail("E_CHECKSUM","Stored package differs")
+        return p
+    }
     @Synchronized fun installed(): Map<String,String> = state().mapValues { (_,v) -> v.jsonObject.string("version") }
     @Synchronized fun inspect(bytes: ByteArray, suffix: String): VerifiedPack = verifier.verify(bytes,suffix,installed())
     @Synchronized fun install(bytes: ByteArray, suffix: String, consent: Consent): VerifiedPack {
@@ -85,6 +96,12 @@ class PackageStore(private val root: Path, private val verifier: PackageVerifier
         publishState(JsonObject(s-id));sessions.remove(id)?.close()
         // Archives retained for explicit recovery; never remove tools, projects or user files.
     }
+    @Synchronized fun previous(id: String): Pair<ByteArray,VerifiedPack> {
+        val r=state()[id]?.jsonObject ?: fail("E_NOT_INSTALLED",id)
+        val previous=r["previous"]?.jsonPrimitive?.contentOrNull ?: fail("E_ROLLBACK","No previous package")
+        val bytes=Files.readAllBytes(root.resolve("$previous.${r.string("kind")}"))
+        return bytes to verifier.verify(bytes,r.string("kind"),installed())
+    }
     @Synchronized fun rollback(id: String, consent: Consent): VerifiedPack {
         val r=state()[id]?.jsonObject ?: fail("E_NOT_INSTALLED",id)
         val previous=r["previous"]?.jsonPrimitive?.contentOrNull ?: fail("E_ROLLBACK","No previous package")
@@ -92,3 +109,5 @@ class PackageStore(private val root: Path, private val verifier: PackageVerifier
     }
     @Synchronized fun close() { sessions.values.forEach(CoreSession::close);sessions.clear() }
 }
+
+data class InstalledPackage(val id: String,val version: String,val digest: String,val kind: String,val enabled: Boolean,val grants: Set<Capability>)

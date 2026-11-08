@@ -1,0 +1,1 @@
+{"environmentId":"python","languageId":"python","prepare":[],"run":["/bin/bash","${resource:resources/run-python.sh}","${source}"]}

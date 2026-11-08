@@ -31,5 +31,5 @@ for p in sorted((base / "examples").glob("*/manifest.json")):
         ds = json.loads((base / "schemas" / (c["type"] + ".schema.json")).read_text())
         jsonschema.Draft202012Validator(ds).validate(descriptor)
         count += 1
-assert "0.1.0" in doc and "0.1.0" in ui
+assert "0.2.0" in doc and "0.2.0" in ui
 print(f"PASS: schemas, embedded schema/manifest snapshots, {count} valid descriptors, illegal example rejected")

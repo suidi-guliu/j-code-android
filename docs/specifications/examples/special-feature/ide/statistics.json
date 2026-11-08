@@ -1,1 +1,1 @@
-{"status":"empty","text":"No results yet","title":"Statistics"}
+{"nodes":[{"command":"analysis","id":"refresh","label":"Refresh statistics","type":"button"},{"columns":["Name","Files","Bytes"],"id":"counts","rows":[["${result:analysis.name}","${result:analysis.files}","${result:analysis.bytes}"]],"type":"table"}],"status":"ready","text":"Read the selected project or persistent Internal Files.","title":"Project statistics"}

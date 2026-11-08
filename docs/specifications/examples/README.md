@@ -29,4 +29,4 @@ bash gradlew :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/speci
 
 Schema/规范同步检查使用开发依赖 `jsonschema`，见 `tools/sui_packages/requirements-dev.txt`。生产 JVM/Android 验证器不依赖 Python/jsonschema。
 
-签名工具见 `pack.py --help`。私钥必须保存在安全目录且不可提交。未被应用固定信任的签名仍显示 unverified。打包成功不代替验证，验证成功不代表Android执行backend已经实现；当前语言样例中的占位符和Kit操作不会自动执行。
+签名工具见 `pack.py --help`。私钥必须保存在安全目录且不可提交。未被应用固定信任的签名仍显示 unverified。打包成功不代替验证，验证成功不代表Android执行backend已经实现；这些 Basic 语言示例采用实际 NativeRecipe 支持的 resource/source 参数；安装授权后可运行。统计 Kit 按钮调用真实 PROJECT_READ。官方完整 IDE Kit、安装工具和模板源码另见 `native-library/src/`。

@@ -1,12 +1,12 @@
 # sui-code UI Extension & Design Specification
 
-规范版本 **0.1.0（实验设计协议）**；对应 Core API **1**、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
+规范版本 **0.2.0**；对应 Core API **2**（兼容 API1 只读面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
 
 ## 1. 范围、实现状态与品牌
 
 品牌名为 `sui-code`。应用包身份、签名和私有数据目录不因视觉品牌改变。保留上游 MIT 版权与第三方许可证；不得把改名作为移除版权的依据。
 
-**当前实现的是独立设计 Token、响应式计算、声明式面板模型与授权状态存储。Android 全局 Compose 渲染、图标资产和页面迁移尚未完成；现有应用仍显示旧 UI。本文的产品设计要求不是“已完成 UI”的证明。** 本规范明确区分可调用 API 与必须满足的渲染要求，避免第三方调用不存在的 Compose API。
+Android 使用 `SuiDesign.kt` 的 sui-code Light/Dark Palette、4/8dp 圆角、统一间距和 Material Design 许可符号；应用品牌资产独立。管理中心在完整编辑区页面呈现，常驻内部文件区无需 Project，Terminal 使用原 PTY 的上下分割布局。所有物理设备表现仍需按交付报告进行实机验收。
 
 sui-code 的视觉目标为信息清晰、编辑器优先、平板高效。不得用过度胶囊化卡片压缩工作区。应用主导航和扩展面板由 host 管理；扩展仅贡献命名空间内内容，不能替换应用入口。
 
@@ -14,7 +14,7 @@ sui-code 的视觉目标为信息清晰、编辑器优先、平板高效。不�
 
 系统跟随、Light、Dark 为产品应支持的三个选项；模式切换不重启会话、不丢失编辑/终端状态。两套颜色必须覆盖同一 Token 集，不允许以反色算法临时生成 Dark。
 
-实际 API：`DesignSystem.colors(dark:Boolean):Map<String,String>`，参数必填，返回只读语义的映射快照；不需权限，不读取系统设置，没有 I/O，不修改全局主题。调用时机为 host 创建/切换主题；第三方 panel 必须继承 host 选择，不得自设全局模式。当前函数不代表 Android 系统主题选择器已接入。
+实际 API：`DesignSystem.colors(dark:Boolean):Map<String,String>`，参数必填，返回只读语义的映射快照；不需权限，不读取系统设置，没有 I/O，不修改全局主题。调用时机为 host 创建/切换主题；第三方 panel 必须继承 host 选择，不得自设全局模式。Android ThemeMode.System/Light/Dark 由原设置持久化，Native Theme 直接消费此颜色表。
 
 ## 3. 颜色 Token 完整定义
 
@@ -47,7 +47,7 @@ sui-code 的视觉目标为信息清晰、编辑器优先、平板高效。不�
 
 使用统一线性图标语义，基准 24dp，推荐线宽 1.75–2dp；显示可小于触摸目标。文件、运行、停止、Project、语言、插件、Kit、包、设置使用一致语义，不用同一图标代表不同危险动作。
 
-新增图标资源必须有明确许可，不复制上游商标作为 sui-code 自有标识。图标按钮必须有本地化 contentDescription；装饰图标明确不可聚焦。当前规范未交付最终品牌图标资产，不将图标表述为已上线。
+新增图标资源必须有明确许可，不复制上游商标作为 sui-code 自有标识。图标按钮必须有本地化 contentDescription；装饰图标明确不可聚焦。品牌 launcher 是独立代码括号图形，语义符号使用固定 sui-native 映射，许可声明随源码保留。
 
 ## 6. 间距系统
 
@@ -120,14 +120,36 @@ Build与QuickRun输出要标出来源、编译/运行阶段、退出状态；Pro
 
 | 接口 | 参数、返回值、约束 |
 |---|---|
-| `PanelState` | 构造必填 `id:String,title:String,text:String`；可选 `status:String="ready"`。id为`[a-z][a-z0-9.-]{0,63}`；title1..80；text<=65536；status枚举ready/loading/empty/error。非法参数抛IllegalArgumentException |
+| `PanelState` | 构造必填 `id:String,title:String,text:String`；可选 `status:String="ready"`、`nodes:JsonArray=emptyArray`。id为`[a-z][a-z0-9.-]{0,63}`；title1..80；text<=65536；status枚举ready/loading/empty/error。非法参数抛IllegalArgumentException |
 | `PanelStore.put` | 必填 `session:CoreSession,panel:PanelState`；返回Reply。校验已激活会话、组件ID、PANEL_OPEN、ui.panel授权和backend；只有accepted才保存 |
 | `PanelStore.snapshot` | 无参数，返回`List<PanelState>`快照，不触发渲染/执行 |
 | `PanelStore.release` | 必填`packageId:String`，返回Unit；移除该包命名空间状态，禁用/卸载时host调用 |
 
-内部键为 `packageId:panelId`；同包更新替换自身状态，不覆盖其他包。Snapshot含纯模型，不授予修改全局布局能力。源码未实现自定义布局DSL，不能在manifest添加任意UI类型。
+内部键为 `packageId:panelId`；同包更新替换自身状态，不覆盖其他包。Snapshot含纯模型，不授予修改全局布局能力。API2 允许下节列出的有限 widgets；未知字段、全局样式覆盖和未知类型拒绝。
 
-完整样例见 [`examples/special-feature/ide/statistics.json`](examples/special-feature/ide/statistics.json) 及 [`examples/minimal-kit/`](examples/minimal-kit/)。验证通过不等于Android已经显示该面板。
+完整样例见 [`examples/special-feature/ide/statistics.json`](examples/special-feature/ide/statistics.json) 及 [`examples/minimal-kit/`](examples/minimal-kit/)。打开 panel 操作会由 Android NativeKitPanel 真实渲染；包禁用/卸载关闭面板及状态。
+
+### Native widget tree：完整字段及事件契约
+
+panel Schema 见 [panel.schema.json](schemas/panel.schema.json)。所有 node 必填 type、id；id 匹配 `[a-z][a-z0-9.-]{0,63}` 且在面板内唯一；禁止未列字段。总节点<=128，嵌套<=8层；超限 E_SIZE，非法形状 E_COMPONENT；仅 API2+ Kit 可用。
+
+| type | 额外必填字段 | 参数类型及行为 |
+|---|---|---|
+| column / row | children | Array<Node>；纵向布局 / 可换行横向布局；间距由 native token 决定 |
+| text | text | String<=4096；正文渲染，不解释 HTML |
+| metric | text | String<=4096；数值摘要样式，仍是可访问文本 |
+| input | label,value | String<=4096；可见标签与默认值；onValueChange 写入面板 id 状态；<=4096字符 |
+| toggle | label,value | String；value 仅 "true"/"false"；选择写入 id 状态 |
+| button | label,command | String；command 必须是本 Kit 已声明非 PANEL_OPEN 的可操作组件；点击运行同组件授权流程 |
+| table | columns,rows | columns:Array<String<=80>，1..8列；rows:Array<Array<String<=4096>>，<=100行且每行列数一致 |
+
+`UiNodes.validate(nodes:JsonArray,commands:Set<String>?=null):Unit` 是真实验证入口：nodes 必填；可选 commands 指定同 Kit 可操作组件集合，生产包解析总是传入该集合；失败抛 PackageFailure，不渲染或执行。模型 PanelState 构造也验证树结构。`NativeKitPanel(host:NativePackageHost,panel:PanelState):Unit` 是 Android Composable renderer，由宿主打开 panel 后调用；这是 host 实现细节，第三方不加载 Kotlin UI 类。
+
+button 的数据流为 click → 收集 input/toggle 当前字符串 → `invoke(packageId,command,inputs)` → CoreSession 权限门禁 → backend → Reply。输入仅在面板内存在，关闭后释放，不持久保存秘密。处理期间按钮禁用并展示进度，失败保留输入和明确错误码；不得把 REQUESTED/STARTING 当作完成。
+
+结果文本支持 `${result:command.field}`，command 为同包命令 ID，field 为 Reply.values key。替换仅显示文字，不变成 shell 或下一条命令；未知值显示 `—`。若 workflow 要使用输入，仅可通过整 argv 参数 `${input:node-id}`，宿主正确转义。table/text/metric 的结果更新在主线程的 Compose 状态中完成，不允许扩展修改全局 state。禁用包清理面板，取消不可确认危险执行。
+
+完整第三方统计面板见 `examples/special-feature/ide/statistics.json`，真实读取 PROJECT_READ 数据，没有 Project 时读取常驻 Internal Files。复杂功能可组合受限 native widgets 与已授权工作流；没有任意视图/DEX/JS 入口。新 node 类型需新 API 与同步 Schema，不得静默忽略未知节点。
 
 ## 17. 工具栏、菜单和命令
 
@@ -145,7 +167,7 @@ Build与QuickRun输出要标出来源、编译/运行阶段、退出状态；Pro
 
 实际统一接口为 `CoreSession.request(Request):Reply`，请求字段、权限和失败码见总规范。PANEL_OPEN参数由PanelStore写入title/text/status。`Reply.accepted=false`必须显示可理解失败，不能继续显示假成功。
 
-当前没有公共click事件订阅、回调URL、DOM消息或任意事件总线；面板是只读声明式内容。需要复杂交互的第三方Kit必须等待明确版本的host能力，不能通过脚本/原JCodeWebView桥接绕过。后续接口须定义事件来源、作用域、取消及版本并增加测试。
+button 点击执行同 Kit 的已声明 command；input/toggle 写入面板范围状态，再以 input.<node-id> 传入请求。结果 values 绑定 `${result:component.field}`；没有值显示破折号，不能填入模拟成功值。异步请求状态不等于任务完成。禁止 DOM 消息、回调 URL、任意全局事件总线和旧 WebView 桥。
 
 ## 20. 主题继承与样式隔离
 
@@ -163,7 +185,7 @@ Panel描述没有自定义颜色、字体、间距、全屏或overlay字段；�
 | Medium | 挤压式可收起文件栏；保留编辑器及终端上下并行 |
 | Expanded | 侧导航+文件/Project栏+编辑器；终端可调高；管理页独立分栏 |
 
-横屏和竖屏都必须覆盖，分屏及键盘弹出后重新计算。禁止简单缩小全部控件。侧栏若会令编辑器不可用，优先收起或切换布局，而不是覆盖编辑器主要输入区。现有Compose界面尚未完成这些迁移，不能据模型单测宣称布局通过。
+横屏和竖屏都必须覆盖，分屏及键盘弹出后重新计算。禁止简单缩小全部控件。侧栏若会令编辑器不可用，优先收起或切换布局，而不是覆盖编辑器主要输入区。Android 依据可用宽度和紧凑高度选择常驻/抽屉导航，编辑器预留左栏宽度，Terminal 上下停靠。布局算法测试不能代替截图、TalkBack 和平板旋转实测。
 
 ## 22. 触控与物理键盘
 
@@ -191,6 +213,8 @@ SUIK UI扩展必须：使用API1支持的描述结构；不注册SUIC面板；�
 
 ## 26. 版本与变更
 
-0.1.0：公开Token、widthClass/terminalHeight纯计算、PanelState/PanelStore、权限模型和声明式UI边界。对应API1、SUIC1.0、SUIK1.0。尚无稳定Compose扩展ABI、最终图标资产或AndroidUI重构完成声明。
+0.1.0：公开Token、widthClass/terminalHeight纯计算、PanelState/PanelStore、权限模型和声明式UI边界。对应API1、SUIC1.0、SUIK1.0。不导出第三方同进程 Compose ABI。
+
+0.2.0：API2 native widget tree、同 Kit 命令绑定、输入和结果状态、全局 Light/Dark 原生主题、完整页面管理中心、尺寸驱动文件栏和上下 Terminal。保留 API1 文本 panel。
 
 Token删除、语义改变、字段删改、事件/权限变化须在设计规范、源码、Schema、样例和测试同步发布。稳定期兼容策略遵循总规范第3节；拒绝依赖JCode UI插件或隐式全局覆盖来保持“兼容”。

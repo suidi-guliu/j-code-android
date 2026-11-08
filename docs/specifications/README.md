@@ -1,6 +1,6 @@
 # sui-code 开发规范
 
-当前规范 **0.1.0（实验）**；Core API **1**；SUIC/SUIK **1.0**。
+当前规范 **0.2.0**；Core API **2**（兼容 API1）；SUIC/SUIK **1.0**。
 
 - [Native Extension & IDE Kit Development Specification](SUIC-SUIK-Development-Specification.md)
 - [UI Extension & Design Specification](SuiCode-UI-Design-Specification.md)
@@ -9,7 +9,7 @@
 - [生产验证器与 host API](../../core/native-packages/src/main/java/dev/suicode/packages/)
 - [独立打包工具](../../tools/sui_packages/pack.py)
 
-这些是新协议的可验证实现和设计契约，不是新 Android 产品已完成的声明。应用接入、旧扩展解耦、真实语言Kit、官方签名目录和完整UI仍在开发。规范内不伪称缺失backend可用。
+规范对应真实 Android NativePackageHost、六个官方签名包及原生 UI。测试层级与硬件限制见最终交付报告。官方包源码：[native-library](../../native-library/)。
 
 ---
 

@@ -1,0 +1,1 @@
+{"arguments":{"argv":"[\"/bin/bash\", \"${resource:resources/project-task.sh}\", \"test\", \"${project}\"]"},"operation":"TEST"}
