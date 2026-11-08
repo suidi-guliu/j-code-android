@@ -1,0 +1,2910 @@
+diff --git a/.github/workflows/deliver-ui-polish-v0.5.yml b/.github/workflows/deliver-ui-polish-v0.5.yml
+new file mode 100644
+index 0000000..9a618e5
+--- /dev/null
++++ b/.github/workflows/deliver-ui-polish-v0.5.yml
+@@ -0,0 +1,105 @@
++name: Deliver sui-code v0.5.1 UI polish
++on:
++  push:
++    branches: [sui-code/v0.5-ui-polish]
++    paths:
++      - '.github/workflows/deliver-ui-polish-v0.5.yml'
++      - '.delivery/sui-code-v0.5-ui-polish/**'
++  workflow_dispatch:
++permissions:
++  contents: read
++jobs:
++  deliver:
++    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5-ui-polish'
++    runs-on: ubuntu-24.04
++    timeout-minutes: 15
++    env:
++      EXPECTED_APK_SHA256: fcd8b4801e8fa01173ea06bea657f13b14ae1568043bb360f10e5f5d8a47b27f
++      EXPECTED_APK_BYTES: '87042788'
++    steps:
++      - uses: actions/checkout@v5
++      - name: Verify immutable prebuilt delivery (no rebuild)
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd .delivery/sui-code-v0.5-ui-polish
++          sha256sum --check --strict SHA256SUMS
++          test "$(stat -c %s sui-code-v0.5.1-ui-polish-debug.apk)" = "$EXPECTED_APK_BYTES"
++          printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-v0.5.1-ui-polish-debug.apk | sha256sum --check --strict
++      - name: Verify upgrade identity, architecture and original v0.1 signer
++        shell: bash
++        run: |
++          set -euo pipefail
++          (cd .delivery/sui-code-native-0.4 && sha256sum --check --strict SHA256SUMS)
++          (cd .delivery/sui-code-v0.5 && sha256sum --check --strict SHA256SUMS)
++          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
++          old=.delivery/sui-code-v0.1/sui-code-v0.1-debug.apk
++          new=.delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk
++          printf '%s  %s\n' 1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06 "$old" | sha256sum --check --strict
++          old_cert=$("$signer" verify --print-certs "$old" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          new_cert=$("$signer" verify --print-certs "$new" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          test "$old_cert" = "$new_cert"
++          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
++          "$(dirname "$signer")/aapt" dump badging "$new" > "$RUNNER_TEMP/native-badging.txt"
++          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070804' versionName='0.5.1'" "$RUNNER_TEMP/native-badging.txt"
++          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/native-badging.txt"
++      - name: Verify SDK, full source, specifications and six real packages
++        shell: python
++        run: |
++          import pathlib, zipfile, json, hashlib
++          root=pathlib.Path('.delivery/sui-code-v0.5-ui-polish')
++          with zipfile.ZipFile('.delivery/sui-code-v0.5/sui-code-v0.5-debug.apk') as old, zipfile.ZipFile(root/'sui-code-v0.5.1-ui-polish-debug.apk') as new:
++              icons=[n for n in old.namelist() if 'ic_launcher' in n]
++              assert icons and sorted(icons)==sorted(n for n in new.namelist() if 'ic_launcher' in n)
++              for name in icons: assert old.read(name)==new.read(name), name
++          with zipfile.ZipFile(root/'source.zip') as z:
++              names=z.namelist()
++              for suffix in ['app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt','docs/specifications/SUIC-SUIK-Development-Specification.md','docs/specifications/SuiCode-UI-Design-Specification.md']:
++                  assert any(n.endswith('/'+suffix) for n in names), suffix
++          with zipfile.ZipFile(root/'native-sdk.zip') as z:
++              assert any(n.endswith('/API-SOURCE-SHA256SUMS') for n in z.namelist())
++          with zipfile.ZipFile(root/'official-packages.zip') as z:
++              index=json.loads(z.read('official-packages/index.json'))
++              assert len(index['packages'])==6
++              for item in index['packages']:
++                  data=z.read('official-packages/'+item['url'].rsplit('/',1)[1])
++                  assert len(data)==item['bytes'] and hashlib.sha256(data).hexdigest()==item['sha256']
++                  assert data[:8] in [b'SUICPKG\0',b'SUIKPKG\0']
++                  assert item['version']=='1.1.0'
++      - name: Upload complete native IDE delivery
++        id: upload
++        uses: actions/upload-artifact@v4
++        with:
++          name: sui-code-v0.5-ui-polish-integrated
++          path: .delivery/sui-code-v0.5-ui-polish/*
++          if-no-files-found: error
++          include-hidden-files: true
++          compression-level: 0
++          retention-days: 30
++      - name: Download uploaded artifact for byte-for-byte verification
++        uses: actions/download-artifact@v4
++        with:
++          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
++          path: ${{ runner.temp }}/native-roundtrip
++          merge-multiple: true
++      - name: Verify downloaded files and publish real download entry
++        shell: bash
++        env:
++          DOWNLOAD_DIR: ${{ runner.temp }}/native-roundtrip
++          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
++          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
++        run: |
++          set -euo pipefail
++          (cd "$DOWNLOAD_DIR" && sha256sum --check --strict SHA256SUMS)
++          test "$(stat -c %s "$DOWNLOAD_DIR/sui-code-v0.5.1-ui-polish-debug.apk")" = "$EXPECTED_APK_BYTES"
++          for source in .delivery/sui-code-v0.5-ui-polish/*; do
++            cmp "$source" "$DOWNLOAD_DIR/$(basename "$source")"
++          done
++          echo UPLOAD_DOWNLOAD_ROUND_TRIP_PASSED
++          {
++            echo '## sui-code v0.5.1 UI polish delivery verified'
++            printf '[Download complete artifact](%s) · [Workflow run](%s)\n\n' "$ARTIFACT_URL" "$RUN_URL"
++            printf 'APK: **%s bytes** · SHA-256 `%s`\n\n' "$EXPECTED_APK_BYTES" "$EXPECTED_APK_SHA256"
++            echo 'Identity dev.suicode.ide.debug, versionCode 1070804, ARM64; original v0.1 signer matches.'
++            echo 'APK, full source, standalone SDK, six signed packages, public specifications, report, patch and evidence uploaded and downloaded identically. No Release or main change.'
++          } >> "$GITHUB_STEP_SUMMARY"
+diff --git a/.github/workflows/verify-ui-polish-v0.5.yml b/.github/workflows/verify-ui-polish-v0.5.yml
+new file mode 100644
+index 0000000..8a55032
+--- /dev/null
++++ b/.github/workflows/verify-ui-polish-v0.5.yml
+@@ -0,0 +1,95 @@
++name: Verify sui-code v0.5 UI polish
++on:
++  push:
++    branches: [sui-code/v0.5-ui-polish]
++    paths:
++      - 'core/**'
++      - 'app/src/**'
++      - 'feature/**'
++      - 'native-library/**'
++      - 'docs/specifications/**'
++      - 'tools/sui_packages/**'
++      - 'tools/ui/**'
++      - '.github/workflows/verify-ui-polish-v0.5.yml'
++  workflow_dispatch:
++permissions:
++  contents: read
++jobs:
++  contracts:
++    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5-ui-polish'
++    runs-on: ubuntu-24.04
++    timeout-minutes: 30
++    steps:
++      - uses: actions/checkout@v5
++      - uses: actions/setup-java@v5
++        id: runtime
++        with:
++          distribution: temurin
++          java-version: '27'
++      - name: Retain verified Java runtime for real source execution tests
++        run: echo "SUI_QUICKRUN_TEST_JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
++      - uses: actions/setup-java@v5
++        with:
++          distribution: temurin
++          java-version: '21'
++      - uses: gradle/actions/setup-gradle@v4
++      - uses: actions/setup-python@v6
++        with:
++          python-version: '3.12'
++      - name: Check compilers, schemas and documentation
++        run: |
++          set -euo pipefail
++          gcc --version
++          g++ --version
++          script --version
++          python -m pip install -r tools/sui_packages/requirements-dev.txt
++          python tools/sui_packages/check_specifications.py
++          python tools/ui/verify_launcher.py
++      - name: Unit and Linux x64 integration tests (not ARM64 acceptance)
++        shell: bash
++        run: |
++          set -euo pipefail
++          # JVM tests do not load ARM64 JNI. The actual APK is built with all native tasks in Codex Cloud.
++          # Keep this job focused on host contracts instead of requiring a second Rust cross toolchain.
++          bash gradlew --no-daemon --max-workers=4 -x :native:ripgrep-ffi:cargoBuildDebugJniLibs -x :native:wasmtime-ffi:cargoBuildDebugJniLibs :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:search:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :core:editor:testDebugUnitTest :core:term:testDebugUnitTest :core:debug:testDebugUnitTest :core:lsp:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
++      - name: Publish concrete test and build diagnostics
++        if: always()
++        shell: python
++        run: |
++          import pathlib, os, xml.etree.ElementTree as ET
++          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
++              out.write('## Native contract verification\n\n')
++              for pattern in ['core/*/build/test-results/testDebugUnitTest/TEST-*.xml','app/build/test-results/testDebugUnitTest/TEST-*.xml']:
++                  for file in pathlib.Path('.').glob(pattern):
++                      root=ET.parse(file).getroot()
++                      out.write(f"- {root.get('name')}: {root.get('tests')} tests, {root.get('failures')} failures\n")
++                      for failure in root.iter('failure'):
++                          out.write('```text\n'+(failure.text or '')[-4000:]+'\n```\n')
++              log=pathlib.Path('native-verification.log')
++              if log.exists():
++                  tail='\n'.join(log.read_text().splitlines()[-100:])
++                  out.write('\n### Gradle tail\n```text\n'+tail+'\n```\n')
++                  if 'BUILD FAILED' in tail:
++                      encoded=tail[-7000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
++                      print('::error title=Native Gradle diagnostics::'+encoded)
++      - name: Verify development packages and reject the illegal plugin
++        run: |
++          set -euo pipefail
++          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/minimal.suic"
++          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/minimal-kit.suik"
++          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/zh-hans-kit.suik"
++          if bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/illegal-plugin.suic" > "$RUNNER_TEMP/illegal.log" 2>&1; then
++            echo 'Illegal plugin was accepted'; exit 1
++          fi
++          grep 'E_BOUNDARY' "$RUNNER_TEMP/illegal.log"
++      - name: Upload test evidence
++        if: always()
++        uses: actions/upload-artifact@v4
++        with:
++          name: sui-code-v0.5-ui-polish-test-results
++          path: |
++            core/*/build/test-results/testDebugUnitTest/
++            app/build/test-results/testDebugUnitTest/
++            native-verification.log
++          if-no-files-found: warn
++          retention-days: 30
+diff --git a/README.md b/README.md
+index 8e7c142..9afd63f 100644
+--- a/README.md
++++ b/README.md
+@@ -8,6 +8,10 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开
+ - 自有签名扩展库、本地导入、权限审阅、启停/更新/回滚；无 JCode 或 VS Code 市场替代入口。
+ - sui-code 原生 Light/Dark 设计系统及尺寸驱动的文件栏、编辑器、底部 Terminal。
+ 
++## v0.5.1 UI polish
++
++本轮保留原v0.5图标，提供自适应可调侧栏、Project-only创建入口、Files/Find搜索分工和API4 `.suik` 本地化基础设施。完整中文翻译包另行交付。[本轮报告](docs/sui-code-ui-polish-0.5.1.md)。
++
+ ## 公开开发规范与源码
+ 
+ - [Native Extension & IDE Kit Development Specification](docs/specifications/SUIC-SUIK-Development-Specification.md)
+@@ -32,4 +36,4 @@ bash gradlew :core:native-packages:testDebugUnitTest :core:distro:testDebugUnitT
+ bash gradlew :app:assembleDebug
+ ```
+ 
+-默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070803；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
++默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070804；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index b151b7b..ba093dd 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -10,7 +10,7 @@ plugins {
+ // open release train (see docs/specifications/09-platform/02-build-variants-and-release.md), and
+ // merges no longer move it. The release scripts parse this line, and `-PjcodeVersionName=…`
+ // overrides it to add the pre-release label a Beta build carries (e.g. 1.7.7-beta.1).
+-val jcodeVersion = "0.5.0"
++val jcodeVersion = "0.5.1"
+ 
+ val jcodeVersionName: String =
+     (project.findProperty("jcodeVersionName") as? String)?.trim()?.takeIf { it.isNotBlank() }
+@@ -96,7 +96,7 @@ android {
+         applicationId = jcodeApplicationId
+         minSdk = 33
+         targetSdk = 33
+-        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: 1070803
++        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: 1070804
+         versionName = jcodeVersionName
+ 
+         buildConfigField("String", "UPDATE_CHANNEL", "\"$jcodeUpdateChannel\"")
+diff --git a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+index 996190f..7721be6 100644
+--- a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
++++ b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+@@ -1884,7 +1884,7 @@ fun JCodeApp(
+                 viewModel.openExtensionViewPage(extId, if (name.isBlank()) view else "$view:$name")
+             },
+             resolveDynamicOptions = viewModel::runTemplateOptionsCommand,
+-            allowWorkspaceType = breadcrumb.size <= 1,
++            // sui-code uses Internal Files as its permanent root; new user Workspaces are no longer offered.
+         )
+     }
+ 
+@@ -2185,10 +2185,15 @@ private fun JCodeShell(
+     // landscape is tall too. Key off height, not width, so phones keep the modal drawers they use in
+     // portrait instead of switching to the cramped persistent side panels a tablet would want.
+     val isMobileLandscapeMode = isLandscape && windowInfo.heightClass == JCodeWindowHeightClass.Compact
+-    val usesModalWorkspace = windowInfo.widthClass == JCodeWindowWidthClass.Compact || windowInfo.heightClass == JCodeWindowHeightClass.Compact
++    val paneDensity=LocalDensity.current
++    var measuredWorkbenchWidth by remember { mutableFloatStateOf(configuration.screenWidthDp.toFloat()) }
++    val panePrefs=remember(appContext) { appContext.getSharedPreferences("sui-workbench-layout",Context.MODE_PRIVATE) }
++    var requestedPaneWidth by remember { mutableFloatStateOf(panePrefs.getFloat("content-width-v1",Float.NaN)) }
++    val paneBounds=dev.blamspot.jcode.design.WorkbenchPaneSizing.bounds(measuredWorkbenchWidth,paneDensity.fontScale,requestedPaneWidth)
++    val usesModalWorkspace = paneBounds.modal || windowInfo.heightClass == JCodeWindowHeightClass.Compact
+     val isPortraitMobileMode = usesModalWorkspace && windowInfo.widthClass == JCodeWindowWidthClass.Compact
+     val canShowRightSidebar = true
+-    val leftSidebarWidth = if (windowInfo.widthClass == JCodeWindowWidthClass.Expanded) 284.dp else 236.dp
++    val leftSidebarWidth = (dev.blamspot.jcode.design.WorkbenchPaneSizing.RAIL + paneBounds.width + dev.blamspot.jcode.design.WorkbenchPaneSizing.HANDLE).dp
+     // Opt-in (Settings → Appearance) landscape split. It deliberately does NOT go through
+     // usesModalWorkspace: that also drives the LEFT ModalNavigationDrawer, and docking the left
+     // drawer on a phone would leave no editor at all. Only the right side changes.
+@@ -3380,22 +3385,22 @@ private fun JCodeShell(
+         }
+         CommandRegistry.register(
+             id = "workspace.newFolder",
+-            title = "New Folder",
+-            group = "Workspace",
++            title = "New Project",
++            group = "Files",
+             action = onCreateProject,
+             icon = JCodeIcon.NewFolder,
+         )
+         CommandRegistry.register(
+             id = "workspace.openFolder",
+             title = "Open Folder",
+-            group = "Workspace",
++            group = "Files",
+             action = { openFolderLauncher.launch(null) },
+             icon = JCodeIcon.Files,
+         )
+         CommandRegistry.register(
+             id = "workspace.autoSetupEnvironment",
+             title = "Auto-Setup Environment",
+-            group = "Workspace",
++            group = "Files",
+             action = onAutoSetup,
+             icon = JCodeIcon.Sdk,
+         )
+@@ -3495,7 +3500,7 @@ private fun JCodeShell(
+ 
+     val drawerContent: @Composable () -> Unit = {
+         ModalDrawerSheet(
+-            modifier = Modifier.width(332.dp),
++            modifier = Modifier.width((dev.blamspot.jcode.design.WorkbenchPaneSizing.RAIL + paneBounds.width).dp),
+             drawerContainerColor = MaterialTheme.colorScheme.surface,
+         ) {
+             WorkspacePanel(
+@@ -3625,7 +3630,7 @@ private fun JCodeShell(
+                 modifier = Modifier
+                     .fillMaxSize()
+                     .padding(innerPadding)
+-                    .onSizeChanged { splitWidthPx = it.height },
++                    .onSizeChanged { splitWidthPx = it.height; measuredWorkbenchWidth=it.width/paneDensity.density },
+             ) {
+                 Box(
+                     modifier = Modifier
+@@ -4085,7 +4090,7 @@ private fun JCodeShell(
+                             modifier = Modifier
+                                 .align(Alignment.CenterStart)
+                                 .fillMaxHeight()
+-                                .width(leftSidebarWidth)
++                                .width(leftSidebarWidth - 12.dp)
+                                 .zIndex(1f),
+                             breadcrumb = breadcrumb,
+                             onCloseWorkspace = handleCloseWorkspace,
+@@ -4122,6 +4127,11 @@ private fun JCodeShell(
+                             // Persistent sidebar is only composed while visible (guarded above).
+                             explorerAutoRefresh = true,
+                         )
++                        dev.blamspot.jcode.workbench.WorkbenchPaneResize(paneBounds,
++                            onWidth={requestedPaneWidth=it},
++                            onDelta={delta -> val live=dev.blamspot.jcode.design.WorkbenchPaneSizing.bounds(measuredWorkbenchWidth,paneDensity.fontScale,requestedPaneWidth); requestedPaneWidth=(live.width+delta).coerceIn(live.minimum,live.maximum)},
++                            onCommit={panePrefs.edit().putFloat("content-width-v1",requestedPaneWidth).apply()},
++                            modifier=Modifier.align(Alignment.CenterStart).padding(start=leftSidebarWidth-12.dp).zIndex(2f))
+                     }
+                 }
+ 
+@@ -4375,6 +4385,7 @@ private fun WorkspacePanel(
+     val context = LocalContext.current
+     val protectedProjectRoots by workspaceManager.registeredLocalRoots.collectAsStateWithLifecycle()
+     var browseInternalFiles by rememberSaveable { mutableStateOf(true) }
++    var revealDirectory by rememberSaveable { mutableStateOf<String?>(null) }
+     val internalRoot = remember(context) {
+         dev.blamspot.jcode.fs.InternalFiles.root(context.filesDir)
+     }
+@@ -4397,7 +4408,7 @@ private fun WorkspacePanel(
+                 listOf(WorkbenchTool.Explorer,WorkbenchTool.Search,WorkbenchTool.ToolchainManager,WorkbenchTool.Packages,WorkbenchTool.Settings).forEach { item ->
+                     Column(Modifier.fillMaxWidth().clickable { onSelectTool(item) }.padding(vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                         Icon(jcIcon(item.icon),item.compactLabel,tint=if(selectedTool==item) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+-                        Text(item.compactLabel,style=MaterialTheme.typography.labelSmall)
++                        Text(dev.blamspot.jcode.design.uiText(when(item) { WorkbenchTool.Explorer -> "nav.files";WorkbenchTool.Search -> "nav.find";WorkbenchTool.ToolchainManager -> "nav.languages";WorkbenchTool.Packages -> "nav.packages";else -> "nav.settings" }),style=MaterialTheme.typography.labelSmall)
+                     }
+                 }
+             }
+@@ -4419,8 +4430,8 @@ private fun WorkspacePanel(
+                 contributedDrawerActions = listOf(internalAction) + (if (selectedProject != null) listOf(activeProjectAction) else emptyList()) + contributedDrawerActions,
+                 onDrawerAction = { action ->
+                     when (action.id) {
+-                        "files.internalRoot" -> { browseInternalFiles = true; onSelectTool(WorkbenchTool.Explorer) }
+-                        "files.activeProject" -> { browseInternalFiles = false; onSelectTool(WorkbenchTool.Explorer) }
++                        "files.internalRoot" -> { revealDirectory=null; browseInternalFiles = true; onSelectTool(WorkbenchTool.Explorer) }
++                        "files.activeProject" -> { revealDirectory=null; browseInternalFiles = false; onSelectTool(WorkbenchTool.Explorer) }
+                         else -> onDrawerAction(action)
+                     }
+                 },
+@@ -4465,8 +4476,8 @@ private fun WorkspacePanel(
+                             }
+ 
+                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+-                                TextButton(onClick={browseInternalFiles=true}) { Text("Internal Files") }
+-                                if(selectedProject!=null) TextButton(onClick={browseInternalFiles=false}) { Text("Project files") }
++                                TextButton(onClick={revealDirectory=null;browseInternalFiles=true}) { Text("Internal Files") }
++                                if(selectedProject!=null) TextButton(onClick={revealDirectory=null;browseInternalFiles=false}) { Text("Project files") }
+                             }
+                             when {
+                                 selectedProject == null || browseInternalFiles -> {
+@@ -4474,6 +4485,7 @@ private fun WorkspacePanel(
+                                     ExplorerFeature.Content(
+                                         workspace = null,
+                                         project = internalProject,
++                                        revealDirectory = revealDirectory,
+                                         fs = workspaceManager.fsFor(internalProject.fsPath),
+                                         context = context,
+                                         modifier = Modifier.weight(1f),
+@@ -4494,6 +4506,7 @@ private fun WorkspacePanel(
+                                             ExplorerFeature.Content(
+                                                 workspace = workspace,
+                                                 project = selectedProject,
++                                                revealDirectory = revealDirectory,
+                                                 fs = workspaceManager.fsFor(selectedProject.fsPath),
+                                                 context = context,
+                                                 modifier = Modifier.fillMaxSize(),
+@@ -4514,6 +4527,8 @@ private fun WorkspacePanel(
+                     WorkbenchTool.Search -> SearchToolPanel(
+                         project = selectedProject ?: internalProject,
+                         activeTab = editorGroup.activeTab,
++                        internalRoot=internalRoot,
++                        onOpenDirectory={ folder -> browseInternalFiles=folder.canonicalFile.toPath().startsWith(internalRoot.canonicalFile.toPath());revealDirectory=folder.absolutePath;onSelectTool(WorkbenchTool.Explorer) },
+                         onOpenResult = onOpenPathAtLine,
+                         seed = searchSeed,
+                         onSeedConsumed = onSearchSeedConsumed,
+diff --git a/app/src/main/java/dev/blamspot/jcode/MainActivity.kt b/app/src/main/java/dev/blamspot/jcode/MainActivity.kt
+index b2e25b9..15d64fc 100644
+--- a/app/src/main/java/dev/blamspot/jcode/MainActivity.kt
++++ b/app/src/main/java/dev/blamspot/jcode/MainActivity.kt
+@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
+             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+         }
+         setContent {
+-            JCodeRoot(viewModel = viewModel)
++            dev.suicode.nativehost.NativeLocalizationProvider { JCodeRoot(viewModel = viewModel) }
+         }
+     }
+ 
+diff --git a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
+index 5075ef7..f3a663c 100644
+--- a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
++++ b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
+@@ -3512,6 +3512,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+ 
+     fun createNewItem(request: NewItemRequest) {
+         viewModelScope.launch {
++            if(request.isWorkspace) { emitMessage("Create a folder in Internal Files or use an optional Project. Existing folder metadata is retained.");return@launch }
+             if(!saveAllDirtyAwait()) { emitMessage("Creation cancelled: existing files could not be saved");return@launch }
+             val name=request.name.trim().ifBlank { if(request.isWorkspace) "untitled-workspace" else "untitled-project" }
+             val nativeTemplate=if(request.isWorkspace) null else nativePackages.templates().firstOrNull { it.id==request.templateId }
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/NativeCommandStrip.kt b/app/src/main/java/dev/blamspot/jcode/workbench/NativeCommandStrip.kt
+index 02d03d2..a03dfd0 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/NativeCommandStrip.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/NativeCommandStrip.kt
+@@ -56,20 +56,20 @@ internal val LocalAdvancedTaskNavigation=compositionLocalOf<()->Unit> { {} }
+     }
+     Column {
+         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=8.dp),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+-            FilledTonalButton(enabled=file!=null && basic!=null || save.quickRunActive,onClick={if(save.quickRunActive) save.onStopQuickRun() else save.onQuickRun(0)}) { Text(if(save.quickRunActive) "Stop file" else "Run file") }
++            FilledTonalButton(enabled=file!=null && basic!=null || save.quickRunActive,onClick={if(save.quickRunActive) save.onStopQuickRun() else save.onQuickRun(0)}) { Text(if(save.quickRunActive) dev.blamspot.jcode.design.uiText("run.stop") else dev.blamspot.jcode.design.uiText("run.file")) }
+             FilledTonalButton(enabled=debug.canDebug || debug.state in setOf(dev.blamspot.jcode.core.debug.DebugState.STOPPED,dev.blamspot.jcode.core.debug.DebugState.RUNNING),onClick={
+                 when(debug.state) {
+                     dev.blamspot.jcode.core.debug.DebugState.STOPPED -> debug.onContinue()
+                     dev.blamspot.jcode.core.debug.DebugState.RUNNING -> debug.onStop()
+                     else -> debug.onDebug()
+                 }
+-            }) { Text(when(debug.state) { dev.blamspot.jcode.core.debug.DebugState.STOPPED -> "Continue";dev.blamspot.jcode.core.debug.DebugState.RUNNING -> "Stop debug";else -> "Debug" }) }
+-            OutlinedButton(onClick={invoke("overview")}) { Text("Overview") }
++            }) { Text(when(debug.state) { dev.blamspot.jcode.core.debug.DebugState.STOPPED -> dev.blamspot.jcode.design.uiText("run.continue");dev.blamspot.jcode.core.debug.DebugState.RUNNING -> dev.blamspot.jcode.design.uiText("run.stopDebug");else -> dev.blamspot.jcode.design.uiText("run.debug") }) }
++            OutlinedButton(onClick={invoke("overview")}) { Text(dev.blamspot.jcode.design.uiText("run.overview")) }
+             VerticalDivider(Modifier.height(40.dp).padding(horizontal=4.dp))
+-            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("build")}) { Text("Build") }
+-            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("test")}) { Text("Test") }
+-            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("run-project")}) { Text("Run Project") }
+-            TextButton(onClick=tasks) { Text("Advanced tasks") }
++            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("build")}) { Text(dev.blamspot.jcode.design.uiText("project.build")) }
++            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("test")}) { Text(dev.blamspot.jcode.design.uiText("project.test")) }
++            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("run-project")}) { Text(dev.blamspot.jcode.design.uiText("project.run")) }
++            TextButton(onClick=tasks) { Text(dev.blamspot.jcode.design.uiText("project.tasks")) }
+         }
+         feedback?.let { text -> Row(Modifier.padding(horizontal=8.dp)) { Text(text,Modifier.weight(1f),color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall);TextButton(onClick={feedback=null}) { Text("Dismiss") } } }
+     }
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/SearchToolPanel.kt b/app/src/main/java/dev/blamspot/jcode/workbench/SearchToolPanel.kt
+index 5dc50da..f0d9fb0 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/SearchToolPanel.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/SearchToolPanel.kt
+@@ -2,11 +2,21 @@ package dev.blamspot.jcode.workbench
+ 
+ import androidx.compose.foundation.BorderStroke
+ import androidx.compose.foundation.background
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.foundation.rememberScrollState
+ import androidx.compose.foundation.clickable
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Box
+ import androidx.compose.foundation.layout.Column
+ import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.FlowRow
++import androidx.compose.foundation.layout.ExperimentalLayoutApi
++import androidx.compose.material3.TextButton
++import androidx.compose.material3.DropdownMenu
++import androidx.compose.material3.DropdownMenuItem
++import dev.blamspot.jcode.design.uiText
++import kotlinx.coroutines.flow.collectLatest
++import kotlinx.coroutines.CancellationException
+ import androidx.compose.foundation.layout.fillMaxSize
+ import androidx.compose.foundation.layout.fillMaxWidth
+ import androidx.compose.foundation.layout.heightIn
+@@ -67,7 +77,7 @@ private const val MIN_QUERY_LENGTH = 2
+ /** Where the Search tool looks for matches. */
+ internal enum class SearchScope(val label: String, val placeholder: String) {
+     Content("Content", "Search in files"),
+-    Names("Names", "Search file names"),
++    Names("Names", "Search file and folder names"),
+     CurrentDoc("Current", "Search in current document"),
+ }
+ 
+@@ -79,32 +89,12 @@ private fun SearchScopeSelector(
+     onSelect: (SearchScope) -> Unit,
+     modifier: Modifier = Modifier,
+ ) {
+-    Row(
+-        modifier = modifier
+-            .clip(RoundedCornerShape(Radius.lg))
+-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f))
+-            .padding(Space.xxs),
+-        horizontalArrangement = Arrangement.spacedBy(Space.xxs),
+-    ) {
+-        SearchScope.entries.forEach { s ->
+-            val sel = s == selected
+-            Box(
+-                modifier = Modifier
+-                    .weight(1f)
+-                    .clip(RoundedCornerShape(Radius.md))
+-                    .background(if (sel) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.Transparent)
+-                    .clickable { onSelect(s) }
+-                    .padding(vertical = Space.s),
+-                contentAlignment = Alignment.Center,
+-            ) {
+-                Text(
+-                    text = s.label,
+-                    style = MaterialTheme.typography.labelMedium,
+-                    maxLines = 1,
+-                    overflow = TextOverflow.Ellipsis,
+-                    color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+-                )
+-            }
++    var expanded by remember { mutableStateOf(false) }
++    val key=when(selected) { SearchScope.Content -> "find.content";SearchScope.Names -> "find.names";SearchScope.CurrentDoc -> "find.current" }
++    Box(modifier) {
++        TextButton(onClick={expanded=true},modifier=Modifier.fillMaxWidth()) { Text(uiText(key)+" ▾") }
++        DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
++            SearchScope.entries.forEach { mode -> DropdownMenuItem(text={Text(uiText(when(mode) { SearchScope.Content -> "find.content";SearchScope.Names -> "find.names";SearchScope.CurrentDoc -> "find.current" }))},onClick={onSelect(mode);expanded=false}) }
+         }
+     }
+ }
+@@ -117,16 +107,21 @@ private fun SearchScopeSelector(
+  * Three scopes: file content across the project (default), file names only, and the current
+  * document — the active editor tab's live buffer, so unsaved edits are searched too.
+  */
++@OptIn(ExperimentalLayoutApi::class)
+ @Composable
+ internal fun SearchToolPanel(
+     project: Project?,
+     activeTab: EditorTab?,
++    internalRoot: File? = null,
++    onOpenDirectory: (File)->Unit = {},
+     onOpenResult: (String) -> Unit,
+     seed: Pair<Int, String>? = null,
+     onSeedConsumed: () -> Unit = {},
+     modifier: Modifier = Modifier,
+ ) {
+-    val rootFile = (project?.fsPath as? FsPath.Local)?.file
++    var searchInternal by remember { mutableStateOf(false) }
++    val rootFile = if(searchInternal) internalRoot else (project?.fsPath as? FsPath.Local)?.file
++    var searchError by remember { mutableStateOf<String?>(null) }
+ 
+     if (rootFile == null) {
+         SearchHint("Open a local project to search its files.", modifier)
+@@ -158,21 +153,24 @@ internal fun SearchToolPanel(
+     // cancels the prior collection, which closes the flow and stops the native search.
+     LaunchedEffect(rootFile, caseSensitive, regex, scope, activeDocTab?.id) {
+         snapshotFlow { query }
+-            .debounce(250)
+             .distinctUntilChanged()
+-            .collect { q ->
++            .collectLatest { q ->
+                 results.clear()
++                searching=false
++                searchError=null
+                 truncated = false
++                kotlinx.coroutines.delay(250)
+                 if (q.length < MIN_QUERY_LENGTH || (scope == SearchScope.CurrentDoc && activeDocTab == null)) {
+                     searching = false
+-                    return@collect
++                    return@collectLatest
+                 }
+                 searching = true
++                searchError=null
+                 val options = SearchOptions(
+                     query = q,
+                     isRegex = regex,
+                     caseSensitive = caseSensitive,
+-                    maxResults = MAX_DISPLAY_RESULTS,
++                    maxResults = MAX_DISPLAY_RESULTS+1,
+                 )
+                 val matches = when (scope) {
+                     SearchScope.Content -> SearchModule.engine.search(rootFile, options)
+@@ -196,7 +194,7 @@ internal fun SearchToolPanel(
+                             truncated = true
+                         }
+                     }
+-                } finally {
++                } catch(e: CancellationException) { throw e } catch(e: Exception) { searchError="Search failed: ${e.message}. Check the expression or choose another scope." } finally {
+                     searching = false
+                 }
+             }
+@@ -209,38 +207,41 @@ internal fun SearchToolPanel(
+         } else {
+             File(rootFile, match.filePath).absolutePath
+         }
+-        base?.let { onOpenResult("$it:${match.lineNumber + 1}:${match.columnStart + 1}") }
++        base?.let { if(match.isDirectory) onOpenDirectory(File(it)) else onOpenResult("$it:${match.lineNumber + 1}:${match.columnStart + 1}") }
+     }
+ 
+     Column(modifier = modifier.fillMaxSize()) {
+         Column(
+-            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.md, vertical = Space.sm),
++            modifier = Modifier.fillMaxWidth().heightIn(max=260.dp).verticalScroll(rememberScrollState()).padding(horizontal = Space.md, vertical = Space.sm),
+             verticalArrangement = Arrangement.spacedBy(Space.s),
+         ) {
++            Text(uiText("find.hint"),style=MaterialTheme.typography.bodySmall)
++            if(internalRoot!=null && project?.id!=dev.blamspot.jcode.fs.InternalFiles.ROOT_NODE_ID) FlowRow {
++                TextButton(onClick={searchInternal=true}) { Text((if(searchInternal) "✓ " else "")+uiText("files.internal")) }
++                TextButton(onClick={searchInternal=false}) { Text((if(!searchInternal) "✓ " else "")+"Project") }
++            }
++            Text(rootFile.path,style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis)
+             CompactSearchField(
+                 query = query,
+                 onQueryChange = { query = it },
+                 searching = searching,
+                 placeholder = scope.placeholder,
+             )
+-            Row(
++            SearchScopeSelector(selected=scope,onSelect={scope=it},modifier=Modifier.fillMaxWidth())
++            FlowRow(
+                 modifier = Modifier.fillMaxWidth(),
+                 horizontalArrangement = Arrangement.spacedBy(Space.s),
+-                verticalAlignment = Alignment.CenterVertically,
+             ) {
+                 ManagerFilterChip(selected = caseSensitive, label = "Aa") { caseSensitive = !caseSensitive }
+                 ManagerFilterChip(selected = regex, label = ".*") { regex = !regex }
+-                SearchScopeSelector(
+-                    selected = scope,
+-                    onSelect = { scope = it },
+-                    modifier = Modifier.weight(1f),
+-                )
++
+             }
+         }
+         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+ 
+-        val grouped = remember(results.size) {
+-            results.groupBy { it.filePath }.entries.toList()
++        val resultSnapshot=results.toList()
++        val grouped = remember(resultSnapshot) {
++            resultSnapshot.groupBy { it.filePath }.entries.toList()
+         }
+         val fileCount = grouped.size
+ 
+@@ -256,11 +257,11 @@ internal fun SearchToolPanel(
+                 results.isEmpty() && searching -> "Searching…"
+                 results.isEmpty() -> "No results"
+                 scope == SearchScope.Names ->
+-                    "${results.size}$plus file${if (results.size == 1) "" else "s"}"
++                    "${results.size}$plus files / folders"
+                 else -> "${results.size}$plus results in $fileCount file${if (fileCount == 1) "" else "s"}"
+             }
+             Text(
+-                text = summary,
++                text = searchError ?: summary,
+                 style = MaterialTheme.typography.labelMedium,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+             )
+@@ -268,7 +269,7 @@ internal fun SearchToolPanel(
+ 
+         LazyColumn(modifier = Modifier.fillMaxSize()) {
+             if (scope == SearchScope.Names) {
+-                items(results, key = { it.filePath }) { match ->
++                items(results.toList(), key = { it.filePath }) { match ->
+                     FileNameRow(match) { openMatch(match) }
+                 }
+             } else {
+@@ -328,9 +329,10 @@ private fun FileNameRow(match: SearchMatch, onClick: () -> Unit) {
+         horizontalArrangement = Arrangement.spacedBy(Space.sm),
+         verticalAlignment = Alignment.CenterVertically,
+     ) {
+-        SearchFileIcon(match.lineText)
++        if(match.isDirectory) Icon(dev.blamspot.jcode.design.jcIcon(JCodeIcon.Folder),"Folder") else SearchFileIcon(match.lineText)
+         Text(
+             text = match.lineText,
++            modifier = Modifier.weight(1f),
+             style = MaterialTheme.typography.bodySmall,
+             fontFamily = FontFamily.Monospace,
+             maxLines = 1,
+@@ -342,6 +344,7 @@ private fun FileNameRow(match: SearchMatch, onClick: () -> Unit) {
+                 style = MaterialTheme.typography.bodySmall,
+                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                 maxLines = 1,
++                modifier=Modifier.weight(1f),
+                 overflow = TextOverflow.Ellipsis,
+             )
+         }
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
+index 476e892..ad7f982 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchChromeBars.kt
+@@ -146,7 +146,7 @@ internal fun WorkspaceHeader(
+                     listActions = listOf(
+                         ContextAction(
+                             JCodeIcon.Close,
+-                            if (inUserWorkspace) "Close workspace" else "Close project",
++                            if (inUserWorkspace) "Close saved project group" else "Close project",
+                         ) { if (inUserWorkspace) onCloseWorkspace() else onCloseProject() },
+                     ),
+                 )
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchPaneResize.kt b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchPaneResize.kt
+new file mode 100644
+index 0000000..3eb87a1
+--- /dev/null
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchPaneResize.kt
+@@ -0,0 +1,40 @@
++package dev.blamspot.jcode.workbench
++
++import androidx.compose.foundation.background
++import androidx.compose.foundation.focusable
++import androidx.compose.foundation.gestures.Orientation
++import androidx.compose.foundation.gestures.draggable
++import androidx.compose.foundation.gestures.rememberDraggableState
++import androidx.compose.foundation.layout.*
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.input.key.*
++import androidx.compose.ui.input.pointer.PointerIcon
++import androidx.compose.ui.input.pointer.pointerHoverIcon
++import androidx.compose.ui.semantics.*
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.platform.LocalDensity
++import dev.blamspot.jcode.design.WorkbenchPaneSizing
++
++@Composable
++internal fun WorkbenchPaneResize(bounds: WorkbenchPaneSizing.Bounds, onWidth: (Float)->Unit, onDelta: (Float)->Unit, onCommit: ()->Unit, modifier: Modifier=Modifier) {
++    val density=LocalDensity.current
++    Box(modifier.width(12.dp).fillMaxHeight()
++        .pointerHoverIcon(PointerIcon(android.view.PointerIcon.getSystemIcon(androidx.compose.ui.platform.LocalContext.current,android.view.PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW)))
++        .semantics {
++            contentDescription="Resize navigation panel. Arrow keys adjust width."
++            stateDescription="${bounds.width.toInt()} dp"
++            progressBarRangeInfo=ProgressBarRangeInfo(bounds.width,bounds.minimum..bounds.maximum)
++            setProgress { value -> onWidth(value.coerceIn(bounds.minimum,bounds.maximum));onCommit();true }
++            customActions=listOf(CustomAccessibilityAction("Reset panel width") { onWidth(340f.coerceIn(bounds.minimum,bounds.maximum));onCommit();true })
++        }.onPreviewKeyEvent {
++            if(it.type==KeyEventType.KeyDown && it.key in listOf(Key.DirectionLeft,Key.DirectionRight)) {
++                onWidth((bounds.width+if(it.key==Key.DirectionRight) 16f else -16f).coerceIn(bounds.minimum,bounds.maximum));onCommit();true
++            } else false
++        }.focusable().draggable(rememberDraggableState { delta -> onDelta(delta/density.density) },Orientation.Horizontal,onDragStopped={onCommit()}),contentAlignment=Alignment.Center) {
++        Box(Modifier.width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
++        Box(Modifier.width(4.dp).height(40.dp).background(MaterialTheme.colorScheme.primary))
++    }
++}
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchPanels.kt b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchPanels.kt
+index e57ddbd..c3ed736 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchPanels.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchPanels.kt
+@@ -89,7 +89,7 @@ internal fun WorkspaceEmptyState(workspace: Workspace?) {
+         }
+         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+             Text(
+-                text = workspace?.name ?: "sui-code",
++                text = "Internal Files",
+                 fontWeight = FontWeight.SemiBold,
+             )
+             Text(
+@@ -200,7 +200,7 @@ internal fun ProjectRoster(
+                                     ContextAction(JCodeIcon.Trash, "Delete project files to Trash", destructive=true) { trashTarget=project },
+                                 ),
+                                 listActions = listOf(
+-                                    ContextAction(JCodeIcon.Open, if (isWorkspace) "Open workspace" else "Open") { onOpenProject(project) },
++                                    ContextAction(JCodeIcon.Open, if (isWorkspace) "Open saved project group" else "Open") { onOpenProject(project) },
+                                     ContextAction(JCodeIcon.Settings, "Project settings") { onOpenProjectSettings(project.id) },
+                                     ContextAction(JCodeIcon.Save, "Export to storage") { onExportProject(project) },
+                                 ),
+diff --git a/app/src/main/java/dev/blamspot/jcode/workbench/dialog/WorkbenchDialogs.kt b/app/src/main/java/dev/blamspot/jcode/workbench/dialog/WorkbenchDialogs.kt
+index 643d789..21322d7 100644
+--- a/app/src/main/java/dev/blamspot/jcode/workbench/dialog/WorkbenchDialogs.kt
++++ b/app/src/main/java/dev/blamspot/jcode/workbench/dialog/WorkbenchDialogs.kt
+@@ -56,41 +56,10 @@ internal fun OpenFolderTypeDialog(
+     onDismiss: () -> Unit,
+     onConfirm: (isWorkspace: Boolean) -> Unit,
+ ) {
+-    var isWorkspace by rememberSaveable { mutableStateOf(false) }
+-
+-    AlertDialog(
+-        onDismissRequest = onDismiss,
+-        title = { Text("Set folder type") },
+-        text = {
+-            Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
+-                Text(
+-                    "\"$folderName\" has no .jcode config yet. Is it a Project or a Workspace?",
+-                    style = MaterialTheme.typography.bodyMedium,
+-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+-                )
+-                Row(verticalAlignment = Alignment.CenterVertically) {
+-                    TypeOption(
+-                        label = "Project",
+-                        selected = !isWorkspace,
+-                        onSelect = { isWorkspace = false },
+-                        modifier = Modifier.weight(1f),
+-                    )
+-                    TypeOption(
+-                        label = "Workspace",
+-                        selected = isWorkspace,
+-                        onSelect = { isWorkspace = true },
+-                        modifier = Modifier.weight(1f),
+-                    )
+-                }
+-            }
+-        },
+-        confirmButton = {
+-            CompactFilledButton(text = "Open", onClick = { onConfirm(isWorkspace) })
+-        },
+-        dismissButton = {
+-            CompactOutlinedButton(text = "Cancel", onClick = onDismiss)
+-        },
+-    )
++    AlertDialog(onDismissRequest=onDismiss,title={Text("Open folder as Project?")},
++        text={Text("$folderName\nFiles remain accessible through Internal Files without a Project. Opening as a Project adds optional tools and context.")},
++        confirmButton={CompactFilledButton(text="Open Project",onClick={onConfirm(false)})},
++        dismissButton={CompactOutlinedButton(text="Cancel",onClick=onDismiss)})
+ }
+ 
+ /**
+@@ -195,11 +164,7 @@ internal fun NewItemDialog(
+      */
+     onOpenGallery: (String, String, String) -> Unit = { _, _, _ -> },
+     resolveDynamicOptions: suspend (String) -> List<String> = { emptyList() },
+-    /** When false (already inside a User Workspace), the Project/Workspace type toggle is hidden and
+-     *  the dialog only creates a project — you don't create a workspace inside a workspace. */
+-    allowWorkspaceType: Boolean = true,
+ ) {
+-    var isWorkspace by rememberSaveable(allowWorkspaceType) { mutableStateOf(false) }
+     var name by rememberSaveable { mutableStateOf("") }
+     var selectedTemplateId by rememberSaveable(templates) {
+         mutableStateOf(templates.firstOrNull()?.id)
+@@ -207,7 +172,7 @@ internal fun NewItemDialog(
+     // 0 = pick folder type / name / template; 1 = configure the template's inputs.
+     var step by rememberSaveable { mutableStateOf(0) }
+ 
+-    val selectedTemplate = if (isWorkspace) null else templates.firstOrNull { it.id == selectedTemplateId }
++    val selectedTemplate = templates.firstOrNull { it.id == selectedTemplateId }
+     val hasInputs = selectedTemplate?.inputs?.isNotEmpty() == true
+     // Live values for the selected template's inputs, seeded from each input's default.
+     val inputValues = remember(selectedTemplateId) {
+@@ -236,40 +201,16 @@ internal fun NewItemDialog(
+ 
+     // Left column: folder type + name. Right column (Project): template list; (Workspace): a hint.
+     val primarySection: @Composable () -> Unit = {
+-        if (allowWorkspaceType) {
+-            Text("Folder type", style = MaterialTheme.typography.labelLarge)
+-            Row(verticalAlignment = Alignment.CenterVertically) {
+-                TypeOption(
+-                    label = "Project",
+-                    selected = !isWorkspace,
+-                    onSelect = { isWorkspace = false },
+-                    modifier = Modifier.weight(1f),
+-                )
+-                TypeOption(
+-                    label = "Workspace",
+-                    selected = isWorkspace,
+-                    onSelect = { isWorkspace = true },
+-                    modifier = Modifier.weight(1f),
+-                )
+-            }
+-        }
+         SettingsTextFieldRow(
+             label = "Name",
+             value = name,
+             onValueChange = { name = it },
+-            placeholder = if (isWorkspace) "Workspace name" else "Project name",
++            placeholder = "Project name",
+             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+         )
+     }
+     val detailSection: @Composable () -> Unit = {
+-        if (isWorkspace) {
+-            Text("Workspace", style = MaterialTheme.typography.labelLarge)
+-            Text(
+-                "A workspace is a container folder that holds multiple projects.",
+-                style = MaterialTheme.typography.bodySmall,
+-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+-            )
+-        } else {
++        run {
+             Text("Template", style = MaterialTheme.typography.labelLarge)
+             templates.forEach { template ->
+                 TemplateOption(
+@@ -288,8 +229,7 @@ internal fun NewItemDialog(
+             Text(
+                 when {
+                     step == 1 && selectedTemplate != null -> selectedTemplate.name
+-                    !allowWorkspaceType -> "New Project"
+-                    else -> "New"
++                    else -> "New Project"
+                 },
+             )
+         },
+@@ -345,7 +285,7 @@ internal fun NewItemDialog(
+         },
+         confirmButton = {
+             val gallery = selectedTemplate?.gallery.orEmpty()
+-            val handsOff = !isWorkspace && gallery.isNotBlank() && selectedTemplate?.extensionId?.isNotBlank() == true
++            val handsOff = gallery.isNotBlank() && selectedTemplate?.extensionId?.isNotBlank() == true
+             CompactFilledButton(
+                 text = if (handsOff || (step == 0 && hasInputs)) "Next" else "Create",
+                 onClick = {
+@@ -361,8 +301,8 @@ internal fun NewItemDialog(
+                         onConfirm(
+                             MainViewModel.NewItemRequest(
+                                 name = name,
+-                                isWorkspace = isWorkspace,
+-                                templateId = if (isWorkspace) null else selectedTemplateId,
++                                isWorkspace = false,
++                                templateId = selectedTemplateId,
+                                 inputs = if (hasInputs) inputValues.toMap() else emptyMap(),
+                             ),
+                         )
+diff --git a/app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt b/app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt
+index 2a6dff3..cebfd10 100644
+--- a/app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt
++++ b/app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt
+@@ -153,6 +153,19 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+         if(job?.isActive==true) return
+         check((plan.preview.pack.official || allowUnverified) && (plan.scripts.isEmpty() || grants.containsAll(setOf(Capability.RUN,Capability.FILE_READ,Capability.FILE_WRITE)))) { "IDE dependency deployment needs reviewed file.read, file.write and process.run permissions" }
+         job=scope.launch {
++            // Metadata-only Kits (including localization) never require Ubuntu, a PTY or a runtime.
++            if(plan.status.isEmpty() && plan.scripts.isEmpty()) {
++                mutable.update { it.copy(busy=true,installing=true,message="Installing reviewed package resources",logPath=null,log="") }
++                try {
++                    check(System.currentTimeMillis()-plan.created<3600000) { "Plan expired; review again" }
++                    plan.dependencies.forEach { dep -> host.install(dep,grants.intersect(dep.pack.permissions),allowUnverified || dep.pack.official) }
++                    host.install(plan.preview,grants.intersect(plan.preview.pack.permissions),allowUnverified)
++                    mutable.update { it.copy(progress=100,message="Ready · package resources enabled; no language environment required",ready=it.ready+(plan.preview.pack.id to "Ready")) }
++                } catch(e: CancellationException) { throw e }
++                catch(e: Exception) { mutable.update { it.copy(message="Package resources could not be enabled: ${e.message}. Review and retry; installed environments are unchanged.") } }
++                finally { mutable.update { it.copy(busy=false,installing=false,cancelling=false) } }
++                return@launch
++            }
+             var poller: Job?=null
+             val token=UUID.randomUUID().toString()
+             val cancelPath=plan.cancellationPath
+diff --git a/app/src/main/java/dev/suicode/nativehost/NativeLanguageCenter.kt b/app/src/main/java/dev/suicode/nativehost/NativeLanguageCenter.kt
+index 095f024..61b39e1 100644
+--- a/app/src/main/java/dev/suicode/nativehost/NativeLanguageCenter.kt
++++ b/app/src/main/java/dev/suicode/nativehost/NativeLanguageCenter.kt
+@@ -45,7 +45,7 @@ import kotlinx.coroutines.*
+     }
+     if(advancedVisible) {
+         Column(modifier) {
+-            Row {
++            FlowRow {
+                 TextButton(onClick={advancedVisible=false}) { Text("← Language readiness") }
+                 TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { distro.checkAvailableCatalogUpdates() } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text("Check trusted-source updates") }
+             }
+@@ -53,7 +53,7 @@ import kotlinx.coroutines.*
+             Box(Modifier.weight(1f)) { advanced() }
+         }
+     } else Column(modifier.padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+-        Text("Languages",style=MaterialTheme.typography.headlineSmall)
++        Text(dev.blamspot.jcode.design.uiText("languages.title"),style=MaterialTheme.typography.headlineSmall)
+         Text("Ubuntu ${environment.runtime.selectedDistro.label} · ${environment.runtime.selectedDistro.arch.rootfsKey}\nReuse installed runtimes. IDE Kits deploy their required development tools after one reviewed plan.")
+         if(busy || setup.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
+@@ -77,7 +77,7 @@ import kotlinx.coroutines.*
+                     if(kit!=null && library.firstOrNull { it.id==id }?.version!=kit.record.version) Text("Updated Kit available. Review its signed dependency plan to adopt the v0.5 workflow.",color=MaterialTheme.colorScheme.primary)
+                     Text(when { status==null -> "Development tools: checking when a Kit is installed";status.isEmpty() -> "Legacy Kit: review updated prerequisites";status.all { it.ready } -> "Ready · runtime and all required tools detected";else -> "Partially Ready · missing: "+status.filter { !it.ready }.joinToString { it.requirement.name } })
+                     status?.forEach { Text("${if(it.ready) "✓" else "○"} ${it.requirement.name} · ${it.installedVersion}",style=MaterialTheme.typography.bodySmall) }
+-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
++                    FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                         if(installedBasic==null) TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.download(basic) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text("Basic run setup") }
+                         Button(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.setupPreview(id) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(if(kit==null) "Set up complete IDE Kit" else "Review / repair dependencies") }
+                     }
+diff --git a/app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt b/app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt
+new file mode 100644
+index 0000000..76d0f08
+--- /dev/null
++++ b/app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt
+@@ -0,0 +1,38 @@
++package dev.suicode.nativehost
++
++import androidx.compose.foundation.layout.*
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.unit.dp
++import dev.blamspot.jcode.design.LocalUiTranslations
++import dev.blamspot.jcode.design.uiText
++import dev.suicode.packages.UiTranslations
++
++@Composable
++fun NativeLocalizationProvider(content: @Composable ()->Unit) {
++    val context=LocalContext.current
++    val host=remember(context) { NativePackageHost.get(context) }
++    val bundles by host.localizations.collectAsState()
++    val selection by host.selectedUiLanguage.collectAsState()
++    val strings=remember(bundles,selection) { UiTranslations(bundles,selection) }
++    CompositionLocalProvider(LocalUiTranslations provides strings,content=content)
++}
++
++@Composable
++fun NativeLanguageSelection(host: NativePackageHost) {
++    val bundles by host.localizations.collectAsState()
++    val selection by host.selectedUiLanguage.collectAsState()
++    var expanded by remember { mutableStateOf(false) }
++    Text(uiText("ui.language"),style=MaterialTheme.typography.titleSmall)
++    Box {
++        OutlinedButton(onClick={expanded=true}) { Text(bundles.singleOrNull { it.selectionId==selection }?.let { "${it.displayName} (${it.locale})" } ?: uiText("ui.english")) }
++        DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
++            DropdownMenuItem(text={Text("English (default)")},onClick={host.selectUiLanguage(null);expanded=false})
++            bundles.forEach { bundle -> DropdownMenuItem(text={Text("${bundle.displayName} (${bundle.locale})\n${bundle.packageId}")},onClick={host.selectUiLanguage(bundle.selectionId);expanded=false}) }
++        }
++    }
++    Text(uiText("ui.fallback"),style=MaterialTheme.typography.bodySmall)
++    Spacer(Modifier.height(8.dp))
++}
+diff --git a/app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt b/app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt
+index 67a011c..b36e170 100644
+--- a/app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt
++++ b/app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt
+@@ -14,6 +14,7 @@ import dev.suicode.packages.*
+ import kotlinx.coroutines.launch
+ 
+ /** Real document import, authenticated download, consent and lifecycle UI. No legacy market bridge. */
++@OptIn(ExperimentalLayoutApi::class)
+ @Composable
+ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
+     val context=LocalContext.current
+@@ -28,6 +29,7 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
+     var section by remember(initialSection) { mutableIntStateOf(initialSection.coerceIn(0,2)) }
+     var pending by remember { mutableStateOf<PackagePreview?>(null) }
+     var replyDialog by remember { mutableStateOf<Pair<String,String>?>(null) }
++    var languageDialog by remember { mutableStateOf(false) }
+     var feedback by remember { mutableStateOf<String?>(null) }
+     var busy by remember { mutableStateOf(false) }
+     var error by remember { mutableStateOf<String?>(null) }
+@@ -43,13 +45,14 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
+         if(uri!=null) perform { pending=host.importDocument(uri) }
+     }
+     Column(modifier.padding(16.dp)) {
+-        Text("Packages",style=MaterialTheme.typography.titleLarge)
++        Text(dev.blamspot.jcode.design.uiText("packages.title"),style=MaterialTheme.typography.titleLarge)
+         Text(source?.let { "Source context: $it" } ?: "Open a source file for language actions; project workflows use the selected Project",style=MaterialTheme.typography.bodySmall)
++        TextButton(onClick={languageDialog=true}) { Text(dev.blamspot.jcode.design.uiText("ui.language")) }
+         Spacer(Modifier.height(12.dp))
+         ScrollableTabRow(selectedTabIndex=section,edgePadding=0.dp) {
+             listOf("Plugin Library","IDE Kit Library","Installed").forEachIndexed { i,title -> Tab(selected=section==i,onClick={section=i},text={Text(title)}) }
+         }
+-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
++        FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+             OutlinedButton(enabled=!busy,onClick={perform { host.refreshLibrary() }}) { Text("Refresh") }
+             OutlinedButton(enabled=!busy,onClick={picker.launch(arrayOf("*/*"))}) { Text("Import .suic / .suik") }
+         }
+@@ -92,15 +95,16 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
+                             Text("${row.record.id}\n${row.record.version} · .${row.record.kind} · ${if(row.record.enabled) "enabled" else "disabled"}")
+                             Text(if(row.pack.official) "Verified sui-code signature" else "Unverified publisher")
+                             Text("Permissions: "+row.record.grants.joinToString { it.wire })
+-                            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
++                            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                 TextButton(enabled=!busy,onClick={perform { if(row.record.enabled) host.disable(row.record.id) else if(row.pack.kind==PackKind.KIT) pending=host.setupPreview(row.record.id) else host.enable(row.record.id) }}) { Text(if(row.record.enabled) "Disable" else "Enable") }
+                                 TextButton(enabled=!busy,onClick={perform { pending=host.rollbackPreview(row.record.id) }}) { Text("Rollback") }
+                             }
+-                            if(row.record.kind=="suik") {
++                            if(row.pack.declarations().all { it.type=="localization" }) Text("UI language resources · no language environment required")
++                            else if(row.record.kind=="suik") {
+                                 Text(setupState.ready[row.record.id] ?: "Prerequisites not checked this session")
+                                 TextButton(enabled=!setupState.busy && !busy,onClick={perform { pending=host.setupPreview(row.record.id) }}) { Text("Review dependencies / repair") }
+                             }
+-                            if(row.record.kind=="suik" && row.record.enabled) row.pack.declarations().filter { it.type !in setOf("project","language","environment","setup","panel") }.forEach { component ->
++                            if(row.record.kind=="suik" && row.record.enabled) row.pack.declarations().filter { it.type !in setOf("project","language","environment","setup","panel","localization") }.forEach { component ->
+                                 TextButton(enabled=!busy,onClick={perform {
+                                     val reply=host.invoke(row.record.id,component.id)
+                                     check(reply.accepted) { reply.code+": "+reply.values.toString() }
+@@ -117,6 +121,7 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
+             }
+         }
+     }
++    if(languageDialog) AlertDialog(onDismissRequest={languageDialog=false},title={Text("Interface language")},text={Column(Modifier.verticalScroll(rememberScrollState())) { NativeLanguageSelection(host) }},confirmButton={TextButton(onClick={languageDialog=false}) { Text("Close") }})
+     replyDialog?.let { (title,text) -> AlertDialog(onDismissRequest={replyDialog=null},title={Text(title)},text={Text(text)},confirmButton={TextButton(onClick={replyDialog=null}) { Text("Close") }}) }
+     pending?.let { preview -> NativePackageReview(host,preview,onDismiss={pending=null},onInstalled={section=2}) }
+ }
+diff --git a/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt b/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
+index 7c8004e..ac0e212 100644
+--- a/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
++++ b/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
+@@ -34,6 +34,15 @@ class NativePackageHost private constructor(private val context: Context) {
+     private val mutation=Mutex()
+     private val mutableRows=MutableStateFlow<List<NativePackageRow>>(emptyList())
+     val rows=mutableRows.asStateFlow()
++    private val languagePrefs=context.getSharedPreferences("sui-native-ui-language",Context.MODE_PRIVATE)
++    private val mutableLanguage=MutableStateFlow(languagePrefs.getString("selection-v1",null))
++    val selectedUiLanguage=mutableLanguage.asStateFlow()
++    private val mutableLocalizations=MutableStateFlow<List<LocalizationBundle>>(emptyList())
++    val localizations=mutableLocalizations.asStateFlow()
++    fun selectUiLanguage(selection: String?) {
++        require(selection==null || mutableLocalizations.value.any { it.selectionId==selection }) { "Unavailable language package" }
++        languagePrefs.edit().putString("selection-v1",selection).apply();mutableLanguage.value=selection
++    }
+     private val mutableError=MutableStateFlow<String?>(null)
+     val error=mutableError.asStateFlow()
+     private val backends=java.util.concurrent.ConcurrentHashMap<Operation,CoreBackend>()
+@@ -48,7 +57,7 @@ class NativePackageHost private constructor(private val context: Context) {
+             require(inputs.size<=64 && inputs.all { (k,v) -> k.matches(Regex("[a-z][a-z0-9.-]{0,63}")) && v.length<=4096 && '\u0000' !in v })
+             val pack=store.load(id)
+             val component=pack.declarations().first { it.id==componentId }
+-            val operation=when(component.type) { "panel" -> Operation.PANEL_OPEN;"simpleRun","basicBuild" -> Operation.SIMPLE_RUN;"language","environment","setup" -> return@withLock Reply(false,"E_COMPONENT");else -> Operation.valueOf(component.descriptor.getValue("operation").jsonPrimitive.content) }
++            val operation=when(component.type) { "panel" -> Operation.PANEL_OPEN;"simpleRun","basicBuild" -> Operation.SIMPLE_RUN;"language","environment","setup","localization" -> return@withLock Reply(false,"E_COMPONENT");else -> Operation.valueOf(component.descriptor.getValue("operation").jsonPrimitive.content) }
+             val args=if(component.type=="panel") component.descriptor.mapValues { if(it.value is JsonPrimitive) it.value.jsonPrimitive.content else it.value.toString() }
+                 else if(component.type in setOf("simpleRun","basicBuild")) emptyMap()
+                 else component.descriptor.getValue("arguments").jsonObject.mapValues { it.value.jsonPrimitive.content }
+@@ -85,6 +94,7 @@ class NativePackageHost private constructor(private val context: Context) {
+         sessions.values.forEach(CoreSession::close);sessions.clear();store.close()
+         backends.clear()
+         mutablePanel.value=null
++        mutableLocalizations.value=emptyList()
+     }
+     private val mutableSource=MutableStateFlow<String?>(null)
+     val source=mutableSource.asStateFlow()
+@@ -182,9 +192,13 @@ class NativePackageHost private constructor(private val context: Context) {
+             runCatching { activate(r.id) }.onFailure { mutableError.value="${r.id}: ${it.message}" }
+         }
+     }
+-    private fun publish() { mutableRows.value=store.records().mapNotNull {
+-        runCatching { NativePackageRow(it,store.load(it.id)) }.onFailure { error -> mutableError.value="${it.id}: ${error.message}" }.getOrNull()
+-    } }
++    private fun publish() {
++        mutableRows.value=store.records().mapNotNull { record ->
++            runCatching { NativePackageRow(record,store.load(record.id)) }.onFailure { error -> mutableError.value="${record.id}: ${error.message}" }.getOrNull()
++        }
++        mutableLocalizations.value=mutableRows.value.filter { it.record.enabled && sessions.containsKey(it.record.id) && Capability.LOCALIZATION in it.record.grants }
++            .flatMap { LocalizationResources.forPack(it.pack) }.sortedWith(compareBy({it.locale},{it.packageId}))
++    }
+     private suspend fun action(block: ()->Unit) = withContext(Dispatchers.IO) {
+         mutation.withLock {
+             try { mutableError.value=null;block();reconcile();publish() }
+diff --git a/app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt b/app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt
+index 26c6c2d..92670d7 100644
+--- a/app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt
++++ b/app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt
+@@ -54,7 +54,8 @@ import kotlinx.coroutines.launch
+                 }
+                 Text("Completed tools stay installed on cancellation or uninstall. Package archives update atomically and support rollback. No environment, project or user data is removed.")
+             }
+-            Text("Permissions and execution: Ubuntu processes can access app/guest files; PRoot is not a hostile-code sandbox. Install only publishers you trust. Installation uses the existing Setup PTY. apt/dpkg cancellation waits for a safe boundary.")
++            dev.suicode.packages.LocalizationResources.forPack(preview.pack).forEach { b -> Text("UI language: ${b.displayName} (${b.locale}) · ${b.entries.size} keys · English fallback. No development environment is required by this resource component.") }
++            if(Capability.RUN in permissions || plan?.scripts?.isNotEmpty()==true) Text("Permissions and execution: Ubuntu processes can access app/guest files; PRoot is not a hostile-code sandbox. Install only publishers you trust. Installation uses the existing Setup PTY. apt/dpkg cancellation waits for a safe boundary.")
+             if(!preview.pack.official) Row { Checkbox(trusted,{trusted=it});Text("I trust this unverified publisher") }
+             TextButton(onClick={grants=permissions}) { Text("Approve all listed permissions") }
+             permissions.sortedBy { it.wire }.forEach { p -> Row { Checkbox(p in grants,{yes -> grants=if(yes) grants+p else grants-p});Text(p.wire,Modifier.padding(top=12.dp)) } }
+diff --git a/core/design/src/main/java/dev/blamspot/jcode/design/UiLocalization.kt b/core/design/src/main/java/dev/blamspot/jcode/design/UiLocalization.kt
+new file mode 100644
+index 0000000..67cf415
+--- /dev/null
++++ b/core/design/src/main/java/dev/blamspot/jcode/design/UiLocalization.kt
+@@ -0,0 +1,8 @@
++package dev.blamspot.jcode.design
++
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.compositionLocalOf
++import dev.suicode.packages.UiTranslations
++
++val LocalUiTranslations=compositionLocalOf { UiTranslations() }
++@Composable fun uiText(key: String,arguments: Map<String,String> = emptyMap()): String = LocalUiTranslations.current.text(key,arguments)
+diff --git a/core/design/src/main/java/dev/blamspot/jcode/design/WorkbenchPaneSizing.kt b/core/design/src/main/java/dev/blamspot/jcode/design/WorkbenchPaneSizing.kt
+new file mode 100644
+index 0000000..9010f90
+--- /dev/null
++++ b/core/design/src/main/java/dev/blamspot/jcode/design/WorkbenchPaneSizing.kt
+@@ -0,0 +1,20 @@
++package dev.blamspot.jcode.design
++
++/** Widths are content dp, independent of the 68dp navigation rail. Never consumes the editor. */
++object WorkbenchPaneSizing {
++    const val RAIL = 68f
++    const val HANDLE = 12f
++    data class Bounds(val modal: Boolean, val minimum: Float, val maximum: Float, val width: Float)
++    fun bounds(available: Float, fontScale: Float, requested: Float?): Bounds {
++        val width=available.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f
++        val scale=fontScale.takeIf { it.isFinite() }?.coerceIn(1f,1.5f) ?: 1f
++        val minimum=260f*scale
++        val editorMinimum=320f*scale
++        val modal=width < RAIL+HANDLE+minimum+editorMinimum
++        val maximum=if(modal) (width-RAIL-24f).coerceIn(0f,520f) else minOf(560f,width-RAIL-HANDLE-editorMinimum)
++        val lower=minOf(minimum,maximum)
++        val initial=(width*.30f).coerceIn(300f,420f)
++        val preferred=requested?.takeIf { it.isFinite() && it>0f } ?: initial
++        return Bounds(modal,lower,maximum,preferred.coerceIn(lower,maximum))
++    }
++}
+diff --git a/core/design/src/test/java/dev/blamspot/jcode/design/WorkbenchPaneSizingTest.kt b/core/design/src/test/java/dev/blamspot/jcode/design/WorkbenchPaneSizingTest.kt
+new file mode 100644
+index 0000000..ed77458
+--- /dev/null
++++ b/core/design/src/test/java/dev/blamspot/jcode/design/WorkbenchPaneSizingTest.kt
+@@ -0,0 +1,26 @@
++package dev.blamspot.jcode.design
++import org.junit.Test
++import org.junit.Assert.*
++class WorkbenchPaneSizingTest {
++    @Test fun tabletSeparatesRailAndReservesEditor() {
++        val b=WorkbenchPaneSizing.bounds(1200f,1f,null)
++        assertFalse(b.modal);assertEquals(360f,b.width,0f);assertTrue(1200-b.width-68-12>=320)
++    }
++    @Test fun rotationSplitAndLargeFontUseDrawerWhenNeeded() {
++        assertTrue(WorkbenchPaneSizing.bounds(600f,1f,480f).modal)
++        assertTrue(WorkbenchPaneSizing.bounds(900f,1.5f,480f).modal)
++        assertFalse(WorkbenchPaneSizing.bounds(1600f,1.5f,480f).modal)
++    }
++    @Test fun restoredWidthClampsWithoutDestroyingPreference() {
++        val saved=500f
++        val narrow=WorkbenchPaneSizing.bounds(800f,1f,saved)
++        assertEquals(400f,narrow.width,0f)
++        assertEquals(saved,WorkbenchPaneSizing.bounds(1200f,1f,saved).width,0f)
++    }
++    @Test fun malformedAndTinyMeasurementsNeverProduceNegativeWidths() {
++        for(w in listOf(0f,40f,Float.NaN,Float.POSITIVE_INFINITY,800f)) {
++            val b=WorkbenchPaneSizing.bounds(w,Float.NaN,Float.NaN)
++            assertTrue(b.width.isFinite());assertTrue(b.width>=0f);assertTrue(b.maximum>=b.minimum)
++        }
++    }
++}
+diff --git a/core/native-packages/src/main/java/dev/suicode/packages/CoreApi.kt b/core/native-packages/src/main/java/dev/suicode/packages/CoreApi.kt
+index 4dc21fe..782afe3 100644
+--- a/core/native-packages/src/main/java/dev/suicode/packages/CoreApi.kt
++++ b/core/native-packages/src/main/java/dev/suicode/packages/CoreApi.kt
+@@ -1,14 +1,14 @@
+ package dev.suicode.packages
+ 
+ /** Version 1 protocol. No Android Context, filesystem handle, classloader or shell is exposed. */
+-object CoreApi { const val VERSION = 3; const val MIN_SUPPORTED = 1; fun compatible(min: Int,max: Int)=min>=1 && min<=max && min<=VERSION && max>=MIN_SUPPORTED }
++object CoreApi { const val VERSION = 4; const val MIN_SUPPORTED = 1; fun compatible(min: Int,max: Int)=min>=1 && min<=max && min<=VERSION && max>=MIN_SUPPORTED }
+ enum class PackKind(val magic: String, val suffix: String, val mime: String) {
+     PLUGIN("SUICPKG\u0000", "suic", "application/vnd.suicode.plugin"),
+     KIT("SUIKPKG\u0000", "suik", "application/vnd.suicode.ide-kit")
+ }
+ enum class Capability(val wire: String) {
+     FILE_READ("file.read"), FILE_WRITE("file.write"), RUN("process.run"),
+-    LSP("language.lsp"), DAP("debug.dap"), PROJECT("project.read"), UI("ui.panel")
++    LSP("language.lsp"), DAP("debug.dap"), PROJECT("project.read"), UI("ui.panel"), LOCALIZATION("ui.localization")
+ }
+ enum class Operation(val permission: Capability) {
+     SIMPLE_RUN(Capability.RUN), LSP_START(Capability.LSP), DAP_START(Capability.DAP),
+diff --git a/core/native-packages/src/main/java/dev/suicode/packages/Descriptors.kt b/core/native-packages/src/main/java/dev/suicode/packages/Descriptors.kt
+index aca8be2..d259e84 100644
+--- a/core/native-packages/src/main/java/dev/suicode/packages/Descriptors.kt
++++ b/core/native-packages/src/main/java/dev/suicode/packages/Descriptors.kt
+@@ -6,6 +6,7 @@ import kotlinx.serialization.json.*
+ internal fun validateDescriptor(type: String, d: JsonObject): Operation? {
+     fun text(key: String) { if(d.string(key).length !in 1..4096) fail("E_COMPONENT",key) }
+     when(type) {
++        "localization" -> { LocalizationDescriptor.parse(d); return null }
+         "setup" -> { KitRequirements.parse(d); return null }
+         "language" -> {
+             d.keysExactly(setOf("languageId","extensions","priority"))
+diff --git a/core/native-packages/src/main/java/dev/suicode/packages/Localization.kt b/core/native-packages/src/main/java/dev/suicode/packages/Localization.kt
+new file mode 100644
+index 0000000..b5d3e1b
+--- /dev/null
++++ b/core/native-packages/src/main/java/dev/suicode/packages/Localization.kt
+@@ -0,0 +1,77 @@
++package dev.suicode.packages
++
++import java.util.Locale
++import kotlinx.serialization.json.*
++
++/** Core-owned public key registry. Security/permission text is intentionally not localizable. */
++object UiTextKeys {
++    val english: Map<String,String> = mapOf(
++        "nav.files" to "Files", "nav.find" to "Find", "nav.languages" to "Languages", "nav.packages" to "Packages", "nav.settings" to "Settings",
++        "files.internal" to "Internal Files", "files.filter" to "Filter visible names", "files.filterHint" to "Filters loaded entries only. Use Find for nested names and contents.",
++        "files.matches" to "{count} visible matches", "files.newFile" to "New File", "files.newFolder" to "New Folder", "files.refresh" to "Refresh", "files.more" to "More file actions",
++        "find.content" to "File contents", "find.names" to "Files and folders", "find.current" to "Current document", "find.query" to "Search {scope}",
++        "find.scope" to "Search scope", "find.hint" to "Search names or contents across the selected folder.",
++        "run.file" to "Run file", "run.stop" to "Stop file", "run.debug" to "Debug", "run.continue" to "Continue", "run.stopDebug" to "Stop debug", "run.overview" to "Overview",
++        "project.build" to "Build", "project.test" to "Test", "project.run" to "Run Project", "project.tasks" to "Advanced tasks",
++        "packages.title" to "Packages", "languages.title" to "Languages", "ui.language" to "Interface language", "ui.english" to "English (default)",
++        "ui.fallback" to "Missing translations use English. Language resources do not install development environments."
++    )
++}
++
++data class LocalizationDescriptor(val locale: String,val displayName: String,val fallback: String,val resource: String) {
++    companion object {
++        fun parse(d: JsonObject): LocalizationDescriptor {
++            d.keysExactly(setOf("locale","displayName","fallback","resource"))
++            val tag=d.string("locale")
++            if(!tag.matches(Regex("[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}")) || Locale.forLanguageTag(tag).toLanguageTag()!=tag || tag=="en") fail("E_LOCALIZATION","Use a canonical BCP47 locale other than reserved en")
++            val name=d.string("displayName")
++            if(name.length !in 1..80 || unsafe(name)) fail("E_LOCALIZATION","Invalid display name")
++            if(d.string("fallback")!="en") fail("E_LOCALIZATION","Only Core English fallback is supported in API 4")
++            val resource=d.string("resource")
++            if(!resource.matches(Regex("resources/i18n/[A-Za-z0-9_-]+\\.json"))) fail("E_LOCALIZATION","Resource must be resources/i18n/<name>.json")
++            return LocalizationDescriptor(tag,name,"en",resource)
++        }
++    }
++}
++
++data class LocalizationBundle(val packageId: String,val locale: String,val displayName: String,val entries: Map<String,String>) {
++    val selectionId: String get()="$packageId/$locale"
++}
++
++/** Parsed only from authenticated payload bytes; no paths, classes, HTML or scripts are evaluated. */
++object LocalizationResources {
++    private val placeholder=Regex("\\{([a-z][a-zA-Z0-9]*)}")
++    private fun parameters(value: String): Set<String> {
++        val stripped=placeholder.replace(value,"")
++        if('{' in stripped || '}' in stripped) fail("E_LOCALIZATION","Malformed placeholder")
++        return placeholder.findAll(value).map { it.groupValues[1] }.toSet()
++    }
++    fun parse(bytes: ByteArray): Map<String,String> {
++        if(bytes.size>65536) fail("E_LOCALIZATION","Translation resource exceeds 64 KiB")
++        val d=jsonObject(bytes)
++        if(d.isEmpty() || d.size>UiTextKeys.english.size) fail("E_LOCALIZATION","Invalid translation key count")
++        return d.mapValues { (key,value) ->
++            val fallback=UiTextKeys.english[key] ?: fail("E_LOCALIZATION","Unknown or protected key: $key")
++            val text=(value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: fail("E_LOCALIZATION","String required: $key")
++            if(text.length !in 1..2048 || unsafe(text) || parameters(text)!=parameters(fallback)) fail("E_LOCALIZATION","Invalid text/placeholders: $key")
++            text
++        }
++    }
++    fun forPack(pack: VerifiedPack): List<LocalizationBundle> = pack.declarations().filter { it.type=="localization" }.map { c ->
++        val d=LocalizationDescriptor.parse(c.descriptor)
++        LocalizationBundle(pack.id,d.locale,d.displayName,parse(pack.content(d.resource)))
++    }
++}
++private fun unsafe(s: String)=s.any { (it.code<32 && it!='\n' && it!='\t') || it in '\u202a'..'\u202e' || it in '\u2066'..'\u2069' || it=='\u007f' }
++
++/** Host supplies only enabled, consented bundles. Selection is explicit, never first-provider-wins. */
++class UiTranslations(bundles: List<LocalizationBundle> = emptyList(),selection: String?=null) {
++    private val entries=bundles.singleOrNull { it.selectionId==selection }?.entries.orEmpty().toMap()
++    fun text(key: String,arguments: Map<String,String> = emptyMap()): String {
++        val english=UiTextKeys.english[key] ?: throw IllegalArgumentException("Unknown UI key $key")
++        val expected=Regex("\\{([a-z][a-zA-Z0-9]*)}").findAll(english).map { it.groupValues[1] }.toSet()
++        require(arguments.keys==expected) { "Placeholder arguments differ for $key" }
++        // Replace by match, so replacement values cannot inject additional formatting placeholders.
++        return Regex("\\{([a-z][a-zA-Z0-9]*)}").replace(entries[key] ?: english) { arguments.getValue(it.groupValues[1]) }
++    }
++}
+diff --git a/core/native-packages/src/main/java/dev/suicode/packages/PackageVerifier.kt b/core/native-packages/src/main/java/dev/suicode/packages/PackageVerifier.kt
+index de10fe9..89a357b 100644
+--- a/core/native-packages/src/main/java/dev/suicode/packages/PackageVerifier.kt
++++ b/core/native-packages/src/main/java/dev/suicode/packages/PackageVerifier.kt
+@@ -132,7 +132,7 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
+         }
+         if(m.array("components").count { it.jsonObject["type"]?.jsonPrimitive?.content=="setup" }>1) fail("E_COMPONENT","Only one setup component is permitted")
+         if(m.array("components").any { it.jsonObject["type"]?.jsonPrimitive?.content=="setup" } && !permissions.containsAll(setOf(Capability.FILE_READ,Capability.FILE_WRITE,Capability.RUN))) fail("E_PERMISSION","Kit setup requires declared file.read, file.write and process.run")
+-        val allowed=if(kind==PackKind.PLUGIN) setOf("language","simpleRun","environment","basicBuild") else setOf("language","simpleRun","environment","lsp","dap","build","test","format","lint","project","workflow","command","panel","setup")
++        val allowed=if(kind==PackKind.PLUGIN) setOf("language","simpleRun","environment","basicBuild") else setOf("language","simpleRun","environment","lsp","dap","build","test","format","lint","project","workflow","command","panel","setup","localization")
+         val componentIds=mutableMapOf<String, Operation?>()
+         m.array("components").forEach { c ->
+             val comp=c as? JsonObject ?: fail("E_COMPONENT","Expected object")
+@@ -140,12 +140,19 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
+             if (!comp.string("id").matches(Regex("[a-z][a-z0-9.-]{0,63}")) || componentIds.containsKey(comp.string("id"))) fail("E_COMPONENT","Duplicate/invalid component ID")
+             if (comp.string("type") !in allowed) fail("E_BOUNDARY","Component outside ${kind.suffix} scope")
+             if(comp.string("type")=="setup" && min<3) fail("E_API","setup requires API 3")
++            if(comp.string("type")=="localization" && (min<4 || Capability.LOCALIZATION !in permissions)) fail("E_LOCALIZATION","localization requires API 4 and ui.localization")
+             val entry=comp.string("entry")
+             val prefix=if(kind==PackKind.PLUGIN) "plugin/" else "ide/"
+             if (!entry.startsWith(prefix) || entry !in files || !entry.endsWith(".json")) fail("E_COMPONENT","Missing declarative component $entry")
+             componentIds[comp.string("id")]=validateDescriptor(comp.string("type"), jsonObject(files.getValue(entry)))
+         }
++        val locales=mutableSetOf<String>()
+         m.array("components").forEach { c ->
++            if(c.jsonObject.string("type")=="localization") {
++                val d=LocalizationDescriptor.parse(jsonObject(files.getValue(c.jsonObject.string("entry"))))
++                if(!locales.add(d.locale)) fail("E_LOCALIZATION","Duplicate locale in package")
++                LocalizationResources.parse(files[d.resource] ?: fail("E_LOCALIZATION","Missing translation resource"))
++            }
+             if(c.jsonObject.string("type")=="setup") KitRequirements.parse(jsonObject(files.getValue(c.jsonObject.string("entry")))).forEach { req ->
+                 if(req.resource!=null && req.resource !in files) fail("E_COMPONENT","Missing setup resource ${req.resource}")
+             }
+diff --git a/core/native-packages/src/test/java/dev/suicode/packages/LocalizationTest.kt b/core/native-packages/src/test/java/dev/suicode/packages/LocalizationTest.kt
+new file mode 100644
+index 0000000..b387c9d
+--- /dev/null
++++ b/core/native-packages/src/test/java/dev/suicode/packages/LocalizationTest.kt
+@@ -0,0 +1,63 @@
++package dev.suicode.packages
++import java.io.File
++import java.nio.file.Files
++import kotlinx.serialization.json.*
++import kotlin.test.*
++class LocalizationTest {
++    private val example=File("../../docs/specifications/examples/packages/zh-hans-kit.suik")
++    private fun parse(s: String)=LocalizationResources.parse((canonical(Json.parseToJsonElement(s))+"\n").toByteArray())
++    @Test fun realSuikHasNoEnvironmentDependencyAndLoadsTranslations() {
++        val pack=PackageVerifier().verify(example.readBytes(),"suik")
++        assertEquals(setOf(Capability.LOCALIZATION),pack.permissions)
++        assertTrue(pack.manifest.getValue("dependencies").jsonArray.isEmpty())
++        val b=LocalizationResources.forPack(pack).single();val t=UiTranslations(listOf(b),b.selectionId)
++        assertEquals("文件",t.text("nav.files"));assertEquals("Stop file",t.text("run.stop"))
++        assertEquals("3 个当前匹配项",t.text("files.matches",mapOf("count" to "3")))
++    }
++    @Test fun unknownKeysAndProtectedSecurityTextRejected() {
++        assertEquals("E_LOCALIZATION",assertFailsWith<PackageFailure> { parse("{\"security.approve\":\"approved\"}") }.code)
++        assertFailsWith<PackageFailure> { parse("{\"nav.files\":2}") }
++        assertFailsWith<PackageFailure> { parse("{\"nav.files\":\"\\u202eevil\"}") }
++    }
++    @Test fun placeholderSetsValidatedAndArgumentsAreLiteral() {
++        assertFailsWith<PackageFailure> { parse("{\"files.matches\":\"无占位符\"}") }
++        assertFailsWith<PackageFailure> { parse("{\"nav.files\":\"{unexpected}\"}") }
++        val b=LocalizationBundle("dev.test.locale","zh-Hans","中文",parse("{\"files.matches\":\"{count} 项\"}"))
++        assertEquals("{scope} 项",UiTranslations(listOf(b),b.selectionId).text("files.matches",mapOf("count" to "{scope}")))
++        assertFailsWith<IllegalArgumentException> { UiTranslations().text("files.matches") }
++    }
++    @Test fun localePathFallbackAndLimitsRejected() {
++        fun d(locale:String="zh-Hans",resource:String="resources/i18n/zh.json",fallback:String="en")=buildJsonObject { put("locale",locale);put("displayName","中文");put("fallback",fallback);put("resource",resource) }
++        assertEquals("zh-Hans",LocalizationDescriptor.parse(d()).locale)
++        for(tag in listOf("en","zh-hans","../zh","zh_Hans")) assertFailsWith<PackageFailure> { LocalizationDescriptor.parse(d(locale=tag)) }
++        assertFailsWith<PackageFailure> { LocalizationDescriptor.parse(d(resource="resources/i18n/../host.json")) }
++        assertFailsWith<PackageFailure> { LocalizationDescriptor.parse(d(fallback="zh")) }
++        assertFailsWith<PackageFailure> { LocalizationResources.parse(ByteArray(65537)) }
++    }
++    @Test fun explicitProviderChoiceNeverLetsAnotherPackageOverride() {
++        val a=LocalizationBundle("dev.test.a","zh-Hans","A",mapOf("nav.files" to "A"));val b=a.copy(packageId="dev.test.b",entries=mapOf("nav.files" to "B"))
++        assertEquals("A",UiTranslations(listOf(b,a),a.selectionId).text("nav.files"))
++        assertEquals("Files",UiTranslations(listOf(b),a.selectionId).text("nav.files"))
++        assertEquals("Files",UiTranslations(listOf(a,a),a.selectionId).text("nav.files"))
++    }
++    @Test fun productionStoreInstallEnableDisableUninstallPreservesEnglishFallback() {
++        val root=Files.createTempDirectory("locale-store")
++        val store=PackageStore(root,PackageVerifier())
++        try {
++            val bytes=example.readBytes();val p=store.inspect(bytes,"suik");val consent=Consent(p.digest,p.permissions,true)
++            store.install(bytes,"suik",consent);store.enable(p.id,emptyMap())
++            fun translated(): String {
++                val bundles=store.records().filter { it.enabled && Capability.LOCALIZATION in it.grants }.flatMap { LocalizationResources.forPack(store.load(it.id)) }
++                return UiTranslations(bundles,"${p.id}/zh-Hans").text("nav.files")
++            }
++            assertEquals("文件",translated());store.disable(p.id);assertEquals("Files",translated())
++            store.enable(p.id,emptyMap());assertEquals("文件",translated());store.uninstall(p.id);assertEquals("Files",translated())
++        } finally { store.close();root.toFile().deleteRecursively() }
++    }
++    @Test fun integrityTamperingAndMissingConsentRejected() {
++        val bytes=example.readBytes();val p=PackageVerifier().verify(bytes,"suik")
++        assertEquals("E_UNVERIFIED",assertFailsWith<PackageFailure> { IdeKitLoader().activate(p,Consent(p.digest,p.permissions,false),emptyMap()) }.code)
++        bytes[bytes.size/2]=(bytes[bytes.size/2].toInt() xor 1).toByte()
++        assertFailsWith<PackageFailure> { PackageVerifier().verify(bytes,"suik") }
++    }
++}
+diff --git a/core/native-packages/src/test/java/dev/suicode/packages/PackageVerifierTest.kt b/core/native-packages/src/test/java/dev/suicode/packages/PackageVerifierTest.kt
+index ba4dc0c..fc17cd2 100644
+--- a/core/native-packages/src/test/java/dev/suicode/packages/PackageVerifierTest.kt
++++ b/core/native-packages/src/test/java/dev/suicode/packages/PackageVerifierTest.kt
+@@ -35,6 +35,21 @@ class PackageVerifierTest {
+         return (magic+ByteBuffer.allocate(12).putShort(1).putShort(0).putLong(body.size.toLong()).array()+body) to key?.public
+     }
+     private fun rejected(code: String, action: ()->Unit) { assertEquals(code,assertFailsWith<PackageFailure>(block=action).code) }
++    @Test fun localizationRequiresKitApiPermissionAndValidAuthenticatedResources() {
++        fun fixture(api:Int=4,permission:String="ui.localization",resource:Boolean=true): ByteArray {
++            val m=manifest("suik","[{\"entry\":\"ide/strings.json\",\"id\":\"strings\",\"type\":\"localization\"}]","[\"$permission\"]").toString(Charsets.UTF_8).replace("\"max\":1,\"min\":1","\"max\":$api,\"min\":$api").toByteArray()
++            val d="""{"displayName":"中文","fallback":"en","locale":"zh-Hans","resource":"resources/i18n/zh.json"}
++""".toByteArray()
++            val files=mutableMapOf("manifest.json" to m,"ide/strings.json" to d)
++            if(resource) files["resources/i18n/zh.json"]="""{"nav.files":"文件"}
++""".toByteArray()
++            return pack("suik",files).first
++        }
++        assertEquals(1,LocalizationResources.forPack(PackageVerifier().verify(fixture(),"suik")).size)
++        rejected("E_LOCALIZATION") { PackageVerifier().verify(fixture(api=3),"suik") }
++        rejected("E_LOCALIZATION") { PackageVerifier().verify(fixture(permission="ui.panel"),"suik") }
++        rejected("E_LOCALIZATION") { PackageVerifier().verify(fixture(resource=false),"suik") }
++    }
+     @Test fun allValidExamplesVerify() {
+         examples.listFiles()!!.filter { !it.name.startsWith("illegal") }.forEach { f ->
+             PackageVerifier().verify(f.readBytes(),f.extension,mapOf("dev.suicode.example.java" to "0.1.0","dev.suicode.example.c-cpp" to "0.1.0","dev.suicode.example.python" to "0.1.0"))
+diff --git a/core/native-packages/src/test/java/dev/suicode/packages/UiNodesTest.kt b/core/native-packages/src/test/java/dev/suicode/packages/UiNodesTest.kt
+index 38eea6f..def11dd 100644
+--- a/core/native-packages/src/test/java/dev/suicode/packages/UiNodesTest.kt
++++ b/core/native-packages/src/test/java/dev/suicode/packages/UiNodesTest.kt
+@@ -22,6 +22,6 @@ class UiNodesTest {
+         assertEquals("E_SIZE",assertFailsWith<PackageFailure> { UiNodes.validate(nodes("[$tree]")) }.code)
+     }
+     @Test fun newCoreStillSupportsVersionOnePackages() {
+-        assertTrue(CoreApi.compatible(1,1));assertTrue(CoreApi.compatible(2,2));assertTrue(CoreApi.compatible(3,3));assertFalse(CoreApi.compatible(4,5));assertFalse(CoreApi.compatible(2,1))
++        assertTrue(CoreApi.compatible(1,1));assertTrue(CoreApi.compatible(2,2));assertTrue(CoreApi.compatible(3,3));assertTrue(CoreApi.compatible(4,4));assertFalse(CoreApi.compatible(5,6));assertFalse(CoreApi.compatible(2,1))
+     }
+ }
+diff --git a/core/search/build.gradle.kts b/core/search/build.gradle.kts
+index 3a35377..6318a2e 100644
+--- a/core/search/build.gradle.kts
++++ b/core/search/build.gradle.kts
+@@ -22,6 +22,7 @@ android {
+ }
+ 
+ dependencies {
++    testImplementation(kotlin("test"))
+     implementation(libs.coroutines.android)
+ }
+ 
+diff --git a/core/search/src/main/java/dev/blamspot/jcode/core/search/SearchEngine.kt b/core/search/src/main/java/dev/blamspot/jcode/core/search/SearchEngine.kt
+index 5eb7dd4..6ff95c8 100644
+--- a/core/search/src/main/java/dev/blamspot/jcode/core/search/SearchEngine.kt
++++ b/core/search/src/main/java/dev/blamspot/jcode/core/search/SearchEngine.kt
+@@ -26,6 +26,7 @@ data class SearchMatch(
+     val lineText: String,
+     /** Matched text */
+     val matchText: String,
++    val isDirectory: Boolean = false,
+ )
+ 
+ /**
+@@ -97,27 +98,25 @@ class SearchEngine {
+      */
+     fun searchFileNames(rootDir: File, options: SearchOptions): Flow<SearchMatch> = flow {
+         val pattern = compilePattern(options)
+-        var resultCount = 0
+-        rootDir.walkTopDown()
+-            .filter { it.isFile }
+-            .filter { file -> shouldInclude(file, rootDir, options, checkSize = false) }
+-            .forEach { file ->
+-                if (resultCount >= options.maxResults) return@forEach
+-                val matcher = pattern.matcher(file.name)
+-                if (matcher.find()) {
+-                    emit(
+-                        SearchMatch(
+-                            filePath = file.relativeTo(rootDir).path,
+-                            lineNumber = 0,
+-                            columnStart = matcher.start(),
+-                            columnEnd = matcher.end(),
+-                            lineText = file.name,
+-                            matchText = matcher.group(),
+-                        )
+-                    )
+-                    resultCount++
+-                }
++        val pending=java.util.ArrayDeque<File>()
++        rootDir.listFiles()?.sortedByDescending { it.name }?.forEach(pending::addLast)
++        var count=0
++        while(pending.isNotEmpty()) {
++            currentCoroutineContext().ensureActive()
++            val file=pending.removeLast()
++            if(java.nio.file.Files.isSymbolicLink(file.toPath())) continue
++            val directory=file.isDirectory
++            val traversalOptions=options.copy(includePatterns=emptyList())
++            if(!shouldInclude(file,rootDir,traversalOptions,checkSize=false)) continue
++            if(directory) file.listFiles()?.sortedByDescending { it.name }?.forEach(pending::addLast)
++            if(!shouldInclude(file,rootDir,options,checkSize=false)) continue
++            val matcher=pattern.matcher(file.name)
++            if(matcher.find()) {
++                emit(SearchMatch(file.relativeTo(rootDir).path,0,matcher.start(),matcher.end(),file.name,matcher.group(),directory))
++                count++
++                if(options.maxResults>0 && count>=options.maxResults) break
+             }
++        }
+     }.flowOn(Dispatchers.IO)
+ 
+     /**
+diff --git a/core/search/src/test/java/dev/blamspot/jcode/core/search/NameSearchTest.kt b/core/search/src/test/java/dev/blamspot/jcode/core/search/NameSearchTest.kt
+new file mode 100644
+index 0000000..287f7a2
+--- /dev/null
++++ b/core/search/src/test/java/dev/blamspot/jcode/core/search/NameSearchTest.kt
+@@ -0,0 +1,36 @@
++package dev.blamspot.jcode.core.search
++import kotlinx.coroutines.*
++import kotlinx.coroutines.flow.*
++import java.nio.file.Files
++import kotlin.test.*
++class NameSearchTest {
++    @Test fun includesDirectoriesAndUnicodeWithoutReadingContents()=runBlocking {
++        val root=Files.createTempDirectory("find-test").toFile()
++        try {
++            val folder=root.resolve("中文 Space").apply { mkdir() };folder.resolve("中文.java").writeText("Hello")
++            val matches=SearchEngine().searchFileNames(root,SearchOptions("中文")).toList()
++            assertEquals(2,matches.size);assertTrue(matches.any { it.isDirectory });assertTrue(matches.any { !it.isDirectory })
++        } finally { root.deleteRecursively() }
++    }
++    @Test fun regexCaseLimitsAndSymlinkBoundary()=runBlocking {
++        val root=Files.createTempDirectory("find-test").toFile();val outside=Files.createTempDirectory("outside").toFile()
++        try {
++            root.resolve("Alpha").mkdir();root.resolve("alpha.kt").writeText("unused");outside.resolve("Alpha-secret").writeText("secret")
++            Files.createSymbolicLink(root.resolve("link").toPath(),outside.toPath())
++            assertEquals(1,SearchEngine().searchFileNames(root,SearchOptions("^Alpha",isRegex=true,caseSensitive=true)).toList().size)
++            assertEquals(1,SearchEngine().searchFileNames(root,SearchOptions("alpha",maxResults=1)).toList().size)
++            assertTrue(SearchEngine().searchFileNames(root,SearchOptions("secret")).toList().isEmpty())
++        } finally { root.deleteRecursively();outside.deleteRecursively() }
++    }
++    @Test fun cancelledNameWalkStopsAndInvalidRegexFails()=runBlocking {
++        val root=Files.createTempDirectory("find-test").toFile()
++        try {
++            repeat(100) { root.resolve("file$it").writeText("") }
++            var count=0
++            SearchEngine().searchFileNames(root,SearchOptions("file")).take(1).collect { count++ }
++            assertEquals(1,count)
++            assertFailsWith<java.util.regex.PatternSyntaxException> { SearchEngine().searchFileNames(root,SearchOptions("[",isRegex=true)).toList() }
++            Unit
++        } finally { root.deleteRecursively() }
++    }
++}
+diff --git a/docs/specifications/README.md b/docs/specifications/README.md
+index e2a2593..f5273ae 100644
+--- a/docs/specifications/README.md
++++ b/docs/specifications/README.md
+@@ -1,6 +1,6 @@
+ # sui-code 开发规范
+ 
+-当前规范 **0.3.0**；Core API **3**（兼容 API1/2）；SUIC/SUIK **1.0**。
++当前规范 **0.4.0**；Core API **4**（兼容 API1/2/3）；SUIC/SUIK **1.0**。
+ 
+ - [Native Extension & IDE Kit Development Specification](SUIC-SUIK-Development-Specification.md)
+ - [UI Extension & Design Specification](SuiCode-UI-Design-Specification.md)
+@@ -216,3 +216,5 @@ stays stable so `## 6` always means "protocol or format" where it appears.
+   [CI, quality and invariants](09-platform/03-ci-quality-and-invariants.md#4-specification-checks):
+   every source path cited by a spec must still exist, and every relative spec link must resolve.
+ - Update the **Verified against** row of any document you re-check against source.
++
++- [API4 简体中文本地化开发样例（部分翻译，无运行环境依赖）](examples/zh-hans-kit/manifest.json) · [可导入示例包](examples/packages/zh-hans-kit.suik)
+diff --git a/docs/specifications/SUIC-SUIK-Development-Specification.md b/docs/specifications/SUIC-SUIK-Development-Specification.md
+index 59917a6..2e2e69d 100644
+--- a/docs/specifications/SUIC-SUIK-Development-Specification.md
++++ b/docs/specifications/SUIC-SUIK-Development-Specification.md
+@@ -1,6 +1,6 @@
+ # sui-code Native Extension & IDE Kit Development Specification
+ 
+-规范版本 **0.3.0**；Core API **3**（兼容 API 1、2 声明）；SUIC **1.0**；SUIK **1.0**。
++规范版本 **0.4.0**；Core API **4**（兼容 API 1、2、3 声明）；SUIC **1.0**；SUIK **1.0**。
+ 
+ 本文的 MUST/必须、MUST NOT/禁止、SHOULD/应为规范性要求。本文与 `core/native-packages/src/main/java/dev/suicode/packages` 中的生产验证器、加载器、授权会话及事务存储对应，不引用 JCode 插件 API。所有路径均相对仓库根目录。
+ 
+@@ -568,7 +568,8 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。
+           "language.lsp",
+           "debug.dap",
+           "project.read",
+-          "ui.panel"
++          "ui.panel",
++          "ui.localization"
+         ]
+       },
+       "uniqueItems": true
+@@ -624,7 +625,8 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。
+               "workflow",
+               "command",
+               "panel",
+-              "setup"
++              "setup",
++              "localization"
+             ]
+           },
+           "entry": {
+@@ -651,6 +653,43 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。
+     "permissions",
+     "dependencies",
+     "components"
++  ],
++  "allOf": [
++    {
++      "if": {
++        "properties": {
++          "components": {
++            "contains": {
++              "type": "object",
++              "properties": {
++                "type": {
++                  "const": "localization"
++                }
++              },
++              "required": [
++                "type"
++              ]
++            }
++          }
++        }
++      },
++      "then": {
++        "properties": {
++          "api": {
++            "properties": {
++              "min": {
++                "minimum": 4
++              }
++            }
++          },
++          "permissions": {
++            "contains": {
++              "const": "ui.localization"
++            }
++          }
++        }
++      }
++    }
+   ]
+ }
+ ```
+@@ -835,3 +874,326 @@ LSP 使用 UTF-16 坐标和正确编码的 file URI，发请求前冲刷 debounc
+ `PackageVerifier.verify(bytes:ByteArray,suffix:String,installed:Map<String,String>=emptyMap(),checkDependencies:Boolean=true):VerifiedPack`：API3新增可选 checkDependencies。默认仍执行全部已安装依赖版本检查；仅宿主的隔离审阅/计划流程可传 false，此时仍验证依赖字段、区间、包身份、签名、哈希和职责边界，但不把预览视为可激活。PackageStore.install/load/enable始终使用true；禁止用预览跳过实际安装检查。第三方SDK的PackageTool仍按默认严格验证。
+ 
+ API3 `setup` 的 Manifest 还必须声明 file.read/file.write/process.run，否则验证阶段报 E_PERMISSION，不能等到确认按钮触发异常。`project` 组件 arguments 可选 `markers:String="[]"`（内容为相对文件名 JSON 数组）；用于没有编辑器源文件时识别可选 Project 上下文。宿主忽略含空段、`.`/`..`、绝对路径或无效字符的 marker，不允许越出 Project。此字段不创建 Project、不执行脚本，缺省时可继续从已打开源文件匹配 Kit。Java/C_CPP/Python 正式模板分别声明 pom.xml、CMakeLists.txt、main.py。Kit 安装结束会串行更新服务注册、刷新与探测目录并重试现有编辑文件，无需手动进入 Servers 再安装。
++
++## 29. API 4：独立 UI 本地化资源（规范 0.4.0）
++
++这是生产 `Localization.kt` / Android NativePackageHost 的实际协议。包头、SUIC/SUIK容器版本仍为1.0。旧API1/2/3 Kit及其授权不变；Core API4是新增声明能力，不要求更新现有语言环境或重装Kit。`.suic`不能声明localization；`.suik`可只有本地化组件，也可同时含LSP/DAP/项目/面板等声明。语言资源不自动获得其他组件权限。
++
++### 29.1 Manifest、描述符及资源
++
++新增组件 `{"id":"strings","type":"localization","entry":"ide/strings.json"}`，Manifest `api.min >= 4`，权限包含`ui.localization`。没有隐含的process.run/file.write/project.read，也没有隐含语言环境依赖。一个包同一locale只能有一个组件。完整可安装示例为`examples/zh-hans-kit`，预构建文件为`examples/packages/zh-hans-kit.suik`；它仅是部分翻译的未签名开发样例，不是正式完整中文版。
++
++**完整合法 Manifest：**
++
++```json
++{
++  "id": "dev.suicode.example.zh-hans",
++  "name": "Simplified Chinese localization example",
++  "author": "sui-code SDK examples",
++  "description": "Partial development fixture, not a complete Chinese translation or official signed language pack.",
++  "version": "0.1.0",
++  "kind": "suik",
++  "api": {
++    "min": 4,
++    "max": 4
++  },
++  "permissions": [
++    "ui.localization"
++  ],
++  "dependencies": [],
++  "components": [
++    {
++      "id": "strings",
++      "type": "localization",
++      "entry": "ide/strings.json"
++    }
++  ]
++}
++```
++
++**完整描述符 Schema（Draft2020-12）：**
++
++```json
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "properties": {
++    "locale": {
++      "type": "string",
++      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
++      "not": {
++        "const": "en"
++      }
++    },
++    "displayName": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 80
++    },
++    "fallback": {
++      "const": "en"
++    },
++    "resource": {
++      "type": "string",
++      "pattern": "^resources/i18n/[A-Za-z0-9_-]+\\.json$"
++    }
++  },
++  "required": [
++    "locale",
++    "displayName",
++    "fallback",
++    "resource"
++  ]
++}
++```
++
++描述符必填字段：`locale:string`为大小写规范化BCP47（如zh-Hans、zh-CN），Java Locale规范化后必须相同；保留en不能覆盖。`displayName:string`长度1..80，纯文本，不得含控制字符或双向重排控制符。`fallback:string`当前只能为en，禁止循环/跨包回退。`resource:string`必须匹配resources/i18n/<ASCII文件名>.json；资源来自已认证包内容，禁止外部文件/URL/路径遍历。未知字段拒绝。
++
++**完整资源 Schema：**
++
++```json
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "minProperties": 1,
++  "maxProperties": 34,
++  "properties": {
++    "nav.files": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "nav.find": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "nav.languages": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "nav.packages": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "nav.settings": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.internal": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.filter": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.filterHint": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.matches": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.newFile": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.newFolder": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.refresh": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.more": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.content": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.names": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.current": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.query": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.scope": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.hint": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.file": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.stop": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.debug": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.continue": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.stopDebug": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.overview": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "project.build": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "project.test": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "project.run": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "project.tasks": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "packages.title": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "languages.title": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "ui.language": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "ui.english": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "ui.fallback": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    }
++  }
++}
++```
++
++资源为遵循本规范canonical JSON+LF规则的严格UTF-8 JSON对象（pack.py会规范化源码JSON），最多64KiB；1..注册键数个条目，每值为1..2048字符纯文本。Core只开放下表键；未知键/保护键拒绝E_LOCALIZATION。每条翻译必须保留对应英文的命名占位符集合（如{count}），不支持printf、HTML、ICU程序或脚本；不完整/额外花括号拒绝。资源不完整时逐键回退英文，不读取任意包提供的英文覆盖。校验器还检查UTF-8、深度、控制字符及原包SHA256/签名。
++
++|公开键|Core英文默认值|
++|---|---|
++|`nav.files`|Files|
++|`nav.find`|Find|
++|`nav.languages`|Languages|
++|`nav.packages`|Packages|
++|`nav.settings`|Settings|
++|`files.internal`|Internal Files|
++|`files.filter`|Filter visible names|
++|`files.filterHint`|Filters loaded entries only. Use Find for nested names and contents.|
++|`files.matches`|{count} visible matches|
++|`files.newFile`|New File|
++|`files.newFolder`|New Folder|
++|`files.refresh`|Refresh|
++|`files.more`|More file actions|
++|`find.content`|File contents|
++|`find.names`|Files and folders|
++|`find.current`|Current document|
++|`find.query`|Search {scope}|
++|`find.scope`|Search scope|
++|`find.hint`|Search names or contents across the selected folder.|
++|`run.file`|Run file|
++|`run.stop`|Stop file|
++|`run.debug`|Debug|
++|`run.continue`|Continue|
++|`run.stopDebug`|Stop debug|
++|`run.overview`|Overview|
++|`project.build`|Build|
++|`project.test`|Test|
++|`project.run`|Run Project|
++|`project.tasks`|Advanced tasks|
++|`packages.title`|Packages|
++|`languages.title`|Languages|
++|`ui.language`|Interface language|
++|`ui.english`|English (default)|
++|`ui.fallback`|Missing translations use English. Language resources do not install development environments.|
++
++
++### 29.2 实际 Core 接口
++
++所有接口在`dev.suicode.packages`，不依赖Android/JCode插件。新增能力`Capability.LOCALIZATION("ui.localization")`，这是被动资源授权，没有任意执行操作。
++
++|接口|参数、返回值、调用时机与失败|
++|---|---|
++|`LocalizationDescriptor.parse(d: JsonObject): LocalizationDescriptor`|验证包安装/加载时调用，全部字段必填；返回locale/displayName/fallback/resource。非法字段/值抛PackageFailure，code E_LOCALIZATION（公共JSON字段类型错误可为E_MANIFEST）。不产生IO/副作用。API4。|
++|`LocalizationResources.parse(bytes: ByteArray): Map<String,String>`|输入完整认证资源字节，返回不可执行的键/文本映射。校验上述限额与占位符；不合法抛PackageFailure（E_LOCALIZATION或通用JSON错误）。纯函数，不要求权限；它不等于启用。|
++|`LocalizationResources.forPack(pack: VerifiedPack): List<LocalizationBundle>`|从认证归档中解析全部localization组件；仅取包内resource；缺失/错误失败。返回每个locale的bundle，包含packageId、locale、displayName、entries和selectionId。API4；宿主必须另外检查生命周期/授权。|
++|`LocalizationBundle.selectionId: String`|只读，格式packageId/locale，用于明确选择；不能只按locale自动抢占。|
++|`UiTranslations(bundles: List<LocalizationBundle> = emptyList(), selection: String? = null)`|宿主仅传入已启用且已授予ui.localization的资源，构建当前不可变快照。没有选择、不可用或重复selectionId时使用英文，防止冲突自动选取。|
++|`UiTranslations.text(key: String, arguments: Map<String,String> = emptyMap()): String`|必填已注册key；arguments键集合必须等于该英文的占位符集合，无占位符时为空。返回当前译文或英文，并一次性按匹配替换参数；参数中的花括号保持字面量，不递归替换。未知key/缺失或额外参数抛IllegalArgumentException，属于宿主编程错误。无IO/权限升级。|
++|`UiTextKeys.english: Map<String,String>`|公开只读键表，是本版本唯一允许翻译的Core键；新增键随API向前添加，移除键需重大API版本及弃用周期。安全授权/签名/来源/删除确认不在键表。|
++
++### 29.3 Android加载、启停及选择
++
++NativePackageHost在安装、恢复、启用、禁用、更新、卸载、回滚后的publish阶段，于IO线程读取已校验归档。只有enabled、有活跃CoreSession且记录授予ui.localization的包才进入`localizations: StateFlow<List<LocalizationBundle>>`。`selectedUiLanguage: StateFlow<String?>`保存用户明确选择；`selectUiLanguage(selection: String?)`为宿主界面操作，null选择英文，不存在selection抛IllegalArgumentException。偏好单独保存，不改系统Locale、不重建Ubuntu、不清任何项目数据。UI通过NativeLocalizationProvider和core/design的LocalUiTranslations订阅不可变快照；`@Composable uiText(key,arguments): String`与上述text契约相同。
++
++Packages页面提供界面语言选择和来源ID。安装只增加可选资源，不自动切换；同locale的不同包各自列出，用户明确选择，不靠安装时间覆盖。禁用/卸载当前资源立即英文回退；偏好保留，重新启用相同ID/locale可恢复。进程重启恢复包和选择。资源更新仍走完整摘要/签名/授权审阅与原子包替换，解析失败回滚旧归档；不允许未确认脚本执行。API4仅已接入的导航、Files筛选、Find模式、主运行操作、Languages/Packages标题等公开键可被替换；未接入的既有设置/高级界面仍英文，完整翻译迁移属于后续范围。
++
++### 29.4 安全、测试与兼容
++
++localization仅可提供纯数据；禁止全局主题覆盖、HTML/View/DEX/JS注入和安全确认文案篡改。完整性/签名状态沿用标准包协议；未签名样例显示未验证且必须确认。权限检查在宿主生命周期而非仅靠Schema，插件越界仍E_BOUNDARY。无环境、下载或执行依赖的语言包审阅计划为零工具步骤；与已启用Java/C_CPP/Python Kit并存。测试覆盖安装/启用/禁用/卸载后资源回退、两来源冲突、占位符、错误key/locale/资源大小及损坏包；规范工具同步验证完整Schema及包样例。旧接口未弃用；后续开放键/新增回退机制必须同步SDK、规范、校验工具和测试。
+diff --git a/docs/specifications/SuiCode-UI-Design-Specification.md b/docs/specifications/SuiCode-UI-Design-Specification.md
+index 94a9eae..0946136 100644
+--- a/docs/specifications/SuiCode-UI-Design-Specification.md
++++ b/docs/specifications/SuiCode-UI-Design-Specification.md
+@@ -1,6 +1,6 @@
+ # sui-code UI Extension & Design Specification
+ 
+-规范版本 **0.3.0**；对应 Core API **3**（兼容 API1 只读面板及 API2 原生交互面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
++规范版本 **0.4.0**；对应 Core API **4**（兼容 API1 只读面板及 API2 原生交互面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
+ 
+ ## 1. 范围、实现状态与品牌
+ 
+@@ -235,3 +235,15 @@ QuickRun Stop 只终止当前任务进程树，交互 shell、终端及已输出
+ `.suik` 面板仍仅通过 UiNodes API 扩展，不能覆盖导航轨、全局主题、底部终端或主运行带。遵守前述48dp触控、键盘焦点、TalkBack标签、动态字级、横竖屏响应和主题继承规范；0.3.0不授权任意第三方Android View/HTML脚本注入。
+ 
+ 文件删除事务必须先持久化恢复意图，再移动原文件，最后更新统计；统计写入失败不使已移动数据失去可恢复索引。不能自动清理仍含用户数据但元数据损坏的 Trash 条目。重命名/移动同步标签和断点路径；影响当前调试源时结束该调试并明确提示重新启动，避免继续使用失效源映射。系统 DocumentsProvider 保留旧 Root ID/authority 授权身份，仅改显示名称和内部安全实现；拒绝越界名称、符号链接和从系统文件入口直接移动/删除登记中的工程根。
++
++## 28. UI polish与本地化扩展（规范0.4.0 / API4）
++
++导航轨固定68dp，第二栏独立测量内容宽度，分隔条12dp；`WorkbenchPaneSizing.bounds(available:Float,fontScale:Float,requested:Float?):Bounds`输入当前可用宽度dp、系统字号缩放及可选用户内容宽度。返回modal/minimum/maximum/width，非有限输入安全回退。内容最小260×clamp(fontScale,1,1.5)dp，编辑区至少320×该缩放dp；空间不足使用抽屉，最大内容560dp。初始内容为窗口30%，限制300..420dp再按实际边界夹取。拖动/方向键16dp步进/无障碍setProgress均受边界限制，释放才持久化；缩小窗口夹取显示值而不覆盖原偏好。横竖屏、分屏由实测宽度重算。底部终端位置与原高度调节独立保留。
++
++Files仅过滤已加载树/当前目录名称，不递归走盘；Find通过明确下拉模式选择文件内容、文件和目录名称、当前文档，显示根范围，可选Internal Files/Project，保留大小写/正则。工具栏用响应式FlowRow；Files保留新文件、新目录和刷新，其他动作进入溢出菜单；不得删除功能。行操作48dp触控区域，深树缩进有界，长名称省略但逐行Properties提供完整名称和路径。
++
++普通创建仅有Project，文件/目录由Internal Files创建。原Workspace数据库、.jcode及PRoot/workspace映射保留；旧容器以saved project group兼容显示，不允许新建。高级共享配置保留，但不再以Default Workspace作用户前置概念。
++
++UI本地化仅由.suik的localization声明及ui.localization权限提供。完整定义、Schema、公开键、英文回退、生命周期、参数类型和错误行为见[总规范第29节](SUIC-SUIK-Development-Specification.md#29-api-4独立-ui-本地化资源规范-040)。`LocalUiTranslations`为CompositionLocal<UiTranslations>；`uiText(key:String,arguments:Map<String,String>=emptyMap()):String`在Compose读取快照，不进行IO。第三方UI只使用其认证资源和Core开放键，不能覆盖主题、全局布局、权限确认或签名状态。默认英文，不安装任何额外运行环境。当前局部键接入不宣称已完成全应用中文翻译。
++
++本轮Launcher图标逐字节保持原v0.5，包括常规/Debug/Beta前景和Adaptive入口；所有临时S-dot方案停用。后续图标设计由用户另行提供。本轮没有改变配色、字体大小、圆角及主题。
+diff --git a/docs/specifications/examples/packages/zh-hans-kit.suik b/docs/specifications/examples/packages/zh-hans-kit.suik
+new file mode 100644
+index 0000000000000000000000000000000000000000..0ddb6fec9c2fab841aaf4218bdc26268bad9a932
+GIT binary patch
+literal 1338
+zcmWFz_4E$#c4uH<WPk!zwE%Bs77-wi1Bex4Y-8>`-U?(f0#yhA>Ew*m<m}?o++w}r
+zj6@?-Gu?9seOU~77!KHnE@8ZJqceFo^R0p;X|Yb*mqp(fR>@sBkZ~mT7ek7P1LIn)
+z)n4rhj5C_Lt4w7W&3x0M&YJWWgh}69G_9yg=69j}`u@M)w&q{w)@O75m^sI4mc#a(
+zJHa}8nwIVeIdRlkQ*|0!wd}eRGd&!FPHm4(KUVjr@?_(r%^QQVeR3xXT{)7t`Slc;
+zNliA@J^}4g@4AyN9PtyH5P8b>+uO?cjs3z;tm^FI@4x+Z{~r^o7d=_4g7Sf0s|8|^
+z7c)~*^@~f2GV{`l^|Ffd^Hzs>oz&4g;ko9E_Zi>NO+i)r);&CV@1%d(np(59fB(+w
+zTV5?S@0)+kzLe{eYwy1QUZV9<W2x%1Cn~CH>C9J`J!AZ7`SWC_rNZ1$$z5`tl}8;G
+zF1qsQ&!t5v6BK$P*UZn%n7Eujbn*1iIrEo?oMvS}bsU!;YXdJZ?3V#CFVJzhiFui6
+zsl_E=mxWH)o5!pu(DK`c_0}&Z8O^I(J*TTpI<0Y(>)SiCHde;;pYC<vb;@*9MGd6V
+zzTGxXNRv1(@R8y1X@-fe=T9^2*rqBfv2fj=7n9UC*H)XC9GJlzDsf=xjL8$Wa6Nu5
+z`6Z|?E8X9JtLU_yx8Bcknfs>tjPK=i>$D(6mG(ye8xg+K*E8Cr3i&^pQS~Hr<+_4>
+zR&GBIT#{)1xMlf-qAPC39~Z7|Wm8@$X;Qn)q4&(|LrznDv^7j)tbMf9e1&(<3#=6T
+zq_*IU_PG?JU32&LuVM{bX}#qy>$c@j3omMHeG~B~SJ%3h^BCXe)Y6YfW>v2Lce?!k
+z?79;nO4nB<wYN-tyWdsg>pZW$g86SY-#zg3Av<cgovSK&Ee{N{2|z3j47Z}x;{4L0
+z<kVvQOhb!2{i+OIkHkDk{Dw~O^*ZbzbM*T>r%lsj4hUED&ge6YSUyQ#e5rs|pfYDm
+z#+@yW!56|7dTJ-}rrz3p#m8u8t8pR6j+sZ_?=^q_@jbVCmiP;$THXbm?M|lhSGRRv
+zv@NTZ`Ej*GQRdHQnUxn7>`QuE@cI?=eOuv{Qx+@TUiRCrc`LB^gMN=Qf4sHD+0zLz
+zwSFGkv@UF`n(_8c;m<EYyJpXoz3g$jP*3uc=7mhh_;)ieNW2lh|GuVo`t`nebxTv{
+zlR~o@OsDmmAN{qub;IF^&*tf|oLbA4n50cQd-BY)L#-<F3*&a>S4bwFe>jPc$GO!@
+z*wb9pOY^#qM%jUlD-Cw+P>MXF7=7r5nL_9FbBSK(nPx3*^1k-LO679&Dc`NJN8ZU+
+zmfAer%vQZWz?+dtgc)~<01R9(XaI&ZX8C}w8$Gi@^fE9sFg^w{(X$@9ZuH!M&<(O3
+iC2yc>MNbe2tvi_TCXWDbRyL4g79a$blLA1BfdK$5<p3=J
+
+literal 0
+HcmV?d00001
+
+diff --git a/docs/specifications/examples/zh-hans-kit/ide/strings.json b/docs/specifications/examples/zh-hans-kit/ide/strings.json
+new file mode 100644
+index 0000000..5a39b85
+--- /dev/null
++++ b/docs/specifications/examples/zh-hans-kit/ide/strings.json
+@@ -0,0 +1,6 @@
++{
++  "locale": "zh-Hans",
++  "displayName": "简体中文（开发示例）",
++  "fallback": "en",
++  "resource": "resources/i18n/zh-Hans.json"
++}
+diff --git a/docs/specifications/examples/zh-hans-kit/manifest.json b/docs/specifications/examples/zh-hans-kit/manifest.json
+new file mode 100644
+index 0000000..0e4cd2d
+--- /dev/null
++++ b/docs/specifications/examples/zh-hans-kit/manifest.json
+@@ -0,0 +1,23 @@
++{
++  "id": "dev.suicode.example.zh-hans",
++  "name": "Simplified Chinese localization example",
++  "author": "sui-code SDK examples",
++  "description": "Partial development fixture, not a complete Chinese translation or official signed language pack.",
++  "version": "0.1.0",
++  "kind": "suik",
++  "api": {
++    "min": 4,
++    "max": 4
++  },
++  "permissions": [
++    "ui.localization"
++  ],
++  "dependencies": [],
++  "components": [
++    {
++      "id": "strings",
++      "type": "localization",
++      "entry": "ide/strings.json"
++    }
++  ]
++}
+diff --git a/docs/specifications/examples/zh-hans-kit/resources/i18n/zh-Hans.json b/docs/specifications/examples/zh-hans-kit/resources/i18n/zh-Hans.json
+new file mode 100644
+index 0000000..bb93b3a
+--- /dev/null
++++ b/docs/specifications/examples/zh-hans-kit/resources/i18n/zh-Hans.json
+@@ -0,0 +1,14 @@
++{
++  "nav.files": "文件",
++  "nav.find": "查找",
++  "nav.languages": "语言",
++  "nav.packages": "扩展包",
++  "nav.settings": "设置",
++  "files.filter": "筛选当前名称",
++  "files.filterHint": "仅筛选已加载条目。递归名称和内容搜索请使用“查找”。",
++  "files.matches": "{count} 个当前匹配项",
++  "run.file": "运行文件",
++  "run.debug": "调试",
++  "run.overview": "概览",
++  "ui.language": "界面语言"
++}
+diff --git a/docs/specifications/schemas/localization-resources.schema.json b/docs/specifications/schemas/localization-resources.schema.json
+new file mode 100644
+index 0000000..78a71dd
+--- /dev/null
++++ b/docs/specifications/schemas/localization-resources.schema.json
+@@ -0,0 +1,179 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "minProperties": 1,
++  "maxProperties": 34,
++  "properties": {
++    "nav.files": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "nav.find": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "nav.languages": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "nav.packages": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "nav.settings": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.internal": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.filter": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.filterHint": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.matches": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.newFile": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.newFolder": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.refresh": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "files.more": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.content": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.names": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.current": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.query": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.scope": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "find.hint": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.file": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.stop": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.debug": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.continue": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.stopDebug": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "run.overview": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "project.build": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "project.test": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "project.run": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "project.tasks": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "packages.title": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "languages.title": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "ui.language": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "ui.english": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    },
++    "ui.fallback": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 2048
++    }
++  }
++}
+diff --git a/docs/specifications/schemas/localization.schema.json b/docs/specifications/schemas/localization.schema.json
+new file mode 100644
+index 0000000..d3c8ec5
+--- /dev/null
++++ b/docs/specifications/schemas/localization.schema.json
+@@ -0,0 +1,32 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "properties": {
++    "locale": {
++      "type": "string",
++      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
++      "not": {
++        "const": "en"
++      }
++    },
++    "displayName": {
++      "type": "string",
++      "minLength": 1,
++      "maxLength": 80
++    },
++    "fallback": {
++      "const": "en"
++    },
++    "resource": {
++      "type": "string",
++      "pattern": "^resources/i18n/[A-Za-z0-9_-]+\\.json$"
++    }
++  },
++  "required": [
++    "locale",
++    "displayName",
++    "fallback",
++    "resource"
++  ]
++}
+diff --git a/docs/specifications/schemas/suik-manifest.schema.json b/docs/specifications/schemas/suik-manifest.schema.json
+index 020a08c..e7fac89 100644
+--- a/docs/specifications/schemas/suik-manifest.schema.json
++++ b/docs/specifications/schemas/suik-manifest.schema.json
+@@ -58,7 +58,8 @@
+           "language.lsp",
+           "debug.dap",
+           "project.read",
+-          "ui.panel"
++          "ui.panel",
++          "ui.localization"
+         ]
+       },
+       "uniqueItems": true
+@@ -114,7 +115,8 @@
+               "workflow",
+               "command",
+               "panel",
+-              "setup"
++              "setup",
++              "localization"
+             ]
+           },
+           "entry": {
+@@ -141,5 +143,42 @@
+     "permissions",
+     "dependencies",
+     "components"
++  ],
++  "allOf": [
++    {
++      "if": {
++        "properties": {
++          "components": {
++            "contains": {
++              "type": "object",
++              "properties": {
++                "type": {
++                  "const": "localization"
++                }
++              },
++              "required": [
++                "type"
++              ]
++            }
++          }
++        }
++      },
++      "then": {
++        "properties": {
++          "api": {
++            "properties": {
++              "min": {
++                "minimum": 4
++              }
++            }
++          },
++          "permissions": {
++            "contains": {
++              "const": "ui.localization"
++            }
++          }
++        }
++      }
++    }
+   ]
+ }
+diff --git a/docs/sui-code-ui-polish-0.5.1.md b/docs/sui-code-ui-polish-0.5.1.md
+new file mode 100644
+index 0000000..212e309
+--- /dev/null
++++ b/docs/sui-code-ui-polish-0.5.1.md
+@@ -0,0 +1,75 @@
++# sui-code v0.5.1 UI polish — 实现、测试与交付报告
++
++基线为已交付v0.5 `d4ea352432d075a13e84bc9cfe3e558455ea3701`，任务分支`sui-code/v0.5-ui-polish`。已检查并保留该分支原有历史；图标临时方案按用户最新指令撤销。本轮不扩展三语言运行功能，不修改main/官方上游，不创建Release，不改旧v0.4/v0.5交付。
++
++## 1. 任务结果
++
++|任务|实际修改及边界|
++|---|---|
++|恢复图标|常规、Debug、Beta前景恢复原v0.5；全9个Launcher源资源逐字节校验。没有生成新图标或调整渐变/比例。历史建议文档已停用。最终APK内15个编译后的Launcher资源也与原v0.5逐字节相同。|
++|第二栏|修复原284/236dp总宽度包含68dp导航轨导致内容仅216/168dp的根因；独立计算内容宽度，按实测可用宽度、字号和编辑区下限夹取。持久化用户宽度；拖动、方向键16dp步进、无障碍调节/重置；窄窗口用抽屉。底部终端位置/高度调节独立保留。|
++|响应式操作|Files工具栏保留新文件/目录/刷新，其他动作及批量动作进入可达溢出菜单；行操作48dp，深树缩进有界，Properties能看完整名称和路径。Find模式下拉与选项分行，输入区可滚动。Languages/Packages按钮改为FlowRow，界面语言选择用弹窗避免挤占列表。|
++|Workspace入口|NewItemDialog移除类型参数/控件；OpenFolderTypeDialog只添加可选Project上下文；VM拒绝过期Workspace创建请求。命令面板分类改为Files，新建Project语义明确；设置中的旧共享配置标作Files/高级共享YAML。旧容器可作为saved project group打开/关闭，数据库、.jcode、用户目录与PRoot /workspace映射保留。|
++|Files / Find|Files只筛选已加载树/当前目录名称，不递归走盘；明确提示Find用于深层搜索。Find保留内容/名称/当前缓冲区三模式，名称包含目录，显示并可选Internal Files/Project范围；保留大小写/正则；文件定位代码行，目录定位Files。旧搜索输入立即取消、错误正则可恢复，快照避免同数量结果陈旧；目录搜索不跟随符号链接。|
++|本地化|Core API4新增Kit-only localization声明与ui.localization授权；认证资源校验、公开键、命名占位符、英文逐键回退、明确来源选择、启停/更新/卸载及恢复流程已接通。资源包不要求Ubuntu/PTY或语言环境。源码、SDK、完整Schema、两规范和可安装示例同步更新。|
++
++**本轮并未完成整套中文翻译。** `zh-hans-kit.suik`是独立、未签名、12条部分翻译的开发示例；安装需正常未验证发布者确认及ui.localization授权。它不是官方完整中文语言包。Core只含英文默认值；中文文本位于独立包资源/开发测试中。当前导航、Files筛选、Find模式、主运行操作和中心标题等公开键已接入，其余既有高级界面继续英文回退。
++
++## 2. 布局与生命周期要点
++
++导航轨68dp，内容初始为窗口30%（先限制300..420dp，再按实际边界夹取）；最小260×字号缩放，最大560dp，并保留至少320×字号缩放的编辑区。缩放使用1..1.5范围；低于容纳条件切抽屉。12dp分隔条在释放时保存内容dp宽度，不在每个指针事件写磁盘。缩小窗口只夹取显示值，不覆盖之前较宽偏好，放大可恢复。
++
++Files各项既有复制/剪切/移动/粘贴、创建、搜索、排序、多选、属性、Trash恢复、导出仍有入口。普通文件无需Project。旧Workspace元数据只兼容读取/管理，不迁移或删除文件，不重命名真实PRoot路径。
++
++语言选择在Packages → Interface language。安装资源仅增加可选项，默认英文；不同包同locale按来源分别选择，不自动抢占。选中包禁用/卸载后立即英文回退，保留偏好以便重新启用恢复。security/permission/signature确认文本不开放翻译，纯数据不能覆盖全局主题或执行代码。
++
++## 3. 关键修改文件与提交
++
++- JCodeShell.kt、WorkbenchPaneSizing.kt、WorkbenchPaneResize.kt：宽度模型、拖动/持久化、抽屉。
++- ExplorerView.kt / ExplorerFeature.kt、SearchToolPanel.kt、SearchEngine.kt：快速过滤、动作菜单、完整搜索与目录定位。
++- WorkbenchDialogs.kt、WorkbenchChromeBars.kt、WorkbenchPanels.kt、SettingsFeature.kt、MainViewModel.kt：Project-only创建、旧容器兼容。
++- Localization.kt、PackageVerifier.kt、Descriptors.kt、CoreApi.kt、NativePackageHost.kt、NativeLocalization.kt、NativeKitSetup.kt：真实本地化协议与加载/授权/无环境安装。
++- docs/specifications、tools/sui_packages、tools/ui：正式规范、SDK、示例及图标校验工具。
++
++完整提交/文件清单与补丁随Artifact；APK构建源码与归档提交的对应关系写入apk-metadata.json。
++
++## 4. 自动化及基础集成测试
++
++云端JVM回归已通过 **248例，0失败**：fs26、distro66、native-packages61、design61、editor3、term4、lsp1、debug1、search3、app22。[GitHub独立回归也已成功](https://github.com/suidi-guliu/j-code-android/actions/runs/42495679946)（7分13秒）。最终`:app:assembleDebug :app:testDebugUnitTest`也已成功（2分52秒，703项任务）；签名、包身份与图标均已实际核验。范围包括：窗口/字号/旋转夹取模型、真实文件与目录名称搜索/大小写/正则/取消/链接边界、真实PackageStore安装启停卸载与英文回退、无环境依赖、占位符/保护键/未知来源冲突、认证资源缺失/校验失败/API权限边界；以及既有三语言QuickRun、文件安全、包管理、保存、终端、LSP/DAP生命周期的JVM回归。
++
++Schema/示例检查89个有效声明，非法插件仍被拒绝。Launcher基线校验9个资源。Standalone SDK已独立构建（34秒）；13个生产API源文件逐字节相同，生产验证器检查18个包：17个合法包通过，非法插件E_BOUNDARY拒绝。
++
++本轮**不重复宣称**上轮Ubuntu x64三语言LSP/DAP协议测试为新增实机验证；本轮未改变LSP/DAP运行器核心。用户已反馈v0.5文件/项目/插件/扩展保留、Languages迅速打开且暂未重现ANR，这只记录为用户已观察结果，不扩大为本包新实机通过。
++
++## 5. APK及升级安全
++
++实际包名`dev.suicode.ide.debug`、versionName`0.5.1`、versionCode`1070804`（高于1070803）、仅ARM64。apksigner已实际与v0.5比较且一致，证书SHA256为`62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0`。APK文件：`sui-code-v0.5.1-ui-polish-debug.apk`，**87,042,788字节**。SHA-256：
++
++```text
++fcd8b4801e8fa01173ea06bea657f13b14ae1568043bb360f10e5f5d8a47b27f
++```
++
++badging、签名与15项编译图标比对日志随交付。功能提交`cda9bdc`，版本配置修正提交`2470902`；APK以`2470902a12e5d1d192febb1b21069ca503ffc78c`构建，后续只追加报告与交付元数据。
++
++本轮没有数据迁移/清理、没有环境重装、没有应用身份变化。布局偏好和语言选择使用新增独立偏好键。旧v0.4/v0.5 SHA256SUMS应保持通过。身份/签名/版本条件通过不能替代真实设备覆盖升级数据保留验收。
++
++## 6. 下载及公共规范
++
++[整合交付工作流及Artifact入口](https://github.com/suidi-guliu/j-code-android/actions/workflows/deliver-ui-polish-v0.5.yml)：在成功运行的Artifacts下载`sui-code-v0.5-ui-polish-integrated`，具体运行与直达入口在最终公开回执中补充。工作流不重构/重新签名APK，上传后下载并逐字节核验全部交付文件。包含一个整合APK、report.md、changes.patch、modified-files.txt、source.zip、native-sdk.zip、部分中文示例包、构建日志、校验值及测试证据。Artifact需登录GitHub，保留30天。六个官方语言包及官方目录保持v0.5原字节，不重新封装运行环境；新本地化开发样例单独提供。
++
++- [Native Extension Development Specification](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/docs/specifications/SUIC-SUIK-Development-Specification.md)
++- [UI Extension Design Specification](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/docs/specifications/SuiCode-UI-Design-Specification.md)
++
++## 7. 仍需ARM64实机验收
++
++没有连接用户平板，不能宣称像素布局、拖动手感、鼠标悬停、TalkBack、键盘、横竖屏/分屏、大字号、升级数据保留或Languages性能已在新包实测。没有伪造logcat、截图、Perfetto或Android端到端结论。
++
++一次性覆盖安装后：
++
++1. 不卸载/不清数据，确认图标与原v0.5一致，原文件/项目/扩展/Ubuntu仍在。
++2. 横屏/竖屏/分屏/字号变化检查第二栏；拖动、键盘调整后重启验证宽度恢复；确认编辑区保留，终端仍在底部且可调高。
++3. 检查Files/Find/Languages/Packages操作不裁剪；长文件名经Properties查看完整路径；溢出菜单可访问全部文件操作。
++4. 新建Project、普通文件和多层目录；确认没有Workspace创建选项；旧项目组、共享配置及导出仍可用。
++5. Files只筛选当前可见名称；Find名称搜索包含深层目录并能打开，内容搜索能跳行，正则错误可恢复，切换范围/快速输入不显示过期结果。
++6. 导入部分中文示例.suik，审阅未验证来源/权限；确认不会要求安装JDK/Python/Ubuntu。选择中文后检查接入键和英文回退；禁用/卸载即时英文，重启与重新启用恢复。
++7. Languages冷开/反复进入保持迅速；确认Run file/Debug/Overview与终端入口仍在。三语言完整实机功能回归留下一阶段统一进行。
+diff --git a/docs/tasks/2026-11-08-v0.5-ui-polish.md b/docs/tasks/2026-11-08-v0.5-ui-polish.md
+new file mode 100644
+index 0000000..973c6ef
+--- /dev/null
++++ b/docs/tasks/2026-11-08-v0.5-ui-polish.md
+@@ -0,0 +1,5 @@
++# v0.5 UI polish 当前任务记录
++
++以用户最新实机反馈指令为准。旧图标设计建议全部撤销，9个Launcher资源恢复到d4ea352原版；不设计或替换图标。保留历史提交以便审计，不将临时方案纳入交付。
++
++本轮范围：第二栏自适应/拖动持久化；Files快速可见名称筛选与Find递归名称/内容搜索；移除Workspace创建入口但保留旧数据；API4独立.suik本地化和部分开发样例；统一测试和单一APK交付。实际结果及待实机项见最终UI polish测试报告。
+diff --git a/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerFeature.kt b/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerFeature.kt
+index ac434f6..ac5ad2e 100644
+--- a/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerFeature.kt
++++ b/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerFeature.kt
+@@ -39,6 +39,7 @@ object ExplorerFeature {
+         hiddenPatterns: List<String> = emptyList(),
+         greyOutExcluded: Boolean = true,
+         autoRefreshEnabled: Boolean = true,
++        revealDirectory: String? = null,
+         onFileSelected: ((dev.blamspot.jcode.fs.FsNode) -> Unit)? = null,
+         onSnackbar: ((String) -> Unit)? = null,
+     ) {
+@@ -52,6 +53,7 @@ object ExplorerFeature {
+             hiddenPatterns = hiddenPatterns,
+             greyOutExcluded = greyOutExcluded,
+             autoRefreshEnabled = autoRefreshEnabled,
++            revealDirectory = revealDirectory,
+             onFileSelected = onFileSelected,
+             onSnackbar = onSnackbar,
+         )
+diff --git a/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt b/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt
+index 3ccef93..f5ccc98 100644
+--- a/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt
++++ b/feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt
+@@ -12,7 +12,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
+ import androidx.compose.foundation.background
+ import androidx.compose.foundation.clickable
+ import androidx.compose.foundation.combinedClickable
++import androidx.compose.foundation.verticalScroll
+ import androidx.compose.foundation.horizontalScroll
++import androidx.compose.foundation.layout.ExperimentalLayoutApi
++import androidx.compose.foundation.layout.FlowRow
++import androidx.compose.foundation.layout.heightIn
++import dev.blamspot.jcode.design.uiText
+ import androidx.compose.foundation.layout.Box
+ import androidx.compose.foundation.layout.Column
+ import androidx.compose.foundation.layout.Row
+@@ -113,7 +118,7 @@ import java.util.Locale
+  * @param onFileSelected callback when a file is tapped
+  * @param onSnackbar callback for showing user messages
+  */
+-@OptIn(ExperimentalFoundationApi::class)
++@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+ @Composable
+ fun ExplorerView(
+     workspace: Workspace?,
+@@ -127,6 +132,7 @@ fun ExplorerView(
+     /** Auto-refresh the tree from filesystem events while the Explorer is actually on-screen. Gated
+      *  by the caller (drawer open / sidebar visible) so watchers stop the moment it's hidden. */
+     autoRefreshEnabled: Boolean = true,
++    revealDirectory: String? = null,
+     onFileSelected: ((FsNode) -> Unit)? = null,
+     onSnackbar: ((String) -> Unit)? = null,
+ ) {
+@@ -157,24 +163,14 @@ fun ExplorerView(
+     var clipboard by remember { mutableStateOf<List<ClipboardEntry>>(emptyList()) }
+     var multi by remember { mutableStateOf(false) }
+     var query by remember { mutableStateOf("") }
+-    var searchRows by remember { mutableStateOf<List<TreeRow>>(emptyList()) }
+-    var searchNote by remember { mutableStateOf("") }
++    val searchRows=remember(query,treeRows,listRows,activeViewMode) { (if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.node.name.contains(query,ignoreCase=true) } }
++    val searchNote=if(query.isBlank()) "" else uiText("files.matches",mapOf("count" to searchRows.size.toString()))
+     var sort by remember { mutableStateOf(TreeViewModel.Sort.Name) }
+     var properties by remember { mutableStateOf<String?>(null) }
+     var batchDelete by remember { mutableStateOf(false) }
+     val selectedRows=(if(query.isNotBlank()) searchRows else treeRows+listRows).distinctBy { it.id }.filter { it.id in selectedIds && !it.isPlaceholder }
+     // If a directory and its child are selected, operate only on the directory.
+     val batchRows=selectedRows.filter { child -> selectedRows.none { parent -> parent.id!=child.id && child.id.startsWith(parent.id+"/") } }
+-    LaunchedEffect(query,project) {
+-        if(query.isBlank()) { searchRows=emptyList();searchNote="";return@LaunchedEffect }
+-        kotlinx.coroutines.delay(180)
+-        val root=(project.fsPath as? FsPath.Local)?.file
+-        if(root==null) { searchNote="Search requires an internal/local directory. SAF access remains available through the file tree.";return@LaunchedEffect }
+-        val taskContext=kotlinx.coroutines.currentCoroutineContext()
+-        val result=withContext(Dispatchers.IO) { dev.blamspot.jcode.fs.LocalFileSearch.search(root,query) { taskContext.ensureActive() } }
+-        searchRows=withContext(Dispatchers.IO) { result.files.map { f -> TreeRow(f.absolutePath,FsNode(FsPath.Local(f),f.name,if(f.isDirectory && !java.nio.file.Files.isSymbolicLink(f.toPath())) FsKind.Directory else FsKind.File,f.length(),f.lastModified()),0,false,false) } }
+-        searchNote="${searchRows.size} matches"+if(result.truncated) " · limited; refine search" else ""
+-    }
+ 
+     // The bin. Its button stays on the toolbar while there is anything in it even after the setting
+     // is turned off — opting out should stop deletes going there, not strand what already has.
+@@ -187,8 +183,15 @@ fun ExplorerView(
+     LaunchedEffect(trashRevision, autoRefreshEnabled) { trashHasItems = !trash.isEmpty() }
+ 
+     // Load project root on first composition
+-    LaunchedEffect(project) {
++    LaunchedEffect(project,revealDirectory) {
+         viewModel.loadProjectRoot(project)
++        revealDirectory?.let { requested ->
++            val root=(project.fsPath as? FsPath.Local)?.file
++            val target=File(requested)
++            if(root!=null && runCatching { dev.blamspot.jcode.fs.DocumentPaths(root).resolve(requested).isDirectory }.getOrDefault(false)) {
++                viewModel.setViewMode(ExplorerViewMode.List);viewModel.navigateTo(FsPath.Local(target),target.name)
++            }
++        }
+     }
+ 
+     // The view mode is an app preference (Settings); react when it changes.
+@@ -336,6 +339,7 @@ fun ExplorerView(
+             return
+         }
+         when (action) {
++            RowAction.Properties -> properties="${row.node.name}\n${row.node.path.stableId}\n${row.node.kind} · ${row.node.sizeBytes} bytes\nModified: ${java.util.Date(row.node.modifiedAtMillis)}"
+             RowAction.Open -> onFileSelected?.invoke(row.node)
+             RowAction.NewFile -> showCreateDialog = CreateTarget(row.node.path, isDirectory = false)
+             RowAction.NewFolder -> showCreateDialog = CreateTarget(row.node.path, isDirectory = true)
+@@ -374,18 +378,25 @@ fun ExplorerView(
+     Column(modifier = modifier.fillMaxSize()) {
+         // Compact action toolbar (always visible) with create/refresh/paste. The Tree|List view mode
+         // is set in Settings, not here.
+-        OutlinedTextField(value=query,onValueChange={query=it.take(256)},label={Text("Search files / folders")},singleLine=true,modifier=Modifier.fillMaxWidth())
++        OutlinedTextField(value=query,onValueChange={query=it.take(256)},label={Text(uiText("files.filter"))},singleLine=true,modifier=Modifier.fillMaxWidth())
++        Text(uiText("files.filterHint"),style=MaterialTheme.typography.bodySmall)
+         if(searchNote.isNotBlank()) Text(searchNote,style=MaterialTheme.typography.bodySmall)
+-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
++        FlowRow(Modifier.fillMaxWidth()) {
+             TextButton(onClick={multi=!multi;selectionState.clear()}) { Text(if(multi) "Done (${selectedIds.size})" else "Select") }
+             TextButton(onClick={sort=TreeViewModel.Sort.entries[(sort.ordinal+1)%TreeViewModel.Sort.entries.size];scope.launch { viewModel.setSort(sort) }}) { Text("Sort: ${sort.name}") }
+-            if(multi) {
+-                TextButton(onClick={ (if(query.isNotBlank()) searchRows else if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.id!=project.fsPath.stableId }.forEach { if(it.id !in selectedIds) selectionState.toggle(it.id) } }) { Text("All") }
+-                TextButton(enabled=batchRows.isNotEmpty(),onClick={clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,false) }}) { Text("Copy") }
+-                TextButton(enabled=batchRows.isNotEmpty(),onClick={if(batchRows.any { isProtectedPath(it.node.path) }) onSnackbar?.invoke("Project/root folders must be managed through Projects") else clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,true) }}) { Text("Cut / move") }
+-                TextButton(enabled=batchRows.isNotEmpty(),onClick={batchDelete=true}) { Text("Trash") }
++            var actionsExpanded by remember { mutableStateOf(false) }
++            Box {
++                TextButton(onClick={actionsExpanded=true}) { Text("Selection actions ▾") }
++                CompactContextMenu(expanded=actionsExpanded,onDismissRequest={actionsExpanded=false},listActions=buildList {
++                    if(multi) {
++                        add(ContextAction(JCodeIcon.SelectAll,"Select all visible") { (if(query.isNotBlank()) searchRows else if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.id!=project.fsPath.stableId }.forEach { if(it.id !in selectedIds) selectionState.toggle(it.id) } })
++                        add(ContextAction(JCodeIcon.Copy,"Copy",enabled=batchRows.isNotEmpty()) { clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,false) } })
++                        add(ContextAction(JCodeIcon.Cut,"Cut / move",enabled=batchRows.isNotEmpty()) { if(batchRows.any { isProtectedPath(it.node.path) }) onSnackbar?.invoke("Project/root folders must be managed through Projects") else clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,true) } })
++                        add(ContextAction(JCodeIcon.Trash,"Move to Trash",enabled=batchRows.isNotEmpty()) { batchDelete=true })
++                    }
++                    add(ContextAction(JCodeIcon.Settings,"Properties / full names",enabled=selectedRows.isNotEmpty()) { properties=selectedRows.joinToString("\n\n") { "${it.node.name}\n${it.node.path.stableId}\n${it.node.kind} · ${it.node.sizeBytes} bytes\nModified: ${java.util.Date(it.node.modifiedAtMillis)}" } })
++                })
+             }
+-            TextButton(enabled=selectedRows.isNotEmpty(),onClick={properties=selectedRows.joinToString("\n\n") { "${it.node.name}\n${it.node.path.stableId}\n${it.node.kind} · ${it.node.sizeBytes} bytes\nModified: ${java.util.Date(it.node.modifiedAtMillis)}" }}) { Text("Properties") }
+         }
+         ExplorerToolbar(
+             viewMode = activeViewMode,
+@@ -477,7 +488,7 @@ fun ExplorerView(
+     }
+     }
+ 
+-    properties?.let { value -> AlertDialog(onDismissRequest={properties=null},title={Text("File properties")},text={Text(value)},confirmButton={TextButton(onClick={properties=null}) { Text("Close") }}) }
++    properties?.let { value -> AlertDialog(onDismissRequest={properties=null},title={Text("File properties")},text={Text(value,Modifier.verticalScroll(rememberScrollState()))},confirmButton={TextButton(onClick={properties=null}) { Text("Close") }}) }
+     if(batchDelete) AlertDialog(onDismissRequest={batchDelete=false},title={Text("Move ${batchRows.size} selected items to Trash?")},text={Text("Files remain recoverable from Trash. Registered project roots cannot be removed here.")},confirmButton={TextButton(onClick={
+         batchDelete=false
+         fileOpScope.launch {
+@@ -612,7 +623,7 @@ data class ClipboardEntry(
+ )
+ 
+ /** Per-row actions surfaced via the visible overflow (⋮) menu. */
+-enum class RowAction { Open, NewFile, NewFolder, Rename, Copy, Cut, Delete, ImportHere, Export }
++enum class RowAction { Open, NewFile, NewFolder, Rename, Copy, Cut, Delete, ImportHere, Export, Properties }
+ 
+ /** Parent of a path, or null when there is no addressable parent (SAF tree URIs). */
+ private fun parentPathOf(path: FsPath): FsPath? = when (path) {
+@@ -650,7 +661,7 @@ private fun RowOverflowMenu(
+         JcTooltip("More actions") {
+             IconButton(
+                 onClick = { onExpandedChange(true) },
+-                modifier = Modifier.size(28.dp),
++                modifier = Modifier.size(48.dp),
+             ) {
+                 Icon(
+                     painter = jcIcon(JCodeIcon.MoreVert),
+@@ -678,6 +689,7 @@ private fun RowOverflowMenu(
+                     add(ContextAction(JCodeIcon.NewFolder, "New folder") { onAction(row, RowAction.NewFolder) })
+                     add(ContextAction(JCodeIcon.Add, "Import files…") { onAction(row, RowAction.ImportHere) })
+                 }
++                add(ContextAction(JCodeIcon.Settings, "Properties / full name") { onAction(row, RowAction.Properties) })
+                 add(ContextAction(JCodeIcon.Save, "Export…") { onAction(row, RowAction.Export) })
+                 // Extension-contributed actions (e.g. "Add to .gitignore") target a path inside the
+                 // repo — the project root isn't a valid target, so omit them there.
+@@ -711,7 +723,7 @@ private fun ExplorerBreadcrumb(
+     ) {
+         if (entries.size > 1) {
+             JcTooltip("Up one level") {
+-                IconButton(onClick = onNavigateUp, modifier = Modifier.size(28.dp)) {
++                IconButton(onClick = onNavigateUp, modifier = Modifier.size(48.dp)) {
+                     Icon(
+                         painter = jcIcon(JCodeIcon.ArrowUp),
+                         contentDescription = "Up one level",
+@@ -810,7 +822,7 @@ private const val EXCLUDED_ROW_ALPHA = 0.4f
+  *  `git status` in the guest, and slow enough that a large expanded tree isn't re-listed constantly. */
+ private const val EXPLORER_VISIBLE_REFRESH_MS = 2_000L
+ 
+-@OptIn(ExperimentalFoundationApi::class)
++@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+ @Composable
+ private fun TreeRowItem(
+     row: TreeRow,
+@@ -820,7 +832,7 @@ private fun TreeRowItem(
+     onAction: (TreeRow, RowAction) -> Unit,
+ ) {
+     val iconSize = IconSize.md
+-    val indent = (row.depth * 16).dp
++    val indent = (row.depth.coerceAtMost(4) * 16).dp
+ 
+     if (row.isPlaceholder) {
+         DenseRow(
+@@ -840,6 +852,7 @@ private fun TreeRowItem(
+     val isDir = row.node.kind == FsKind.Directory
+ 
+     DenseRow(
++        height = 48.dp,
+         modifier = Modifier
+             .combinedClickable(
+                 onClick = onClick,
+@@ -914,7 +927,7 @@ private fun TreeRowItem(
+ 
+ // --- List View ---
+ 
+-@OptIn(ExperimentalFoundationApi::class)
++@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+ @Composable
+ private fun ListViewContent(
+     rows: List<TreeRow>,
+@@ -1034,25 +1047,20 @@ private fun ExplorerToolbar(
+     showTrash: Boolean,
+     onOpenTrash: () -> Unit,
+ ) {
+-    Row(
+-        modifier = Modifier
+-            .fillMaxWidth()
+-            .padding(horizontal = Space.xs, vertical = Space.xxs),
+-        verticalAlignment = Alignment.CenterVertically,
+-    ) {
+-        ToolbarIcon(jcIcon(JCodeIcon.NewFile), "New File", onCreateFile)
+-        ToolbarIcon(jcIcon(JCodeIcon.NewFolder), "New Folder", onCreateFolder)
+-        ToolbarIcon(jcIcon(JCodeIcon.Add), "Import files", onImport)
+-        ToolbarIcon(jcIcon(JCodeIcon.Paste), "Paste", onPaste, enabled = canPaste)
+-        ToolbarIcon(jcIcon(JCodeIcon.Refresh), "Refresh", onRefresh)
+-        if (viewMode == ExplorerViewMode.Tree) {
+-            ToolbarIcon(jcIcon(JCodeIcon.Collapse), "Collapse all", onCollapseAll)
+-        }
+-        // Away from the make-and-refresh cluster, at the end of the row: the bin is where deletes
+-        // are undone, not another thing to do to the tree.
+-        if (showTrash) {
+-            Spacer(modifier = Modifier.weight(1f))
+-            ToolbarIcon(jcIcon(JCodeIcon.Trash), "Trash", onOpenTrash)
++    Row(Modifier.fillMaxWidth().padding(horizontal=Space.xs),verticalAlignment=Alignment.CenterVertically) {
++        ToolbarIcon(jcIcon(JCodeIcon.NewFile),uiText("files.newFile"),onCreateFile)
++        ToolbarIcon(jcIcon(JCodeIcon.NewFolder),uiText("files.newFolder"),onCreateFolder)
++        ToolbarIcon(jcIcon(JCodeIcon.Refresh),uiText("files.refresh"),onRefresh)
++        Spacer(Modifier.weight(1f))
++        var more by remember { mutableStateOf(false) }
++        Box {
++            ToolbarIcon(jcIcon(JCodeIcon.MoreVert),uiText("files.more"),{more=true})
++            CompactContextMenu(expanded=more,onDismissRequest={more=false},listActions=buildList {
++                add(ContextAction(JCodeIcon.Add,"Import files",onClick=onImport))
++                if(canPaste) add(ContextAction(JCodeIcon.Paste,"Paste",onClick=onPaste))
++                if(viewMode==ExplorerViewMode.Tree) add(ContextAction(JCodeIcon.Collapse,"Collapse all",onClick=onCollapseAll))
++                if(showTrash) add(ContextAction(JCodeIcon.Trash,"Trash / restore",onClick=onOpenTrash))
++            })
+         }
+     }
+ }
+@@ -1065,7 +1073,7 @@ private fun ToolbarIcon(
+     enabled: Boolean = true,
+ ) {
+     JcTooltip(description) {
+-        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(34.dp)) {
++        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(48.dp)) {
+             Icon(
+                 painter = icon,
+                 contentDescription = description,
+diff --git a/feature/settings/src/main/java/dev/blamspot/jcode/feature/settings/SettingsFeature.kt b/feature/settings/src/main/java/dev/blamspot/jcode/feature/settings/SettingsFeature.kt
+index 5dbdd35..76a9bfe 100644
+--- a/feature/settings/src/main/java/dev/blamspot/jcode/feature/settings/SettingsFeature.kt
++++ b/feature/settings/src/main/java/dev/blamspot/jcode/feature/settings/SettingsFeature.kt
+@@ -294,7 +294,7 @@ object SettingsFeature {
+                                 Text(
+                                     text = when (scope) {
+                                         null -> "GLOBAL"
+-                                        ConfigScope.Workspace -> "WORKSPACE"
++                                        ConfigScope.Workspace -> "FILES"
+                                         ConfigScope.Project -> "PROJECT"
+                                     },
+                                     style = MaterialTheme.typography.labelMedium,
+@@ -1474,7 +1474,7 @@ object SettingsFeature {
+             if (query.isBlank()) {
+                 Text(
+                     text = when (selectedScope) {
+-                        ConfigScope.Workspace -> "These settings save to the workspace .jcode and apply across its projects unless a project override exists."
++                        ConfigScope.Workspace -> "These settings preserve the shared folder .jcode configuration and apply unless a Project overrides them."
+                         ConfigScope.Project -> "These settings save to the project .jcode and only affect the selected local project."
+                     },
+                     style = MaterialTheme.typography.bodySmall,
+@@ -1484,7 +1484,7 @@ object SettingsFeature {
+             }
+ 
+             workspaceError?.let { message ->
+-                WarningCard(title = "Workspace YAML warning", message = message)
++                WarningCard(title = "Shared folder YAML warning", message = message)
+             }
+ 
+             if (projectOverridesAvailable) {
+@@ -1588,7 +1588,7 @@ object SettingsFeature {
+                 keywords = "yaml files config workspace project open backing edit",
+             ) {
+                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+-                    CompactFilledButton(text = "Open workspace YAML", onClick = onOpenWorkspaceConfig)
++                    CompactFilledButton(text = "Open shared folder YAML (advanced)", onClick = onOpenWorkspaceConfig)
+                     CompactOutlinedButton(
+                         text = "Open project YAML",
+                         onClick = onOpenProjectConfig,
+diff --git a/tools/sui_packages/build_sdk.py b/tools/sui_packages/build_sdk.py
+index 3b441b4..aaa716d 100644
+--- a/tools/sui_packages/build_sdk.py
++++ b/tools/sui_packages/build_sdk.py
+@@ -29,7 +29,7 @@ application { mainClass.set("dev.suicode.packages.PackageTool") }
+   rel=p.relative_to(ROOT);assert p.read_bytes()==(dst/rel).read_bytes()
+   sums.append(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+rel.as_posix())
+  (dst/'API-SOURCE-SHA256SUMS').write_text('\n'.join(sums)+'\n')
+- (dst/'README.md').write_text('''# sui-code Native SDK 0.3 / Core API 3
++ (dst/'README.md').write_text('''# sui-code Native SDK 0.4 / Core API 4
+ 
+ This standalone JVM SDK copies the exact production Kotlin verifier, independent loaders, authorization API, native recipe/dataflow interpreter and design model. API-SOURCE-SHA256SUMS records byte identity. It does not emulate Android services or embed runtimes.
+ 
+diff --git a/tools/sui_packages/check_specifications.py b/tools/sui_packages/check_specifications.py
+index 5a39d20..fd4ab38 100644
+--- a/tools/sui_packages/check_specifications.py
++++ b/tools/sui_packages/check_specifications.py
+@@ -3,6 +3,7 @@
+ Requires jsonschema (development dependency only, never used by Android).
+ """
+ import json
++import re
+ import pathlib
+ import sys
+ import jsonschema
+@@ -31,5 +32,14 @@ for p in sorted((base / "examples").glob("*/manifest.json")) + sorted((root / "n
+         ds = json.loads((base / "schemas" / (c["type"] + ".schema.json")).read_text())
+         jsonschema.Draft202012Validator(ds).validate(descriptor)
+         count += 1
+-assert "0.3.0" in doc and "0.3.0" in ui
++keys=dict(re.findall(r'"([a-z][a-zA-Z0-9.]+)" to "([^"\n]*)"',(root/'core/native-packages/src/main/java/dev/suicode/packages/Localization.kt').read_text()))
++resources=json.loads((base/'schemas/localization-resources.schema.json').read_text())
++assert set(resources['properties'])==set(keys), 'E_SPEC_STALE: localization keys'
++for descriptor in (base/'examples').glob('*/ide/*.json'):
++ d=json.loads(descriptor.read_text())
++ if 'locale' in d and 'resource' in d:
++  strings=json.loads((descriptor.parent.parent/d['resource']).read_text())
++  jsonschema.Draft202012Validator(resources).validate(strings)
++  for key,value in strings.items():assert set(re.findall(r'\{([a-z][a-zA-Z0-9]*)}',value))==set(re.findall(r'\{([a-z][a-zA-Z0-9]*)}',keys[key]))
++assert "0.4.0" in doc and "0.4.0" in ui
+ print(f"PASS: schemas, embedded schema/manifest snapshots, {count} valid descriptors, illegal example rejected")
+diff --git a/tools/ui/launcher-v05-sha256.json b/tools/ui/launcher-v05-sha256.json
+new file mode 100644
+index 0000000..5f00220
+--- /dev/null
++++ b/tools/ui/launcher-v05-sha256.json
+@@ -0,0 +1,14 @@
++{
++  "baseline": "d4ea352432d075a13e84bc9cfe3e558455ea3701",
++  "files": {
++    "app/src/main/res/drawable/ic_launcher_foreground.xml": "01b4bb787ad7ce8c64a3b1e28f2096e116250213ac418b5f2e09fa2a6f6a3b7e",
++    "app/src/main/res/drawable/ic_launcher_foreground_beta.xml": "98fce6fa45826b222520c382c1a5664581e226f5e77104efc1b91c62d8a4a67d",
++    "app/src/main/res/drawable/ic_launcher_foreground_debug.xml": "02fa66e495e4fdbd5fc3612f4dccc5106433f51c2e3162ffe0883d1fd3c0202e",
++    "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "782436920161e1855dcd048e9f1dff31e7f6b656be28c1c415dddb85ba37ef8f",
++    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_beta.xml": "585e8f8fef7fd58fdf451d7741e1a49e3281390d4a1d3e4e890a90abcf38d712",
++    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_beta_round.xml": "585e8f8fef7fd58fdf451d7741e1a49e3281390d4a1d3e4e890a90abcf38d712",
++    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_debug.xml": "317345ea126aee2a89a6610c360ddf27afc6bd291ea76e2467fd3dc21b9bfebd",
++    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_debug_round.xml": "317345ea126aee2a89a6610c360ddf27afc6bd291ea76e2467fd3dc21b9bfebd",
++    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": "782436920161e1855dcd048e9f1dff31e7f6b656be28c1c415dddb85ba37ef8f"
++  }
++}
+diff --git a/tools/ui/verify_launcher.py b/tools/ui/verify_launcher.py
+new file mode 100644
+index 0000000..037e8a4
+--- /dev/null
++++ b/tools/ui/verify_launcher.py
+@@ -0,0 +1,11 @@
++#!/usr/bin/env python3
++"""Check all launcher source resources against the delivered v0.5 bytes, without regenerating icons."""
++from pathlib import Path
++import hashlib,json
++root=Path(__file__).resolve().parents[2]
++snapshot=json.loads((root/'tools/ui/launcher-v05-sha256.json').read_text())
++actual={str(p.relative_to(root)) for p in (root/'app/src/main/res').rglob('*') if p.is_file() and 'ic_launcher' in p.name}
++assert actual==set(snapshot['files']), 'Launcher resource inventory differs from v0.5'
++for path,digest in snapshot['files'].items():
++ assert hashlib.sha256((root/path).read_bytes()).hexdigest()==digest, f'Launcher modified: {path}'
++print(f"PASS: {len(actual)} launcher resources byte-identical to v0.5 {snapshot['baseline']}")

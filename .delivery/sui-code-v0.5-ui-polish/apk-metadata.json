@@ -1,0 +1,19 @@
+{
+  "apk_file": "sui-code-v0.5.1-ui-polish-debug.apk",
+  "bytes": 87042788,
+  "sha256": "fcd8b4801e8fa01173ea06bea657f13b14ae1568043bb360f10e5f5d8a47b27f",
+  "applicationId": "dev.suicode.ide.debug",
+  "versionName": "0.5.1",
+  "versionCode": 1070804,
+  "abis": [
+    "arm64-v8a"
+  ],
+  "certificate_sha256": "62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0",
+  "v05_signer_matches": true,
+  "compiled_launcher_resources_identical_to_v05": 15,
+  "official_catalog_unchanged": true,
+  "apk_build_source_commit": "2470902a12e5d1d192febb1b21069ca503ffc78c",
+  "baseline_commit": "d4ea352432d075a13e84bc9cfe3e558455ea3701",
+  "device_upgrade_tested": false,
+  "source_archive_commit": "6535aef1216478ca7612b5319bd68f0c9df52782"
+}
