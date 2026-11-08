@@ -1,0 +1,17 @@
+{
+  "apk_file": "sui-code-v0.5-debug.apk",
+  "bytes": 86956384,
+  "sha256": "d8c968ff33288a50d1ebdbb4b85ce7da5d2d4ce2e5cf48bc8979b864d9d1be8a",
+  "applicationId": "dev.suicode.ide.debug",
+  "versionName": "0.5.0",
+  "versionCode": 1070803,
+  "abis": [
+    "arm64-v8a"
+  ],
+  "certificate_sha256": "62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0",
+  "v01_v04_signers_match": true,
+  "apk_build_source_commit": "5806a993f7047c493094310585ad1056f9e0fe29",
+  "baseline_commit": "50aec6ab2f9dbde20982c4b9247238f88e7b17b0",
+  "device_upgrade_tested": false,
+  "source_archive_commit": "1c30272d010c5dbd7bd5fe8c76c62e4219aec1a0"
+}
