@@ -16,7 +16,7 @@ for kind, example in [("suic", "minimal"), ("suik", "minimal-kit")]:
     for p in [base / "schemas" / f"{kind}-manifest.schema.json", base / "examples" / example / "manifest.json"]:
         if "```json\n" + p.read_text() + "```" not in doc:
             raise AssertionError(f"E_SPEC_STALE: {p.name}")
-for p in sorted((base / "examples").glob("*/manifest.json")):
+for p in sorted((base / "examples").glob("*/manifest.json")) + sorted((root / "native-library/src").glob("*/*/manifest.json")):
     m = json.loads(p.read_text())
     schema = json.loads((base / "schemas" / (m["kind"] + "-manifest.schema.json")).read_text())
     validator = jsonschema.Draft202012Validator(schema)
@@ -31,5 +31,5 @@ for p in sorted((base / "examples").glob("*/manifest.json")):
         ds = json.loads((base / "schemas" / (c["type"] + ".schema.json")).read_text())
         jsonschema.Draft202012Validator(ds).validate(descriptor)
         count += 1
-assert "0.2.0" in doc and "0.2.0" in ui
+assert "0.3.0" in doc and "0.3.0" in ui
 print(f"PASS: schemas, embedded schema/manifest snapshots, {count} valid descriptors, illegal example rejected")

@@ -197,10 +197,12 @@ class DebugSession(
         val id = seq.incrementAndGet()
         val deferred = CompletableDeferred<JSONObject>()
         pending[id] = deferred
-        writeMessage(JSONObject().apply {
-            put("seq", id); put("type", "request"); put("command", command); put("arguments", arguments)
-        })
-        return withTimeout(30_000) { deferred.await() }
+        return try {
+            writeMessage(JSONObject().apply {
+                put("seq", id); put("type", "request"); put("command", command); put("arguments", arguments)
+            })
+            withTimeout(30_000) { deferred.await() }
+        } finally { pending.remove(id) }
     }
 
     private suspend fun writeMessage(message: JSONObject) {
@@ -233,6 +235,7 @@ class DebugSession(
      * A normal exit is already TERMINATED by the `terminated` event, so this only reports real deaths.
      */
     private fun onAdapterGone(detail: String?) {
+        if(closed.get()) { pending.values.forEach { it.completeExceptionally(DebugException("Adapter closed")) };pending.clear();return }
         val why = detail?.let { " ($it)" } ?: ""
         val message = "The debug adapter exited before answering$why."
         val state = _state.value
@@ -374,13 +377,24 @@ class DebugSession(
 
     override fun close() {
         if(!closed.compareAndSet(false,true)) return
-        scope.launch { runCatching { sendRequest("disconnect", JSONObject().put("terminateDebuggee", true)) } }
-        readJob?.cancel()
-        transport?.close(); transport = null
-        _state.value = DebugState.DISCONNECTED
-        pending.values.forEach { it.cancel() }
-        pending.clear()
-        scope.cancel()
+        val closing=transport
+        val cleanup=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+        // Keep the reader alive until disconnect is acknowledged. Cancelling first loses Java's
+        // terminateDebuggee request because its adapter lives in the retained language server.
+        cleanup.launch {
+            try { withTimeout(1500) { sendRequest("disconnect",JSONObject().put("terminateDebuggee",true)) } }
+            catch(_: Exception) { /* The transport close is the final fallback for owned adapters. */ }
+            finally {
+                readJob?.cancel()
+                runCatching { closing?.close() }
+                transport=null
+                pending.values.forEach { it.cancel() };pending.clear()
+                _state.value=DebugState.DISCONNECTED
+                scope.cancel();cleanup.cancel()
+            }
+        }
+        cleanup.launch { delay(2000);runCatching { closing?.close() } }
+
     }
 
     // ---- parsers ----

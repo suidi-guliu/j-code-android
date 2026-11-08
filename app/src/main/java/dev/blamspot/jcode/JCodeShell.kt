@@ -92,6 +92,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -126,6 +127,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import dev.blamspot.jcode.workbench.LocalAdvancedTaskNavigation
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -982,7 +985,7 @@ fun JCodeApp(
     val activeDebugFile = editorGroup.activeTab?.takeIf { !it.isPage }?.filePath
     // Resolved through the ViewModel rather than by matching the catalog's `extensions` here: `.kt`
     // maps to an engine only inside an Android app project, which a plain extension match misses.
-    val activeDebugEngineId = remember(activeDebugFile?.path) {
+    val activeDebugEngineId = remember(activeDebugFile?.path,debugCatalogState.entries,debugCatalogState.installedEntryIds) {
         activeDebugFile?.path?.let { viewModel.debugEngineIdFor(it) }
     }
     val canDebug = activeDebugEngineId != null &&
@@ -1382,6 +1385,7 @@ fun JCodeApp(
         EditorEmptyActions(
             recents = recents,
             onOpenRecent = viewModel::openRecent,
+            onRemoveRecent = viewModel::removeRecent,
             onExportRecent = { recent ->
                 val dir = if (recent.kind == ProjectKind.Local) recent.uri else ""
                 pendingTreeExport = File(dir).name.ifBlank { "project" } + "\n" + dir
@@ -1699,6 +1703,7 @@ fun JCodeApp(
         LocalSdkInstallRequestedId provides sdkInstallRequestedId,
         LocalExtensionInstallPhases provides extensionInstallPhases,
         dev.blamspot.jcode.workbench.LocalNativeNavigation provides viewModel::openNativePackagesPage,
+        dev.blamspot.jcode.workbench.LocalProjectTrash provides viewModel::trashProject,
         LocalExtensionSources provides ExtensionSourcesState(
             sources = extensionSources,
             releases = extensionSourceReleases,
@@ -2971,6 +2976,11 @@ private fun JCodeShell(
     }
 
     fun closeTerminalSession(sessionId: String) {
+        if(sessionId==setupTerminalSessionId && dev.suicode.nativehost.NativePackageHost.get(appContext).setup.state.value.installing) {
+            dev.suicode.nativehost.NativePackageHost.get(appContext).setup.cancel()
+            scope.launch { snackbarHostState.showSnackbar("Kit cancellation requested. Setup stays open until the current package operation finishes safely.") }
+            return
+        }
         if (sessionId == setupTerminalSessionId && nativeEnvironmentManager.state.value.installing) {
             nativeEnvironmentManager.cancel()
             scope.launch { snackbarHostState.showSnackbar("Package cancellation requested. Setup stays open until apt/dpkg reaches a safe boundary.") }
@@ -2998,8 +3008,9 @@ private fun JCodeShell(
 
     fun closeAllTerminalSessions() {
         // Kill every live PTY (the tracked ids may drift from the manager's sessions), then clear state.
-        val packageSession = setupTerminalSessionId?.takeIf { nativeEnvironmentManager.state.value.installing }
-        if (packageSession != null) nativeEnvironmentManager.cancel()
+        val kitSetup=dev.suicode.nativehost.NativePackageHost.get(appContext).setup
+        val packageSession = setupTerminalSessionId?.takeIf { nativeEnvironmentManager.state.value.installing || kitSetup.state.value.installing }
+        if(packageSession!=null) { if(kitSetup.state.value.installing) kitSetup.cancel() else nativeEnvironmentManager.cancel() }
         val ids = (terminalSessionIds + terminalSessionManager.sessions.keys).distinct().filterNot { it == packageSession }
         ids.forEach { id ->
             terminalSessionManager.closeSession(id)
@@ -3622,6 +3633,12 @@ private fun JCodeShell(
                         .fillMaxWidth(),
                 ) {
                     CompositionLocalProvider(
+                        LocalAdvancedTaskNavigation provides {
+                            selectedTool=WorkbenchTool.RunDebug
+                            leftSidebarExpanded=true
+                            if(usesModalWorkspace) scope.launch { compactDrawerState.open() }
+                            Unit
+                        },
                         LocalChromeControls provides remember(chromeHidden) {
                             ChromeControls(
                                 chromeHidden = chromeHidden,
@@ -3873,7 +3890,7 @@ private fun JCodeShell(
                                 )
                                 EditorPageKind.ExtensionSources -> {
                                     val section=tab.id.substringAfterLast(':').toIntOrNull() ?: 0
-                                    if(section==3) ToolchainManagerPanel(
+                                    if(section==3) dev.suicode.nativehost.NativeLanguageCenter(Modifier.fillMaxSize()) { ToolchainManagerPanel(
                         sdkState = sdkCatalogState,
                         lspState = lspCatalogState,
                         debugState = LocalDebugCatalogState.current,
@@ -3891,7 +3908,7 @@ private fun JCodeShell(
                         onShowIssues = panelActions.onShowIssues,
                         managers = panelActions.toolchainManagers,
                         onOpenManager = panelActions.onOpenToolchainManager,
-                    ) else dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),section)
+                    ) } else dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),section)
                                 }
                                 EditorPageKind.AndroidDevice -> AndroidDevicePage(
                                     adbInstalled = ADB_CATALOG_ID in sdkCatalogState.installedEntryIds,
@@ -4375,7 +4392,16 @@ private fun WorkspacePanel(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize()) {
+            Column(Modifier.width(68.dp).fillMaxHeight().verticalScroll(rememberScrollState()),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                listOf(WorkbenchTool.Explorer,WorkbenchTool.Search,WorkbenchTool.ToolchainManager,WorkbenchTool.Packages,WorkbenchTool.Settings).forEach { item ->
+                    Column(Modifier.fillMaxWidth().clickable { onSelectTool(item) }.padding(vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                        Icon(jcIcon(item.icon),item.compactLabel,tint=if(selectedTool==item) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(item.compactLabel,style=MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             // breadcrumb depth tells us whether we're inside a User Workspace (a container of
             // projects) vs the Default Workspace (single open project, no roster).
             val inUserWorkspace = breadcrumb.size > 1
@@ -4413,7 +4439,19 @@ private fun WorkspacePanel(
                     WorkbenchTool.Explorer -> {
                         val rosterProjects = workspace?.projects.orEmpty()
                         Column(modifier = Modifier.fillMaxSize()) {
-                            if (inUserWorkspace) {
+                            val recentActions=LocalEditorEmptyActions.current
+                            var showProjects by remember { mutableStateOf(false) }
+                            TextButton(onClick={showProjects=!showProjects}) { Text(if(showProjects) "Hide recent projects" else "Projects · optional context") }
+                            if(showProjects) Column(Modifier.heightIn(max=180.dp).verticalScroll(rememberScrollState())) {
+                                recentActions.recents.forEach { recent ->
+                                    Row(Modifier.fillMaxWidth()) {
+                                        TextButton(onClick={recentActions.onOpenRecent(recent)},modifier=Modifier.weight(1f)) { Text(recentDisplayName(recent),maxLines=1,overflow=TextOverflow.Ellipsis) }
+                                        TextButton(onClick={recentActions.onRemoveRecent(recent.uri)}) { Text("Remove") }
+                                    }
+                                }
+                                Text("Remove only clears the recent list; files stay intact.",style=MaterialTheme.typography.bodySmall)
+                            }
+                            if (rosterProjects.isNotEmpty()) {
                                 ProjectRoster(
                                     projects = rosterProjects,
                                     selectedProjectId = selectedProject?.id ?: -1L,
@@ -4426,6 +4464,10 @@ private fun WorkspacePanel(
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                             }
 
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                                TextButton(onClick={browseInternalFiles=true}) { Text("Internal Files") }
+                                if(selectedProject!=null) TextButton(onClick={browseInternalFiles=false}) { Text("Project files") }
+                            }
                             when {
                                 selectedProject == null || browseInternalFiles -> {
                                     CompositionLocalProvider(dev.blamspot.jcode.feature.explorer.LocalProtectedProjectRoots provides protectedProjectRoots) {
@@ -4470,7 +4512,7 @@ private fun WorkspacePanel(
                     }
 
                     WorkbenchTool.Search -> SearchToolPanel(
-                        project = selectedProject,
+                        project = selectedProject ?: internalProject,
                         activeTab = editorGroup.activeTab,
                         onOpenResult = onOpenPathAtLine,
                         seed = searchSeed,
@@ -4515,7 +4557,7 @@ private fun WorkspacePanel(
 
                     WorkbenchTool.Extensions,WorkbenchTool.IdeKits,WorkbenchTool.Packages -> dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),when(tool) { WorkbenchTool.IdeKits -> 1;WorkbenchTool.Packages -> 2;else -> 0 })
 
-                    WorkbenchTool.ToolchainManager -> ToolchainManagerPanel(
+                    WorkbenchTool.ToolchainManager -> dev.suicode.nativehost.NativeLanguageCenter(Modifier.fillMaxSize()) { ToolchainManagerPanel(
                         sdkState = sdkCatalogState,
                         lspState = lspCatalogState,
                         debugState = LocalDebugCatalogState.current,
@@ -4533,7 +4575,7 @@ private fun WorkspacePanel(
                         onShowIssues = managerActions.onShowIssues,
                         managers = managerActions.toolchainManagers,
                         onOpenManager = managerActions.onOpenToolchainManager,
-                    )
+                    ) }
 
                     WorkbenchTool.DbManager -> DbManagerPanel(
                         installed = installedExtensions,
@@ -4558,6 +4600,7 @@ private fun WorkspacePanel(
                     WorkbenchTool.Settings -> Unit
                 }
             }
+        }
         }
     }
 }
@@ -4752,6 +4795,7 @@ internal data class EditorEmptyActions(
     val recents: List<RecentEntity> = emptyList(),
     val onOpenRecent: (RecentEntity) -> Unit = {},
     val onExportRecent: (RecentEntity) -> Unit = {},
+    val onRemoveRecent: (String) -> Unit = {},
     val onNewProject: () -> Unit = {},
     val onOpenFolder: () -> Unit = {},
     /** Extension-contributed actions (e.g. Clone, Remote Repo) shown after New/Open Folder. */

@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 
 @Singleton
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -445,24 +446,26 @@ class WorkspaceManager @Inject constructor(
     }
 
     /** Rename a Local project folder (and its `.jcode/<name>.yaml`) and update the DB row. */
-    suspend fun renameProject(projectId: Long, newName: String): Boolean = withContext(Dispatchers.IO) {
-        val entity = workspaceDao.getProject(projectId) ?: return@withContext false
-        if (entity.kind != ProjectKind.Local) return@withContext false
-        val sanitized = sanitizedFolderName(newName)
-        if (sanitized == entity.name) return@withContext false
+    suspend fun renameProject(projectId: Long, newName: String): Boolean = withContext(Dispatchers.IO) { FileMutations.mutex.withLock {
+        val entity = workspaceDao.getProject(projectId) ?: return@withLock false
+        if (entity.kind != ProjectKind.Local) return@withLock false
+        val oldLocation=File(entity.location)
+        val sanitized=SafeLocalFiles.child(oldLocation.parentFile,newName,nested=false).name
+        if (sanitized == entity.name) return@withLock false
         val oldDir = File(entity.location)
         val newDir = File(oldDir.parentFile, sanitized)
-        if (newDir.exists()) return@withContext false
-        if (!oldDir.renameTo(newDir)) return@withContext false
+        if (newDir.exists()) return@withLock false
+        if (!oldDir.renameTo(newDir)) return@withLock false
 
         val jcodeDir = File(newDir, ".jcode")
         File(jcodeDir, "${oldDir.name}.yaml").takeIf { it.isFile }?.renameTo(File(jcodeDir, "$sanitized.yaml"))
 
         workspaceDao.updateProject(projectId, sanitized, newDir.absolutePath)
+        FileMutations.moved(FsPath.Local(oldDir),FsPath.Local(newDir))
         nodeMetaCache.remove(oldDir.absolutePath)
         nodeMetaCache.remove(newDir.absolutePath)
         true
-    }
+    } }
 
     // --- Workspace navigation (breadcrumb) ---
 
@@ -533,6 +536,10 @@ class WorkspaceManager @Inject constructor(
             order = project.order,
         )
     }
+
+    suspend fun registeredProjectRootsNow(): Set<String> = workspaceDao.getAllProjects().filter { it.kind==ProjectKind.Local }.map { it.location }.toSet()
+
+    suspend fun removeRecent(uri: String) { workspaceDao.deleteRecent(uri) }
 
     suspend fun removeProject(projectId: Long) {
         workspaceDao.deleteProject(projectId)

@@ -10,7 +10,7 @@ def main(key):
  def package(name,kind,language_components,permissions,deps=[]):
   src=root/'native-library/src'/name/kind
   prefix='plugin' if kind=='suic' else 'ide'
-  manifest={'id':'dev.suicode.'+name.lower().replace('_','')+('.basic' if kind=='suic' else '.kit'),'name':name+(' Basic Plugin' if kind=='suic' else ' IDE Kit'),'author':'sui-code','description':'Native language execution' if kind=='suic' else 'Language services, project tools and development workflows','version':'1.0.0','kind':kind,'api':{'min':2,'max':2},'dependencies':deps,'permissions':permissions,'components':[]}
+  manifest={'id':'dev.suicode.'+name.lower().replace('_','')+('.basic' if kind=='suic' else '.kit'),'name':name+(' Basic Plugin' if kind=='suic' else ' IDE Kit'),'author':'sui-code','description':'Native language execution' if kind=='suic' else 'Language services, project tools and development workflows','version':'1.1.0','kind':kind,'api':{'min':3,'max':3},'dependencies':deps,'permissions':permissions,'components':[]}
   for cid,typ,data in language_components:
    path=f'{prefix}/{cid}.json';write(src/path,data);manifest['components'].append({'id':cid,'type':typ,'entry':path})
   referenced={c['entry'] for c in manifest['components']}
@@ -22,7 +22,7 @@ def main(key):
   with zipfile.ZipFile(io.BytesIO(out.read_bytes()[20:])) as z:
    signature=json.loads(z.read('signature.sig'))
   public=(root/'native-library/official-p256.der').read_bytes()
-  catalog.append({'id':manifest['id'],'name':manifest['name'],'version':manifest['version'],'kind':kind,'url':f'https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/final-product/native-library/v1/{out.name}','bytes':result['bytes'],'sha256':result['sha256'],'author':manifest['author'],'description':manifest['description'],'dependencies':deps,'changeLog':'Initial native integration; see specification and test report for verified capabilities.','signer':hashlib.sha256(public).hexdigest(),'signature':signature['signature'],'api':manifest['api']})
+  catalog.append({'id':manifest['id'],'name':manifest['name'],'version':manifest['version'],'kind':kind,'url':f'https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5-workbench-reliability/native-library/v1/{out.name}','bytes':result['bytes'],'sha256':result['sha256'],'author':manifest['author'],'description':manifest['description'],'dependencies':deps,'changeLog':'v0.5: reviewed automatic prerequisites, stable project paths, LSP/DAP and breakpoint fixes.','signer':hashlib.sha256(public).hexdigest(),'signature':signature['signature'],'api':manifest['api']})
   return manifest['id']
  for name,languages,env,tools,provider,server in [
   ('Java',[('java',['java'])],'java',['java','javac','jshell'],'temurin','sui-jdtls'),
@@ -33,6 +33,7 @@ def main(key):
    components.extend([(language,'language',{'languageId':language,'extensions':exts,'priority':50}),('run-'+language,'simpleRun',{'languageId':language,'environmentId':env,'prepare':[],'run':['/bin/bash','${resource:resources/run-'+language+'.sh}','${source}']})])
   basic=package(name,'suic',components,['file.read','process.run'])
   package(name,'suik',[
+   ('prerequisites','setup',json.loads((root/'native-library/src'/name/'suik/adapters/setup.json').read_text())),
    ('language-server','lsp',{'operation':'LSP_START','arguments':json.loads((root/'native-library/src'/name/'suik/adapters/lsp.json').read_text())}),
    ('debugger','dap',{'operation':'DAP_START','arguments':json.loads((root/'native-library/src'/name/'suik/adapters/dap.json').read_text())}),
    ('diagnostics','lint',{'operation':'LINT','arguments':{'serverId':server}}),
@@ -42,7 +43,7 @@ def main(key):
    ('run-project','command',{'operation':'SIMPLE_RUN','arguments':{'argv':json.dumps(['/bin/bash','${resource:resources/project-task.sh}','run','${project}'])}}),
    ('statistics','command',{'operation':'PROJECT_READ','arguments':{'action':'statistics'}}),
    *[('debug-'+action.lower(),'command',{'operation':'DAP_START','arguments':{'action':action}}) for action in ['state','continue','pause','next','stepIn','stepOut','stop']],
-   ('project','project',{'operation':'PROJECT_READ','arguments':{'role':'template','title':name+' Project','description':'A multi-file project with a real automated test','files':json.dumps({p.relative_to(root/'native-library/src'/name/'suik/resources/templates').as_posix():'resources/templates/'+p.relative_to(root/'native-library/src'/name/'suik/resources/templates').as_posix() for p in (root/'native-library/src'/name/'suik/resources/templates').rglob('*') if p.is_file()})}}),
+   ('project','project',{'operation':'PROJECT_READ','arguments':{'role':'template','markers':json.dumps({'Java':['pom.xml'],'C_CPP':['CMakeLists.txt'],'Python':['main.py']}[name]),'title':name+' Project','description':'A multi-file project with a real automated test','files':json.dumps({p.relative_to(root/'native-library/src'/name/'suik/resources/templates').as_posix():'resources/templates/'+p.relative_to(root/'native-library/src'/name/'suik/resources/templates').as_posix() for p in (root/'native-library/src'/name/'suik/resources/templates').rglob('*') if p.is_file()})}}),
    ('overview','panel',{'title':name+' IDE','text':'Language services use the selected Ubuntu environment. Runtime and tool availability are checked before operations.','status':'ready','nodes':[{'id':'workspace-tools','type':'row','children':[{'id':'refresh-statistics','type':'button','label':'Read project statistics','command':'statistics'},{'id':'build-action','type':'button','label':'Build','command':'build'},{'id':'test-action','type':'button','label':'Test','command':'test'},{'id':'run-action','type':'button','label':'Run Project','command':'run-project'}]},{'id':'debug-controls','type':'row','children':[{'id':'debug-'+action.lower(),'type':'button','label':label,'command':'debug-'+action.lower()} for action,label in [('state','Refresh debug state'),('continue','Continue'),('pause','Pause'),('next','Step over'),('stepIn','Step into'),('stepOut','Step out'),('stop','Stop debug')]]},{'id':'debug-state-value','type':'text','text':'Debug: ${result:debug-state.state}'},{'id':'statistics-table','type':'table','columns':['Project','Files','Bytes'],'rows':[['${result:statistics.name}','${result:statistics.files}','${result:statistics.bytes}']]}]})
   ],['language.lsp','file.read','file.write','process.run','debug.dap','project.read','ui.panel'],[{'id':basic,'min':'1.0.0','max':'2.0.0'}])
  write(root/'native-library/v1/index.json',{'format':1,'packages':catalog})

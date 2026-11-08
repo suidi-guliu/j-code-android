@@ -1,6 +1,6 @@
 # sui-code Native Extension & IDE Kit Development Specification
 
-规范版本 **0.2.0**；Core API **2**（兼容 API 1 声明）；SUIC **1.0**；SUIK **1.0**。
+规范版本 **0.3.0**；Core API **3**（兼容 API 1、2 声明）；SUIC **1.0**；SUIK **1.0**。
 
 本文的 MUST/必须、MUST NOT/禁止、SHOULD/应为规范性要求。本文与 `core/native-packages/src/main/java/dev/suicode/packages` 中的生产验证器、加载器、授权会话及事务存储对应，不引用 JCode 插件 API。所有路径均相对仓库根目录。
 
@@ -20,7 +20,7 @@ Android 宿主 `app/.../dev/suicode/nativehost` 已连接独立 PackageStore、�
 
 | 类型 | 完整字段与约束 |
 |---|---|
-| `CoreApi` | `VERSION: Int = 2`、`MIN_SUPPORTED: Int = 1`；`compatible(min:Int,max:Int):Boolean` 判断区间交集 |
+| `CoreApi` | `VERSION: Int = 3`、`MIN_SUPPORTED: Int = 1`；`compatible(min:Int,max:Int):Boolean` 判断区间交集 |
 | `PackKind` | `PLUGIN`/`KIT`；属性 `magic: String`、`suffix: String`、`mime: String` |
 | `Capability` | 枚举；wire 值见权限表 |
 | `Operation` | 枚举；`permission: Capability`，见操作表 |
@@ -343,7 +343,7 @@ descriptor 为 `{operation:"LSP_START",arguments:{...}}`。以下字段全部必
 
 descriptor 为 `{operation:"DAP_START",arguments:{...}}`。必填字符串：id、name、installCommand、verifyCommand、uninstallCommand、adapterCommand、transport、debugType、extensions、workflow。transport=`stdio` 或 `lsp`（后者接 Kit RPC 返回的 TCP port）；extensions 为 JSON 字符串数组。可选 preLaunchResource 是本包 resources/ 下的脚本路径；经校验并 staging 后，以 `[script,source,project]` 执行，stdout 必须只输出 JSON，其内容成为 `prepared`，失败中止调试。
 
-`DebugWorkflow.resolve(workflow:JsonObject,context:Map<String,JsonElement>,rpc:suspend(String,JsonArray)->JsonElement):ResolvedDebugPlan`：三个参数必填，返回 launch:JsonObject、cwd:String、port:Int?。仅在调试准备阶段由授权 host 调用；外部 RPC 可挂起，取消应向上传播。最多32步，无循环，无动态代码。
+`DebugWorkflow.resolve(workflow:JsonObject,context:Map<String,JsonElement>,rpc:suspend(String,JsonArray)->JsonElement):ResolvedDebugPlan`：三个参数必填，返回 launch:JsonObject、cwd:String、port:Int?。仅在调试准备阶段由授权 host 调用；外部 RPC 可挂起，取消应向上传播。最多32步；API3仅允许空发现结果的有界重试（retryEmpty 1..30），无动态代码。
 
 workflow 必须恰含 steps:Array、launch:Object、port:null或引用。step 必填 id（`[a-z][a-zA-Z0-9]{0,31}`，不可覆盖上下文）、command:String、arguments:Array；可选 jsonArguments:Boolean 将复合参数编码为 JSON 字符串；select:{field:String,equals:JSON} 从 RPC 数组唯一选择一项；expect:JSON 要求结果相等。`${value.field.0}` 为整值引用，保留 JSON 类型；输入上下文为 source、project、sourceUri、projectUri，可有 prepared。没有字段/唯一项 E_WORKFLOW，expect 不符 E_BUILD，port 必须1..65535。见官方 Java Kit 的 main-class/build/classpath/debug-session 工作流，及 C/C++、Python 的声明式 launch。
 
@@ -623,7 +623,8 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
               "project",
               "workflow",
               "command",
-              "panel"
+              "panel",
+              "setup"
             ]
           },
           "entry": {
@@ -659,3 +660,178 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
 ```json
 {"api":{"max":2,"min":2},"author":"sui-code examples","components":[{"entry":"ide/overview.json","id":"overview","type":"panel"}],"dependencies":[],"description":"Local development example; not an official publisher","id":"dev.suicode.example.minimal-kit","kind":"suik","name":"minimal-kit","permissions":["ui.panel"],"version":"0.1.0"}
 ```
+
+
+## 28. API 3：IDE Kit 依赖部署协议（规范 0.3.0）
+
+API 1/2 的声明及授权保留。新增 `setup` 仅属于 `.suik`，Manifest `api.min` 必须 ≥3；`.suic` 使用它必须报 E_BOUNDARY。包格式仍为 1.0，不重命名 ZIP 充当独立格式。安装资源属于已签名/校验的资源文件，不会在导入、验证或激活时自动执行。
+
+### 28.1 完整组件 Schema
+
+下列 Schema 与 `schemas/setup.schema.json` 一致。除 JSON Schema 外，生产解析器还强制唯一 ID、文件/资源路径不能含 `.`/`..` 或通配符、至少一个探测条件、provider 与专用字段一致、资源必须确实在已认证 payload 中。`environment` 要求 environmentId，禁止 resource/packages；`ubuntu-apt` 要求非空 packages，禁止 environmentId/resource；`kit-resource` 要求 resource，禁止 environmentId。一个包最多一个 setup。
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:suicode:setup:3",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^https://[^/]+",
+            "maxLength": 1024
+          },
+          "provider": {
+            "enum": [
+              "environment",
+              "ubuntu-apt",
+              "kit-resource"
+            ]
+          },
+          "files": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^/(opt/sui-code|usr|bin|lib)/[A-Za-z0-9_./+*-]+$"
+            }
+          },
+          "commands": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9+_.-]{0,79}$"
+            }
+          },
+          "anyCommands": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9+_.-]{0,79}$"
+            }
+          },
+          "packages": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9+.-]{0,79}$"
+            }
+          },
+          "bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "environmentId": {
+            "enum": [
+              "java",
+              "cpp",
+              "c",
+              "python"
+            ]
+          },
+          "resource": {
+            "type": "string",
+            "pattern": "^resources/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "source",
+          "provider",
+          "files",
+          "commands",
+          "packages",
+          "bytes"
+        ]
+      }
+    }
+  },
+  "required": [
+    "requirements"
+  ]
+}
+```
+
+合法 Manifest 和组件示例见 `examples/dependencies-kit/`（可直接打包验证）。Java/C_CPP/Python 的正式依赖定义见 native-library/src/*/suik/adapters/setup.json。未知字段失败 E_MANIFEST，未知 provider/无效条件 E_COMPONENT，越界路径 E_PATH；不允许 fallback 成任意用户 shell。
+
+### 28.2 字段语义与执行边界
+
+|字段|类型/必填|含义与失败行为|
+|---|---|---|
+|requirements|Array<KitRequirement>，必填1..32|唯一 ID，按声明顺序部署；运行环境在开发工具前|
+|id/name/version|String，均必填|ID 为稳定组件键；version 是显示的已安装/所需版本说明，不自动放入 shell|
+|source|HTTPS URL，必填|来源审核信息；APT 使用用户已配置且签名有效的 Ubuntu 仓库，不自行加入仓库、不关闭 TLS/GPG|
+|provider|枚举，必填|environment 调用已有原生环境安装流程；ubuntu-apt 部署声明的包；kit-resource 执行认证资源|
+|files|Array<String>，必填|绝对 guest 文件只读存在性检查；不执行其内容|
+|commands|Array<String>，必填|所有命令必须可发现，Core 生成 command -v，无包提供的探测脚本|
+|anyCommands|Array<String>，可选默认[]|至少一个可发现，适用于带版本的 lldb-dap 可执行文件|
+|packages|Array<String>，必填|dpkg 已配置状态；安装时 apt 验证签名元数据和哈希，现有包不自动升级|
+|environmentId|String，environment 必填|当前宿主注册 java、c、cpp、python；复用现有环境文件和安装器，不重新封装语言发行版|
+|resource|String，kit-resource 必填|认证 payload 中 resources/ 路径；统一确认后交给既有 Ubuntu Setup PTY|
+|bytes|Long?，必填|已知下载字节数；未知必须 null 并明确显示未知，不能显示0假装无下载|
+
+### 28.3 生产接口
+
+扩展作者提交声明，不能直接获取 Android 对象。以下是相同生产 SDK 中的宿主接口：
+
+|接口|参数/返回|时机、权限、失败和兼容性|
+|---|---|---|
+|`KitRequirements.parse(d:JsonObject):List<KitRequirement>`|完整 setup 描述→不可执行的解析结果|安装验证和计划前；无权限/进程副作用；严格边界失败抛 PackageFailure；API3|
+|`KitRequirements.forPack(pack:VerifiedPack):List<KitRequirement>`|认证包→全部前置条件|仅数据读取，无环境安装；API3|
+|`VerifiedPack.resourcePaths():List<String>`|无参→排序的认证 resources/ 名称|宿主按认证 payload 部署临时资源，不接受未认证磁盘路径；API3|
+|`DebugWorkflow.resolve(workflow:JsonObject,context:Map<String,JsonElement>,rpc:suspend(String,JsonArray)->JsonElement):ResolvedDebugPlan`|返回 launch:JsonObject、cwd:String、port:Int?|宿主在已获 DAP、RUN、FILE_READ 授权的后台协程调用；RPC 和取消由 host 执行；未就绪/多目标/编译失败给明确 E_WORKFLOW/E_BUILD|
+
+Android 生产宿主 `NativeKitSetup` 实现 `inspect(pack:VerifiedPack,force:Boolean=false):List<KitDependencyStatus>`（IO、60秒缓存、可取消）；`prepare(preview:PackagePreview):KitSetupPlan`（IO、只形成计划）；`install(plan,grants:Set<Capability>,allowUnverified:Boolean):Unit`（启动应用生命周期安装任务）；`cancel():Unit`（请求安全边界取消）；`state:StateFlow<KitSetupState>`（进度、详细日志路径、Ready/Partially Ready）。这些 Android 接口不导出成第三方任意代码运行 API。
+
+计划包括所有待装包的精确摘要、签名、来源及权限并列出每项现状、版本、架构、可用大小和执行行为。确认授权必须绑定精确包摘要。缺失的官方 Basic 包在同一计划内列出并安装；本地未知依赖必须先导入审阅，不能静默从第三方市场补齐。依赖脚本仅在统一确认后执行，必须授予 file.read/file.write/process.run，且所有依赖的权限都在同一次审阅中列出。
+
+取消不强杀 apt/dpkg，不删除锁；等待当前包事务结束后停止下一步。已成功安装的共享工具保留，不能通过回滚包破坏其他 Kit。包状态仍用 PackageStore 原子提交并保留前一版本；失败保留原已验证包/数据和诊断日志；Partially Ready 列出未就绪项并提供相同计划的重新审阅与重试。禁用/卸载 Kit 不卸载语言环境或共享工具。
+
+### 28.4 DAP 数据流与源路径
+
+步骤可选 `retryEmpty:Int=1`（1..30）仅针对空数组发现结果每秒重试，协程取消立即传播；`select` 必填 field:String、equals:JsonElement，可选 path:Boolean=false、fallbackSingle:Boolean=false。path 按 URI 解码和 Unix Path.normalize 比较，不能使用 URLDecoder 的加号转空格规则。精确匹配唯一目标优先；仅在候选总数为1且 fallbackSingle=true 时回退。空结果报尚未索引/无入口；多结果列明候选、要求打开目标入口文件，禁止随意选择第一个。
+
+LSP 使用 UTF-16 坐标和正确编码的 file URI，发请求前冲刷 debounced didChange；取消发 $/cancelRequest。Kit 可在 initializationOptions.virtualDocuments 中声明 scheme→LSP method（例如 jdt→java/classFileContents）；虚拟源码缓存在 app cache，以只读编辑器打开，不写回 JDK。project build、LSP、DAP 均使用稳定 `/workspace/...` 路径；临时 `/sui-quickrun` 仅可用于 Basic 单文件，不得写入持久 CMake 缓存。旧的 Kit 自有 build/debug 缓存迁移为带时间戳备份，用户源码不删。
+
+### 28.5 0.3.0 变更及回归
+
+新增 setup 组件、工具就绪状态、统一审阅流程、API3 SDK 和依赖示例。API1/2包继续加载；新字段不得假装 API2 兼容。所有主机、Schema、示例、签名包和本文同步提交。SDK 的 API-SOURCE-SHA256SUMS 必须对应生产源码。测试区分纯 JVM、Ubuntu x64 协议和 Android ARM64 实机；未连接设备时不能宣称 ANR 或断点实机验收通过。
+
+`PackageVerifier.verify(bytes:ByteArray,suffix:String,installed:Map<String,String>=emptyMap(),checkDependencies:Boolean=true):VerifiedPack`：API3新增可选 checkDependencies。默认仍执行全部已安装依赖版本检查；仅宿主的隔离审阅/计划流程可传 false，此时仍验证依赖字段、区间、包身份、签名、哈希和职责边界，但不把预览视为可激活。PackageStore.install/load/enable始终使用true；禁止用预览跳过实际安装检查。第三方SDK的PackageTool仍按默认严格验证。
+
+API3 `setup` 的 Manifest 还必须声明 file.read/file.write/process.run，否则验证阶段报 E_PERMISSION，不能等到确认按钮触发异常。`project` 组件 arguments 可选 `markers:String="[]"`（内容为相对文件名 JSON 数组）；用于没有编辑器源文件时识别可选 Project 上下文。宿主忽略含空段、`.`/`..`、绝对路径或无效字符的 marker，不允许越出 Project。此字段不创建 Project、不执行脚本，缺省时可继续从已打开源文件匹配 Kit。Java/C_CPP/Python 正式模板分别声明 pom.xml、CMakeLists.txt、main.py。Kit 安装结束会串行更新服务注册、刷新与探测目录并重试现有编辑文件，无需手动进入 Servers 再安装。

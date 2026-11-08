@@ -1,1 +1,1 @@
-{"arguments":{"description":"A multi-file project with a real automated test","files":"{\"main.py\": \"resources/templates/main.py\", \"tests/test_main.py\": \"resources/templates/tests/test_main.py\"}","role":"template","title":"Python Project"},"operation":"PROJECT_READ"}
+{"arguments":{"description":"A multi-file project with a real automated test","files":"{\"main.py\": \"resources/templates/main.py\", \"tests/test_main.py\": \"resources/templates/tests/test_main.py\"}","markers":"[\"main.py\"]","role":"template","title":"Python Project"},"operation":"PROJECT_READ"}

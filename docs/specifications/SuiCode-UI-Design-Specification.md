@@ -1,6 +1,6 @@
 # sui-code UI Extension & Design Specification
 
-规范版本 **0.2.0**；对应 Core API **2**（兼容 API1 只读面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
+规范版本 **0.3.0**；对应 Core API **3**（兼容 API1 只读面板及 API2 原生交互面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
 
 ## 1. 范围、实现状态与品牌
 
@@ -215,6 +215,23 @@ SUIK UI扩展必须：使用API1支持的描述结构；不注册SUIC面板；�
 
 0.1.0：公开Token、widthClass/terminalHeight纯计算、PanelState/PanelStore、权限模型和声明式UI边界。对应API1、SUIC1.0、SUIK1.0。不导出第三方同进程 Compose ABI。
 
-0.2.0：API2 native widget tree、同 Kit 命令绑定、输入和结果状态、全局 Light/Dark 原生主题、完整页面管理中心、尺寸驱动文件栏和上下 Terminal。保留 API1 文本 panel。
+0.3.0：API2 native widget tree、同 Kit 命令绑定、输入和结果状态、全局 Light/Dark 原生主题、完整页面管理中心、尺寸驱动文件栏和上下 Terminal。保留 API1 文本 panel。
 
 Token删除、语义改变、字段删改、事件/权限变化须在设计规范、源码、Schema、样例和测试同步发布。稳定期兼容策略遵循总规范第3节；拒绝依赖JCode UI插件或隐式全局覆盖来保持“兼容”。
+
+
+## 27. v0.5 工作台信息架构与兼容性（规范 0.3.0）
+
+保留当前主题 Token、配色、字体及用户选择，工作台按功能重新组织。左侧常驻导航轨为 Files、Find、Languages、Packages、Settings；Files 内部总目录不以 Workspace/Project 为前提，Project 为可选上下文，可切换最近项目或返回 Internal Files。目录树保留创建、导入、导出、Trash，增加名称搜索、排序、多选复制/剪切/粘贴、移动和属性。文件夹名/路径 Unicode 不做破坏性替换，文件冲突默认拒绝覆盖。文件重命名/移动与打开缓冲区的路径身份同步，删除后缓冲区保留只读直到恢复，禁止后台保存重新生成旧路径。
+
+主操作带相邻显示 **Run file、Debug、Overview**；当前文件 Basic QuickRun 与 Project Build/Test/Run Project 必须使用不同文案和动作。Overview 在运行旁显示 Kit 声明式面板，不再要求用户进入包管理器。Advanced tasks 保留 .jcode/run.yaml 的配置、运行和编辑能力；从日常主导航移除旧 Run 大入口，但不得删除配置或隐藏唯一入口。Source Control/Database/VM 在 More 工具菜单保留（仅已可用能力显示）。底部 Terminal/Output/Issues/Debug/Tasks 继续使用已有会话和高度拖动机制。小宽度时操作带可横向滚动，不把所有按钮挤成不可触控的小图标。
+
+Languages 按语言展示运行环境、Basic 插件、IDE Kit、开发工具就绪层级；常规动作是一次审阅完整 IDE Kit 计划。SDK/Servers/Debuggers 仍有高级入口，不能作为普通用户逐项安装的前置步骤。Packages 单入口分 Plugin Library、IDE Kit Library、Installed，不再有重复主导航。计划加载与探测必须在 IO/后台执行；页面卸载取消探测，已确认的安装任务由应用拥有并持续提供进度/取消/日志，不因切换标签失去状态。
+
+补全自动触发来自文本修改或显式 Ctrl+Space；方向键、点击、拖动选择和滚动不得无条件新开补全。请求绑定文档、快照和光标，旧结果不能覆盖新位置，取消需传给 LSP。Ctrl+F5 从 Activity 常规及 shortcut 两条 Android 物理键盘分发路径进入同一保存/QuickRun链，拒绝重复按下；Ctrl+Enter 是部分键盘未向 Android 上报 F5 时的兼容入口。所有快捷键必须保留可点击的功能入口。
+
+QuickRun Stop 只终止当前任务进程树，交互 shell、终端及已输出文本保留。关闭会话才释放 PTY；二者不得共用销毁动作。断点未验证时必须显示源路径、行号与 adapter 消息，不能假装已命中。错误展示应包含操作、原因、日志及重试方式；E_BACKEND 仅作为诊断码，不可成为唯一用户文案。项目统计无工程上下文时明确 N/A。
+
+`.suik` 面板仍仅通过 UiNodes API 扩展，不能覆盖导航轨、全局主题、底部终端或主运行带。遵守前述48dp触控、键盘焦点、TalkBack标签、动态字级、横竖屏响应和主题继承规范；0.3.0不授权任意第三方Android View/HTML脚本注入。
+
+文件删除事务必须先持久化恢复意图，再移动原文件，最后更新统计；统计写入失败不使已移动数据失去可恢复索引。不能自动清理仍含用户数据但元数据损坏的 Trash 条目。重命名/移动同步标签和断点路径；影响当前调试源时结束该调试并明确提示重新启动，避免继续使用失效源映射。系统 DocumentsProvider 保留旧 Root ID/authority 授权身份，仅改显示名称和内部安全实现；拒绝越界名称、符号链接和从系统文件入口直接移动/删除登记中的工程根。

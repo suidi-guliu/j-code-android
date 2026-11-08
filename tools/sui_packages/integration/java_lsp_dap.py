@@ -16,6 +16,8 @@ class Framed:
                     line=self.source.readline()
                     if not line: raise EOFError('protocol stream closed')
                     if line in (b'\r\n',b'\n'):break
+
+                    if b':' not in line: raise ValueError('Unframed protocol line: '+repr(line[:300]))
                     k,v=line.decode().split(':',1);headers[k.lower()]=v.strip()
                 size=int(headers['content-length'])
                 self.messages.put(json.loads(self.source.read(size)))
@@ -51,7 +53,7 @@ def main(args):
     root=pathlib.Path(tempfile.mkdtemp(prefix='sui-real-java-'))
     process=None; sock=None
     try:
-        source=root/'中文 space'/'Hello.java';source.parent.mkdir()
+        source=root/'中文 + space'/'Hello.java';source.parent.mkdir()
         source.write_text('public class Hello {\n public static void main(String[] args) {\n  int value=41;\n  System.out.println("SUI_DAP_"+(value+1));\n }\n}\n')
         config=root/'configuration';shutil.copytree(pathlib.Path(args.server)/'config_linux',config)
         launcher=next((pathlib.Path(args.server)/'plugins').glob('org.eclipse.equinox.launcher_*.jar'))
@@ -59,7 +61,7 @@ def main(args):
         command=[str(pathlib.Path(args.jdk)/'bin/java'),'-Xmx768m','-Declipse.application=org.eclipse.jdt.ls.core.id1','-Declipse.product=org.eclipse.jdt.ls.core.product','-Dosgi.bundles.defaultStartLevel=4','--add-modules=ALL-SYSTEM','--add-opens','java.base/java.util=ALL-UNNAMED','--add-opens','java.base/java.lang=ALL-UNNAMED','-jar',str(launcher),'-configuration',str(config),'-data',str(root/'workspace')]
         process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=stderr,start_new_session=True,env={**os.environ,'JAVA_HOME':args.jdk})
         lsp=Framed(process.stdout,process.stdin)
-        initialized=lsp.rpc('initialize',{'processId':os.getpid(),'rootUri':source.parent.as_uri(),'workspaceFolders':[{'uri':source.parent.as_uri(),'name':'smoke'}],'capabilities':{'workspace':{'workspaceFolders':True}},'initializationOptions':{'bundles':[str(pathlib.Path(args.debug_plugin).resolve())]}})
+        initialized=lsp.rpc('initialize',{'processId':os.getpid(),'rootUri':source.parent.as_uri(),'workspaceFolders':[{'uri':source.parent.as_uri(),'name':'smoke'}],'capabilities':{'workspace':{'workspaceFolders':True}},'initializationOptions':{'bundles':[str(pathlib.Path(args.debug_plugin).resolve())],'extendedClientCapabilities':{'classFileContentsSupport':True}}})
         assert initialized.get('capabilities'),initialized
         print('PASS Java LSP initialize',flush=True)
         lsp.send({'jsonrpc':'2.0','method':'initialized','params':{}})
@@ -86,7 +88,7 @@ def main(args):
             item=dap.next()
             if item.get('event')=='initialized':break
             if item.get('request_seq')==launch and not item.get('success'):raise RuntimeError(item)
-        bps=dap.dap_wait(dap.dap_send('setBreakpoints',{'source':{'path':str(source)},'breakpoints':[{'line':4}]}))
+        bps=dap.dap_wait(dap.dap_send('setBreakpoints',{'source':{'path':str(source)},'breakpoints':[{'line':3}]}))
         assert bps['body']['breakpoints'][0]['verified'],bps
         dap.dap_wait(dap.dap_send('configurationDone',{}))
         while True:
@@ -97,6 +99,12 @@ def main(args):
         stack=dap.dap_wait(dap.dap_send('stackTrace',{'threadId':thread}))
         assert stack['body']['stackFrames'],stack
         print('PASS Java breakpoint and stack trace',flush=True)
+        dap.dap_wait(dap.dap_send('next',{'threadId':thread}))
+        while True:
+            item=dap.next()
+            if item.get('event')=='stopped':thread=item['body']['threadId'];break
+            if item.get('event')=='terminated':raise AssertionError('Java step ended before the next statement')
+        print('PASS Java DAP step-over',flush=True)
         dap.dap_wait(dap.dap_send('continue',{'threadId':thread}))
         output=''
         while True:
@@ -105,6 +113,22 @@ def main(args):
             if item.get('event')=='terminated':break
         assert 'SUI_DAP_42' in output,output
         print('PASS Java debuggee output and termination',flush=True)
+        original=source.read_text()
+        partial=original.replace('System.out.println("SUI_DAP_"+(value+1));','System.out.pr')
+        lsp.send({'jsonrpc':'2.0','method':'textDocument/didChange','params':{'textDocument':{'uri':source.as_uri(),'version':2},'contentChanges':[{'text':partial}]}})
+        items=lsp.rpc('textDocument/completion',{'textDocument':{'uri':source.as_uri()},'position':{'line':3,'character':len('  System.out.pr')},'context':{'triggerKind':1}})
+        items=items if isinstance(items,list) else items['items']
+        assert any('println' in x.get('filterText',x['label']) for x in items),items
+        print('PASS Java System.out.pr real member completion',flush=True)
+        lsp.send({'jsonrpc':'2.0','method':'textDocument/didChange','params':{'textDocument':{'uri':source.as_uri(),'version':3},'contentChanges':[{'text':original}]}})
+        definitions=lsp.rpc('textDocument/definition',{'textDocument':{'uri':source.as_uri()},'position':{'line':3,'character':5}})
+        assert definitions,definitions
+        location=definitions[0] if isinstance(definitions,list) else definitions
+        uri=location.get('uri',location.get('targetUri'))
+        assert uri.startswith('jdt:'),definitions
+        text=lsp.rpc('java/classFileContents',{'uri':uri})
+        assert isinstance(text,str) and 'class System' in text,str(text)[:300]
+        print('PASS Java Go to Definition virtual JDK source and classFileContents',flush=True)
         lsp.rpc('shutdown',None);lsp.send({'jsonrpc':'2.0','method':'exit','params':None})
     finally:
         if sock: sock.close()

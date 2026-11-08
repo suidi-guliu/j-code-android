@@ -4,9 +4,20 @@ import dev.blamspot.jcode.core.distro.LspCatalogEntry
 import dev.suicode.packages.Capability
 import dev.suicode.packages.PackKind
 import kotlinx.serialization.json.*
+import kotlinx.coroutines.sync.withLock
 
 /** Translates authorized native Kit declarations to the existing generic LSP client. */
 object NativeLanguageServices {
+    private val refreshMutex=kotlinx.coroutines.sync.Mutex()
+    suspend fun refreshAndCheck(host: NativePackageHost,distro: dev.blamspot.jcode.core.distro.DistroService,onError: (String)->Unit) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        refreshMutex.withLock {
+            val latest=host.rows.value
+            dev.blamspot.jcode.core.distro.LspServerCatalog.registerNative(entries(latest,onError))
+            dev.blamspot.jcode.core.distro.DebugEngineCatalog.setContributed(engines(latest,onError))
+            distro.refreshLspCatalog();distro.refreshDebugEngineCatalog();distro.invalidateCatalogProbes()
+            if(distro.isRuntimeReady()) { distro.checkLspStatuses();distro.checkDebugEngineStatuses() }
+        }
+    }
     private fun dependenciesEnabled(row: NativePackageRow,rows: List<NativePackageRow>): Boolean = row.pack.manifest.getValue("dependencies").jsonArray.all { dep ->
         rows.any { it.record.enabled && it.record.id==dep.jsonObject.getValue("id").jsonPrimitive.content }
     }

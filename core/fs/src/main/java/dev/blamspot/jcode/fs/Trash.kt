@@ -6,6 +6,7 @@ import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 /** What put a thing in the bin, so the list can say where it came from. */
@@ -63,7 +64,7 @@ data class TrashListing(val children: List<TrashChild> = emptyList(), val total:
  * <filesDir>/trash/<id>/data/<name>  the thing itself
  * ```
  */
-class Trash(private val root: File) {
+class Trash(private val root: File,private val beforeMetadataWrite: ((TrashEntry)->Unit)? = null) {
 
     /** Everything in the bin, newest first. Entries that lost their payload are dropped as they surface. */
     suspend fun list(): List<TrashEntry> = withContext(Dispatchers.IO) {
@@ -142,35 +143,37 @@ class Trash(private val root: File) {
      * and folder the user recognises.
      */
     suspend fun put(
-        context: Context,
+        context: Context?,
         path: FsPath,
         projectName: String,
         projectRoot: String?,
         source: TrashSource,
-    ): TrashEntry = withContext(Dispatchers.IO) {
+    ): TrashEntry = withContext(Dispatchers.IO) { FileMutations.mutex.withLock {
         val id = newId()
         val dir = File(root, id)
         val data = File(dir, DATA).apply { mkdirs() }
-        val entry = when (path) {
-            is FsPath.Local -> takeLocal(path.file, data)
-            is FsPath.Saf -> takeSaf(context, path.uri, data)
-        }.let { taken ->
-            TrashEntry(
-                id = id,
-                name = taken.name,
-                originalPath = taken.original,
-                parentPath = taken.parent,
-                saf = path is FsPath.Saf,
-                isDirectory = taken.isDirectory,
-                sizeBytes = sizeOf(data),
-                deletedAtMillis = System.currentTimeMillis(),
-                location = label(projectName, projectRoot, taken.parent),
-                source = source,
-            )
+        val planned=when(path) {
+            is FsPath.Local -> Taken(path.file.name,path.file.absolutePath,path.file.parentFile?.absolutePath.orEmpty(),path.file.isDirectory)
+            is FsPath.Saf -> {
+                val ctx=context ?: error("SAF operations require Context")
+                val doc=DocumentFile.fromTreeUri(ctx,path.uri) ?: DocumentFile.fromSingleUri(ctx,path.uri) ?: error("Document is unavailable")
+                Taken(doc.name ?: error("Document has no name"),path.uri.toString(),doc.parentFile?.uri?.toString() ?: error("Document has no restorable parent"),doc.isDirectory)
+            }
         }
-        write(dir, entry)
+        val intent=TrashEntry(id,planned.name,planned.original,planned.parent,path is FsPath.Saf,planned.isDirectory,0,System.currentTimeMillis(),label(projectName,projectRoot,planned.parent),source)
+        // Persist a complete recovery journal BEFORE the original path is changed.
+        write(dir,intent)
+        when(path) {
+            is FsPath.Local -> takeLocal(path.file,data)
+            is FsPath.Saf -> takeSaf(context ?: error("SAF operations require Context"),path.uri,data)
+        }
+        val entry=intent.copy(sizeBytes=sizeOf(data))
+        // If the disk fills after the move, the durable intent still locates/restores the payload.
+        try { write(dir,entry) } catch(_: java.io.IOException) { /* Keep valid intent and payload. */ }
+
+        FileMutations.removed(path)
         entry
-    }
+    } }
 
     /**
      * Put one back where it came from, and return where that turned out to be.
@@ -184,6 +187,7 @@ class Trash(private val root: File) {
         val landed =
             if (entry.saf) restoreSaf(context, entry, payload) else restoreLocal(entry, payload)
         SafeLocalFiles.remove(File(root, entry.id))
+        if(!entry.saf) FileMutations.restored(FsPath.Local(File(entry.originalPath)),FsPath.Local(File(landed)))
         landed
     }
 
@@ -210,9 +214,8 @@ class Trash(private val root: File) {
         var dropped = 0
         root.listFiles().orEmpty().filter { it.isDirectory }.forEach { dir ->
             val entry = readEntry(dir)
-            // An entry too damaged to read is swept too — it can never be restored, and leaving it
-            // means the bin only ever grows.
-            if (entry == null || entry.deletedAtMillis < cutoff) {
+            // Never purge an unreadable recovery journal while it still owns user payload.
+            if ((entry==null && payloadOf(dir)==null) || (entry!=null && entry.deletedAtMillis<cutoff)) {
                 SafeLocalFiles.remove(dir)
                 dropped++
             }
@@ -345,7 +348,8 @@ class Trash(private val root: File) {
     }
 
     private fun write(dir: File, entry: TrashEntry) {
-        File(dir, ENTRY).writeText(
+        beforeMetadataWrite?.invoke(entry)
+        SafeLocalFiles.write(File(dir,ENTRY),(
             JSONObject()
                 .put("name", entry.name)
                 .put("originalPath", entry.originalPath)
@@ -356,15 +360,23 @@ class Trash(private val root: File) {
                 .put("deletedAtMillis", entry.deletedAtMillis)
                 .put("location", entry.location)
                 .put("source", entry.source.name)
-                .toString(),
+                .toString()).toByteArray(Charsets.UTF_8),
         )
     }
 
     /** The single child of an entry's `data/` — the thing that was deleted. */
     private fun payloadOf(dir: File): File? = File(dir, DATA).listFiles()?.firstOrNull()
 
-    private fun sizeOf(file: File): Long =
-        if (file.isDirectory) file.walkTopDown().filter { it.isFile }.sumOf { it.length() } else file.length()
+    private fun sizeOf(file: File): Long {
+        var bytes=0L
+        java.nio.file.Files.walkFileTree(file.toPath(),object: java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+            override fun visitFile(path: java.nio.file.Path,attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult {
+                if(attrs.isRegularFile) bytes+=attrs.size()
+                return java.nio.file.FileVisitResult.CONTINUE
+            }
+        })
+        return bytes
+    }
 
     private fun label(projectName: String, projectRoot: String?, parent: String): String {
         val root = projectRoot?.trimEnd('/').orEmpty()

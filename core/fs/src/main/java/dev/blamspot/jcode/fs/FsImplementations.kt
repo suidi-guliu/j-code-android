@@ -41,7 +41,7 @@ class PosixFs @Inject constructor() : Fs {
                 FsNode(
                     path = FsPath.Local(child),
                     name = child.name,
-                    kind = if (child.isDirectory) FsKind.Directory else FsKind.File,
+                    kind = if (child.isDirectory && !java.nio.file.Files.isSymbolicLink(child.toPath())) FsKind.Directory else FsKind.File,
                     sizeBytes = if (child.isFile) child.length() else 0L,
                     modifiedAtMillis = child.lastModified(),
                 )

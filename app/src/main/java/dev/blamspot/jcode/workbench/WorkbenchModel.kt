@@ -227,12 +227,12 @@ internal enum class WorkbenchTool(
     /** Hidden from the activity bar until it has a working UI (kept in the enum for `when` exhaustiveness). */
     val available: Boolean = true,
 ) {
-    Explorer("Explorer", JCodeIcon.Files, "Files"),
+    Explorer("Files", JCodeIcon.Files, "Files"),
     Search("Search", JCodeIcon.Search, "Find"),
     Scm("SCM", JCodeIcon.Scm, "SCM"),
-    RunDebug("Run", JCodeIcon.Run, "Run"),
-    Extensions("Plugin Center", JCodeIcon.Extensions, "Plugins"),
-    IdeKits("IDE Kit Center", JCodeIcon.Code, "IDE Kits"),
+    RunDebug("Advanced tasks", JCodeIcon.Tasks, "Tasks", available=false),
+    Extensions("Plugin Library", JCodeIcon.Extensions, "Plugins", available=false),
+    IdeKits("IDE Kit Library", JCodeIcon.Code, "IDE Kits", available=false),
     Packages("Package Manager", JCodeIcon.Destinations, "Packages"),
     /** SDKs + language servers + debug engines, merged into one searchable/filterable catalog. */
     ToolchainManager("Language Center", JCodeIcon.Sdk, "Languages"),
@@ -303,3 +303,5 @@ internal sealed interface RightPanelSelection {
 }
 
 internal val LocalNativeNavigation = compositionLocalOf<(Int)->Unit> { {} }
+
+internal val LocalProjectTrash=compositionLocalOf<(dev.blamspot.jcode.fs.Project)->Unit> { {} }

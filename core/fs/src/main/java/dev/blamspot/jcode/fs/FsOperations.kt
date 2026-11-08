@@ -8,6 +8,7 @@ import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Additional filesystem operations beyond the base [Fs] contract.
@@ -17,19 +18,19 @@ import kotlinx.coroutines.withContext
 
 /** Create a new file inside [parent] with the given [name]. */
 suspend fun createFile(fs: Fs, context: Context, parent: FsPath, name: String): FsNode =
-    when (fs) {
+    withContext(Dispatchers.IO) { when (fs) {
         is PosixFs -> createFilePosix(parent, name)
         is SafFs -> createFileSaf(context, parent, name)
         else -> error("Unsupported Fs implementation: ${fs::class}")
-    }
+    } }
 
 /** Create a new directory inside [parent] with the given [name]. */
 suspend fun createDirectory(fs: Fs, context: Context, parent: FsPath, name: String): FsNode =
-    when (fs) {
+    withContext(Dispatchers.IO) { when (fs) {
         is PosixFs -> createDirectoryPosix(parent, name)
         is SafFs -> createDirectorySaf(context, parent, name)
         else -> error("Unsupported Fs implementation: ${fs::class}")
-    }
+    } }
 
 private suspend fun createDirectoryPosix(parent: FsPath, name: String): FsNode {
     val parentFile = parent.requireLocal()
@@ -91,15 +92,17 @@ private suspend fun createFileSaf(context: Context, parent: FsPath, name: String
 
 /** Rename a file/directory at [from] to [newName]. */
 suspend fun renameFile(fs: Fs, context: Context, from: FsPath, newName: String): FsNode =
-    when (fs) {
+    withContext(Dispatchers.IO) { FileMutations.mutex.withLock { when (fs) {
         is PosixFs -> renamePosix(from, newName)
         is SafFs -> renameSaf(context, from, newName)
         else -> error("Unsupported Fs implementation: ${fs::class}")
-    }
+    } }
+ }
 
 private suspend fun renamePosix(from: FsPath, newName: String): FsNode {
     val oldFile = from.requireLocal()
     val newFile = SafeLocalFiles.rename(oldFile, newName)
+    FileMutations.moved(from,FsPath.Local(newFile))
     return FsNode(
         path = FsPath.Local(newFile),
         name = newName,
@@ -111,7 +114,8 @@ private suspend fun renamePosix(from: FsPath, newName: String): FsNode {
 
 private suspend fun renameSaf(context: Context, from: FsPath, newName: String): FsNode {
     val doc = from.toDocumentFile(context)
-    doc.renameTo(newName)
+    check(doc.renameTo(newName)) { "Rename refused by document provider" }
+    FileMutations.moved(from,FsPath.Saf(doc.uri))
     return FsNode(
         path = FsPath.Saf(doc.uri),
         name = doc.name ?: newName,
@@ -125,27 +129,28 @@ private suspend fun renameSaf(context: Context, from: FsPath, newName: String): 
  * Permanently delete a file/directory (recursively). There is no trash bin — recovery is expected
  * via git (`git restore` / `git checkout`) for tracked files, so deletes here are irreversible.
  */
-suspend fun deletePermanently(fs: Fs, context: Context, path: FsPath) {
+suspend fun deletePermanently(fs: Fs, context: Context, path: FsPath) = withContext(Dispatchers.IO) { FileMutations.mutex.withLock {
     when (fs) {
         is PosixFs -> {
             val file = path.requireLocal()
             SafeLocalFiles.remove(file)
+            FileMutations.removed(path)
         }
         is SafFs -> {
             val doc = path.toDocumentFile(context)
-            check(doc.delete()) { "Delete failed: ${doc.uri}" }
+            check(doc.delete()) { "Delete failed: ${doc.uri}" };FileMutations.removed(path)
         }
         else -> error("Unsupported Fs implementation: ${fs::class}")
     }
-}
+} }
 
 /** Copy a file/directory from [source] to [targetParent] with optional [newName]. */
 suspend fun copyFileOrDir(fs: Fs, context: Context, source: FsPath, targetParent: FsPath, newName: String? = null): FsPath =
-    when (fs) {
+    withContext(Dispatchers.IO) { when (fs) {
         is PosixFs -> copyPosix(source, targetParent, newName)
         is SafFs -> copySaf(context, source, targetParent, newName)
         else -> error("Unsupported Fs implementation: ${fs::class}")
-    }
+    } }
 
 private suspend fun copyPosix(source: FsPath, targetParent: FsPath, newName: String?): FsPath {
     val sourceFile = source.requireLocal()
@@ -466,4 +471,20 @@ private fun FsPath.toDocumentFile(context: Context): DocumentFile = when (this) 
     is FsPath.Saf -> DocumentFile.fromTreeUri(context, uri)
         ?: DocumentFile.fromSingleUri(context, uri)
         ?: error("Unable to resolve document for $uri")
+}
+
+/** Move without overwriting. An interrupted cross-provider copy leaves the original intact. */
+suspend fun moveFileOrDir(fs: Fs,context: Context,source: FsPath,parent: FsPath): FsPath = withContext(Dispatchers.IO) {
+    if(source is FsPath.Local && parent is FsPath.Local) FileMutations.mutex.withLock {
+        val target=SafeLocalFiles.child(parent.file,source.file.name,nested=false)
+        check(!java.nio.file.Files.exists(target.toPath(),java.nio.file.LinkOption.NOFOLLOW_LINKS)) { "Destination already exists. Rename it or choose another folder; nothing was overwritten." }
+        require(!target.toPath().normalize().startsWith(source.file.canonicalFile.toPath())) { "Cannot move a folder into itself" }
+        java.nio.file.Files.move(source.file.toPath(),target.toPath())
+        FsPath.Local(target).also { FileMutations.moved(source,it) }
+    } else {
+        val landed=copyFileOrDir(fs,context,source,parent)
+        deletePermanently(fs,context,source)
+        FileMutations.moved(source,landed)
+        landed
+    }
 }

@@ -29,7 +29,7 @@ fun NativeKitPanel(host: NativePackageHost,panel: PanelState) {
         scope.launch {
             try {
                 val reply=host.invoke(owner,command,inputs.toMap())
-                message=reply.code
+                message=reply.code+(reply.values["reason"]?.let { ": $it · review the operation context or installation log, then retry." } ?: "")
                 reply.values.forEach { (key,value) -> results["$command.$key"]=value }
             } catch(e: Exception) { message=e.message ?: "Native command failed" }
             finally { busy=false }

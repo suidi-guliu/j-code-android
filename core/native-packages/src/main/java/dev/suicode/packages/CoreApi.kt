@@ -1,7 +1,7 @@
 package dev.suicode.packages
 
 /** Version 1 protocol. No Android Context, filesystem handle, classloader or shell is exposed. */
-object CoreApi { const val VERSION = 2; const val MIN_SUPPORTED = 1; fun compatible(min: Int,max: Int)=min>=1 && min<=max && min<=VERSION && max>=MIN_SUPPORTED }
+object CoreApi { const val VERSION = 3; const val MIN_SUPPORTED = 1; fun compatible(min: Int,max: Int)=min>=1 && min<=max && min<=VERSION && max>=MIN_SUPPORTED }
 enum class PackKind(val magic: String, val suffix: String, val mime: String) {
     PLUGIN("SUICPKG\u0000", "suic", "application/vnd.suicode.plugin"),
     KIT("SUIKPKG\u0000", "suik", "application/vnd.suicode.ide-kit")
@@ -44,7 +44,7 @@ class CoreSession internal constructor(
         if(!authority.accepted) return authority
         val trusted=request.copy(packageId=packageId,digest=digest)
         return try { backends[request.operation]?.invoke(trusted) ?: Reply(false, "E_UNAVAILABLE") }
-        catch (_: Exception) { Reply(false, "E_BACKEND") }
+        catch (e: Exception) { Reply(false, "E_BACKEND", mapOf("reason" to (e.message ?: e.javaClass.simpleName).take(2000), "component" to request.component)) }
     }
     @Synchronized override fun close() { active = false }
 }

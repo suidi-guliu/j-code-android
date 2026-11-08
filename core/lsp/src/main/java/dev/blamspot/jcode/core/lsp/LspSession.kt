@@ -41,6 +41,7 @@ class LspSession(
     private var readJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val requestId = AtomicInteger(0)
+    @Volatile private var readyAtNanos=0L
     private val pending = ConcurrentHashMap<Int, CompletableDeferred<Any?>>()
     private val writeMutex = Mutex()
     @Volatile private var closed = false
@@ -80,15 +81,20 @@ class LspSession(
             // --noprofile --norc so a user's shell configuration cannot inject output into the stream.
             val workspaceId = java.security.MessageDigest.getInstance("SHA-256").digest(projectRoot.toByteArray()).joinToString("") { "%02x".format(it) }
             val command = "exec bash --noprofile --norc -c " + dev.blamspot.jcode.core.distro.shellQuote(descriptor.runCommand.replace("\${workspaceId}", workspaceId).replace("\${workspaceRoot}", dev.blamspot.jcode.core.distro.shellQuote(dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(projectRoot))))
-            transport = withContext(Dispatchers.IO) { transportFactory(command) } ?: throw LspException("runtime is not ready")
+            val created=withContext(Dispatchers.IO) { transportFactory(command) } ?: throw LspException("runtime is not ready")
+            val retained=synchronized(this) { if(closed) false else { transport=created;true } }
+            if(!retained) { created.close();return }
             _state.value = LspState.RUNNING
             readJob = scope.launch { readLoop() }
 
             val result = sendRequest("initialize", initializeParams(rootUri), INITIALIZE_TIMEOUT_MS)
             serverCapabilities = result.asObject()?.optJSONObject("capabilities")
             sendNotification("initialized", JSONObject())
+            readyAtNanos=System.nanoTime()
             _state.value = LspState.READY
-        } catch (e: Exception) {
+        } catch(e: kotlinx.coroutines.CancellationException) { close();throw e }
+        catch (e: Exception) {
+            if(closed) return
             errorMessage = e.message ?: e::class.java.simpleName
             _state.value = LspState.ERROR
             close()
@@ -143,7 +149,7 @@ class LspSession(
         put("name", rootUri.substringAfterLast('/').ifBlank { "workspace" })
     }
 
-    override fun close() {
+    @Synchronized override fun close() {
         if (closed) return
         closed = true
         val t = transport
@@ -273,8 +279,18 @@ class LspSession(
 
     suspend fun completion(uri: String, line: Int, character: Int): List<CompletionResult> {
         if (!ready() || !supportsCompletion) return emptyList()
-        val result = sendRequest("textDocument/completion", positionParams(uri, line, character).put("context",JSONObject().put("triggerKind",1)))
-        return parseCompletions(result)
+        val params=positionParams(uri,line,character).put("context",JSONObject().put("triggerKind",1))
+        var result=sendRequest("textDocument/completion",params)
+        var items=parseCompletions(result)
+        // clangd can answer an early query before its first background index is usable. Retry only
+        // during startup, bounded to 600 ms and cancelled with the editor's snapshot/caret request.
+        repeat(3) {
+            if(System.nanoTime()-readyAtNanos>5_000_000_000L || (items.isNotEmpty() && result.asObject()?.optBoolean("isIncomplete",false)!=true)) return items
+            delay(200)
+            if(!ready()) return emptyList()
+            result=sendRequest("textDocument/completion",params);items=parseCompletions(result)
+        }
+        return items
     }
 
     suspend fun hover(uri: String, line: Int, character: Int): String? {

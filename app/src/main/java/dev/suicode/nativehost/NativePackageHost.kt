@@ -28,6 +28,7 @@ class NativePackageHost private constructor(private val context: Context) {
     private val verifier=PackageVerifier(mapOf(hash(keyBytes) to rootKey))
     private val store=PackageStore(root.toPath(),verifier)
     val providers=NativeProviders()
+    val setup by lazy { NativeKitSetup(context,this,dev.blamspot.jcode.core.distro.DistroServiceLocator.distroService(context)) }
     var onDeactivated: (String)->Unit = {}
     private val sessions=java.util.concurrent.ConcurrentHashMap<String,CoreSession>()
     private val mutation=Mutex()
@@ -47,7 +48,7 @@ class NativePackageHost private constructor(private val context: Context) {
             require(inputs.size<=64 && inputs.all { (k,v) -> k.matches(Regex("[a-z][a-z0-9.-]{0,63}")) && v.length<=4096 && '\u0000' !in v })
             val pack=store.load(id)
             val component=pack.declarations().first { it.id==componentId }
-            val operation=when(component.type) { "panel" -> Operation.PANEL_OPEN;"simpleRun","basicBuild" -> Operation.SIMPLE_RUN;"language","environment" -> return@withLock Reply(false,"E_COMPONENT");else -> Operation.valueOf(component.descriptor.getValue("operation").jsonPrimitive.content) }
+            val operation=when(component.type) { "panel" -> Operation.PANEL_OPEN;"simpleRun","basicBuild" -> Operation.SIMPLE_RUN;"language","environment","setup" -> return@withLock Reply(false,"E_COMPONENT");else -> Operation.valueOf(component.descriptor.getValue("operation").jsonPrimitive.content) }
             val args=if(component.type=="panel") component.descriptor.mapValues { if(it.value is JsonPrimitive) it.value.jsonPrimitive.content else it.value.toString() }
                 else if(component.type in setOf("simpleRun","basicBuild")) emptyMap()
                 else component.descriptor.getValue("arguments").jsonObject.mapValues { it.value.jsonPrimitive.content }
@@ -65,7 +66,7 @@ class NativePackageHost private constructor(private val context: Context) {
     val library=mutableLibrary.asStateFlow()
     suspend fun refreshLibrary()=withContext(Dispatchers.IO) {
         fun fetch(path: String,limit: Int): ByteArray {
-            val connection=URL("https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/final-product/native-library/v1/$path").openConnection() as java.net.HttpURLConnection
+            val connection=URL("https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5-workbench-reliability/native-library/v1/$path").openConnection() as java.net.HttpURLConnection
             connection.instanceFollowRedirects=false;connection.connectTimeout=20000;connection.readTimeout=30000
             try {
                 check(connection.responseCode==200) { "Official library HTTP ${connection.responseCode}" }
@@ -116,7 +117,7 @@ class NativePackageHost private constructor(private val context: Context) {
         require(data.size<=32*1024*1024) { "Package exceeds 32 MiB" }
         // Recognize authenticated binary kind rather than trusting a provider-supplied filename.
         val suffix=PackKind.entries.firstOrNull { data.size>=8 && data.copyOfRange(0,8).contentEquals(it.magic.toByteArray()) }?.suffix ?: error("E_MAGIC: Not a .suic or .suik package")
-        PackagePreview(data,suffix,store.inspect(data,suffix),"Local document: $uri")
+        PackagePreview(data,suffix,verifier.verify(data,suffix,checkDependencies=false),"Local document: $uri")
     }
     suspend fun download(item: LibraryItem): PackagePreview = withContext(Dispatchers.IO) {
         val url=URL(item.url)
@@ -127,7 +128,7 @@ class NativePackageHost private constructor(private val context: Context) {
             check(connection.responseCode==200) { "Package download HTTP ${connection.responseCode}" }
             val data=connection.inputStream.use { it.readNBytes(32*1024*1024+1) }
             check(data.size==item.bytes && hash(data)==item.sha256) { "Package size/SHA-256 mismatch" }
-            val pack=store.inspect(data,item.kind)
+            val pack=verifier.verify(data,item.kind,checkDependencies=false)
             check(pack.official && pack.id==item.id && pack.version==item.version) { "Official signature/identity mismatch" }
             PackagePreview(data,item.kind,pack,item.url)
         } finally { connection.disconnect() }
@@ -137,6 +138,14 @@ class NativePackageHost private constructor(private val context: Context) {
         onDeactivated(preview.pack.id)
         activate(preview.pack.id)
         publish()
+    }
+    suspend fun installedPreview(id: String): PackagePreview = withContext(Dispatchers.IO) {
+        val pack=store.load(id)
+        PackagePreview(File(root,"${pack.digest}.${pack.kind.suffix}").readBytes(),pack.kind.suffix,pack,"Installed package")
+    }
+    suspend fun setupPreview(id: String): PackagePreview {
+        val item=library.value.firstOrNull { it.id==id }
+        return if(item!=null) download(item) else installedPreview(id)
     }
     suspend fun enable(id: String)=action { activate(id);publish() }
     suspend fun disable(id: String)=action { store.disable(id);onDeactivated(id);sessions.remove(id)?.close();providers.unregister(id);mutablePanel.value=null;publish() }

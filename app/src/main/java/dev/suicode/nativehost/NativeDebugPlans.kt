@@ -22,13 +22,16 @@ object NativeDebugPlans {
         val context=mutableMapOf<String,JsonElement>("source" to JsonPrimitive(source),"project" to JsonPrimitive(project),"sourceUri" to JsonPrimitive(File(source).toURI().toASCIIString()),"projectUri" to JsonPrimitive(File(project).toURI().toASCIIString()))
         args["preLaunchResource"]?.jsonPrimitive?.content?.let { resource ->
             require(resource.startsWith("resources/") && resource.split('/').none { it==".." || it=="." })
-            val script="/tmp/sui-debug-${UUID.randomUUID()}.sh"
-            check(distro.stageGuestFile(script,row.pack.content(resource).toString(Charsets.UTF_8))) { "Cannot stage Kit preparation script" }
+            val directory="/tmp/sui-debug-${UUID.randomUUID()}"
+            row.pack.resourcePaths().forEach { name ->
+                check(distro.stageGuestBytes("$directory/$name",row.pack.content(name))) { "Cannot stage Kit preparation resource" }
+            }
+            val script="$directory/$resource"
             try {
                 val result=distro.execOwned(owner="sui-kit:${row.record.id}/prepare",command="/bin/bash ${shellQuote(script)} ${shellQuote(source)} ${shellQuote(project)}",workdir=project,timeoutMs=300000L)
                 check(result.succeeded) { "Kit preparation failed: ${result.stderr.takeLast(2000)}" }
                 context["prepared"]=Json.parseToJsonElement(result.stdout.trim())
-            } finally { File(distro.activeRootfsPath(),script.removePrefix("/")).delete() }
+            } finally { dev.blamspot.jcode.fs.SafeLocalFiles.remove(File(distro.activeRootfsPath(),directory.removePrefix("/"))) }
         }
         return DebugWorkflow.resolve(Json.parseToJsonElement(args.getValue("workflow").jsonPrimitive.content).jsonObject,context) { command,arguments ->
             val result=rpc(sourcePath,command,JSONArray(arguments.toString())) ?: error("Kit RPC $command needs a ready language server")

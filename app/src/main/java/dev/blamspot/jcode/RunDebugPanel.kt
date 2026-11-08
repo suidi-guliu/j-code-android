@@ -236,7 +236,7 @@ private fun ProjectRunBuildDetail(
             if (runs.any { run -> run.terminals.any { it.command.contains("adb ") } }) {
                 AndroidTargetRow(project)
             }
-            if (runs.isEmpty()) HintText("No run config yet — add one.")
+            if (runs.isEmpty()) HintText("No advanced run task configured — add one.")
             runs.forEachIndexed { index, config ->
                 val running = isRunning && (runningRunName == null || runningRunName == config.name)
                 RunConfigRow(
@@ -253,7 +253,7 @@ private fun ProjectRunBuildDetail(
                     onDelete = { onDeleteRun(project, index) },
                 )
             }
-            AddRow("Add run config", onClick = { showAddRun = true })
+            AddRow("New advanced task", onClick = { showAddRun = true })
             // While a session runs this is the debugger — steps, stack, variables — and nothing else
             // shows it, so it gets the whole section. Idle it is only a way to start one on the open
             // file, which every run config's own Debug button already falls through to, so it
@@ -289,7 +289,7 @@ private fun ProjectRunBuildDetail(
 
     if (showAddRun) {
         AddConfigDialog(
-            title = "Add run config",
+            title = "New advanced task",
             groupHint = "Pick a framework, then a project file.",
             entryHint = "Pick a project file — every run config it offers is added.",
             emptyHint = "No run trigger detected — start from a blank config.",

@@ -1,6 +1,6 @@
 # sui-code 开发规范
 
-当前规范 **0.2.0**；Core API **2**（兼容 API1）；SUIC/SUIK **1.0**。
+当前规范 **0.3.0**；Core API **3**（兼容 API1/2）；SUIC/SUIK **1.0**。
 
 - [Native Extension & IDE Kit Development Specification](SUIC-SUIK-Development-Specification.md)
 - [UI Extension & Design Specification](SuiCode-UI-Design-Specification.md)

@@ -21,7 +21,7 @@ def main(destination):
 repositories { mavenCentral() }
 kotlin { jvmToolchain(21) }
 sourceSets.main { kotlin.srcDir("core/native-packages/src/main/java") }
-dependencies { implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0") }
+dependencies { implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0"); implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2") }
 application { mainClass.set("dev.suicode.packages.PackageTool") }
 ''')
  sums=[]
@@ -29,7 +29,7 @@ application { mainClass.set("dev.suicode.packages.PackageTool") }
   rel=p.relative_to(ROOT);assert p.read_bytes()==(dst/rel).read_bytes()
   sums.append(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+rel.as_posix())
  (dst/'API-SOURCE-SHA256SUMS').write_text('\n'.join(sums)+'\n')
- (dst/'README.md').write_text('''# sui-code Native SDK 0.2 / Core API 2
+ (dst/'README.md').write_text('''# sui-code Native SDK 0.3 / Core API 3
 
 This standalone JVM SDK copies the exact production Kotlin verifier, independent loaders, authorization API, native recipe/dataflow interpreter and design model. API-SOURCE-SHA256SUMS records byte identity. It does not emulate Android services or embed runtimes.
 

@@ -32,6 +32,12 @@ class SetupTerminalRunner(
     private val appContext: Context,
     private val distroService: DistroService,
 ) {
+    companion object {
+        @Volatile private var shared: SetupTerminalRunner?=null
+        fun get(context: Context,distro: DistroService): SetupTerminalRunner = shared ?: synchronized(this) {
+            shared ?: SetupTerminalRunner(context.applicationContext,distro).also { shared=it }
+        }
+    }
     private val manager: TerminalSessionManager
         get() = TerminalSessionHost.manager(appContext)
 

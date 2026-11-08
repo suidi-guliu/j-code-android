@@ -38,6 +38,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
+import dev.blamspot.jcode.fs.moveFileOrDir
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -87,7 +92,6 @@ import dev.blamspot.jcode.fs.renameFile
 import dev.blamspot.jcode.fs.TrashSource
 import dev.blamspot.jcode.fs.WorkspaceServiceLocator
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
@@ -150,7 +154,27 @@ fun ExplorerView(
     var showDeleteConfirm by remember { mutableStateOf<TreeRow?>(null) }
 
     // Clipboard for copy/cut operations
-    var clipboard by remember { mutableStateOf<ClipboardEntry?>(null) }
+    var clipboard by remember { mutableStateOf<List<ClipboardEntry>>(emptyList()) }
+    var multi by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var searchRows by remember { mutableStateOf<List<TreeRow>>(emptyList()) }
+    var searchNote by remember { mutableStateOf("") }
+    var sort by remember { mutableStateOf(TreeViewModel.Sort.Name) }
+    var properties by remember { mutableStateOf<String?>(null) }
+    var batchDelete by remember { mutableStateOf(false) }
+    val selectedRows=(if(query.isNotBlank()) searchRows else treeRows+listRows).distinctBy { it.id }.filter { it.id in selectedIds && !it.isPlaceholder }
+    // If a directory and its child are selected, operate only on the directory.
+    val batchRows=selectedRows.filter { child -> selectedRows.none { parent -> parent.id!=child.id && child.id.startsWith(parent.id+"/") } }
+    LaunchedEffect(query,project) {
+        if(query.isBlank()) { searchRows=emptyList();searchNote="";return@LaunchedEffect }
+        kotlinx.coroutines.delay(180)
+        val root=(project.fsPath as? FsPath.Local)?.file
+        if(root==null) { searchNote="Search requires an internal/local directory. SAF access remains available through the file tree.";return@LaunchedEffect }
+        val taskContext=kotlinx.coroutines.currentCoroutineContext()
+        val result=withContext(Dispatchers.IO) { dev.blamspot.jcode.fs.LocalFileSearch.search(root,query) { taskContext.ensureActive() } }
+        searchRows=withContext(Dispatchers.IO) { result.files.map { f -> TreeRow(f.absolutePath,FsNode(FsPath.Local(f),f.name,if(f.isDirectory && !java.nio.file.Files.isSymbolicLink(f.toPath())) FsKind.Directory else FsKind.File,f.length(),f.lastModified()),0,false,false) } }
+        searchNote="${searchRows.size} matches"+if(result.truncated) " · limited; refine search" else ""
+    }
 
     // The bin. Its button stays on the toolbar while there is anything in it even after the setting
     // is turned off — opting out should stop deletes going there, not strand what already has.
@@ -317,11 +341,11 @@ fun ExplorerView(
             RowAction.NewFolder -> showCreateDialog = CreateTarget(row.node.path, isDirectory = true)
             RowAction.Rename -> showRenameDialog = RenameTarget(row.node.path, row.node.name)
             RowAction.Copy -> {
-                clipboard = ClipboardEntry(row.node.path, row.node.name, isCut = false)
+                clipboard = listOf(ClipboardEntry(row.node.path, row.node.name, isCut = false))
                 onSnackbar?.invoke("Copied '${row.node.name}'")
             }
             RowAction.Cut -> {
-                clipboard = ClipboardEntry(row.node.path, row.node.name, isCut = true)
+                clipboard = listOf(ClipboardEntry(row.node.path, row.node.name, isCut = true))
                 onSnackbar?.invoke("Cut '${row.node.name}'")
             }
             RowAction.Delete -> showDeleteConfirm = row
@@ -346,10 +370,23 @@ fun ExplorerView(
         }
     }
 
-    CompositionLocalProvider(LocalProjectRootId provides project.fsPath.stableId) {
+    CompositionLocalProvider(LocalProjectRootId provides project.fsPath.stableId,LocalExplorerMultiSelection provides multi) {
     Column(modifier = modifier.fillMaxSize()) {
         // Compact action toolbar (always visible) with create/refresh/paste. The Tree|List view mode
         // is set in Settings, not here.
+        OutlinedTextField(value=query,onValueChange={query=it.take(256)},label={Text("Search files / folders")},singleLine=true,modifier=Modifier.fillMaxWidth())
+        if(searchNote.isNotBlank()) Text(searchNote,style=MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            TextButton(onClick={multi=!multi;selectionState.clear()}) { Text(if(multi) "Done (${selectedIds.size})" else "Select") }
+            TextButton(onClick={sort=TreeViewModel.Sort.entries[(sort.ordinal+1)%TreeViewModel.Sort.entries.size];scope.launch { viewModel.setSort(sort) }}) { Text("Sort: ${sort.name}") }
+            if(multi) {
+                TextButton(onClick={ (if(query.isNotBlank()) searchRows else if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.id!=project.fsPath.stableId }.forEach { if(it.id !in selectedIds) selectionState.toggle(it.id) } }) { Text("All") }
+                TextButton(enabled=batchRows.isNotEmpty(),onClick={clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,false) }}) { Text("Copy") }
+                TextButton(enabled=batchRows.isNotEmpty(),onClick={if(batchRows.any { isProtectedPath(it.node.path) }) onSnackbar?.invoke("Project/root folders must be managed through Projects") else clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,true) }}) { Text("Cut / move") }
+                TextButton(enabled=batchRows.isNotEmpty(),onClick={batchDelete=true}) { Text("Trash") }
+            }
+            TextButton(enabled=selectedRows.isNotEmpty(),onClick={properties=selectedRows.joinToString("\n\n") { "${it.node.name}\n${it.node.path.stableId}\n${it.node.kind} · ${it.node.sizeBytes} bytes\nModified: ${java.util.Date(it.node.modifiedAtMillis)}" }}) { Text("Properties") }
+        }
         ExplorerToolbar(
             viewMode = activeViewMode,
             onCreateFile = { showCreateDialog = CreateTarget(resolveCreateParent(), isDirectory = false) },
@@ -364,25 +401,25 @@ fun ExplorerView(
                 scmUi.onFsActivity?.invoke()
             },
             onPaste = {
-                clipboard?.let { entry ->
-                    scope.launch {
-                        runCatching {
-                            if (entry.isCut) check(!isProtectedPath(entry.sourcePath)) { "Manage registered project folders through Project management" }
-                            val targetParent = resolveCreateParent()
-                            copyFileOrDir(fs, context, entry.sourcePath, targetParent)
-                            viewModel.refresh()
-                            onSnackbar?.invoke("Pasted '${entry.name}'")
-                            if (entry.isCut) {
-                                deletePermanently(fs, context, entry.sourcePath)
-                                viewModel.refresh()
-                            }
-                            clipboard = null
-                            scmUi.onFsActivity?.invoke()
-                        }.onFailure { onSnackbar?.invoke("Paste failed: ${it.message}") }
+                val entries=clipboard
+                val parent=resolveCreateParent()
+                fileOpScope.launch {
+                    for(entry in entries) {
+                        try {
+                            if(entry.isCut) {
+                                check(!isProtectedPath(entry.sourcePath)) { "Manage registered project folders through Project management" }
+                                moveFileOrDir(fs,context,entry.sourcePath,parent)
+                            } else copyFileOrDir(fs,context,entry.sourcePath,parent)
+                        } catch(e: Exception) {
+                            onSnackbar?.invoke("Paste stopped at '${entry.name}': ${e.message}. Conflicting files were not overwritten; remaining clipboard entries retained.")
+                            clipboard=entries.dropWhile { it!=entry };viewModel.refresh();return@launch
+                        }
                     }
+                    clipboard=emptyList();viewModel.refresh();scmUi.onFsActivity?.invoke()
+                    onSnackbar?.invoke("Pasted ${entries.size} item(s)")
                 }
             },
-            canPaste = clipboard != null,
+            canPaste = clipboard.isNotEmpty(),
             showTrash = trashSettings.enabled || trashHasItems,
             onOpenTrash = trashSettings.onOpen,
         )
@@ -391,7 +428,10 @@ fun ExplorerView(
         // file-manager for one directory, navigated via the breadcrumb + up button. The scrollable
         // body must take the *remaining* height (weight) so its LazyColumn is bounded and scrolls;
         // a bare fillMaxSize would overflow under the toolbar and hide the last rows.
-        when (activeViewMode) {
+        if(query.isNotBlank()) Box(Modifier.weight(1f)) {
+            ListViewContent(rows=searchRows,isLoading=false,selectedIds=selectedIds,selectionState=selectionState,
+                onRowClick={row -> if(row.node.kind==FsKind.Directory) { query="";scope.launch { viewModel.setViewMode(ExplorerViewMode.List);viewModel.navigateTo(row.node.path,row.node.name) } } else onFileSelected?.invoke(row.node) },onAction={row,action -> runRowAction(row,action)})
+        } else when (activeViewMode) {
             ExplorerViewMode.Tree -> Box(modifier = Modifier.weight(1f)) {
                 TreeViewContent(
                     rows = treeRows,
@@ -437,6 +477,17 @@ fun ExplorerView(
     }
     }
 
+    properties?.let { value -> AlertDialog(onDismissRequest={properties=null},title={Text("File properties")},text={Text(value)},confirmButton={TextButton(onClick={properties=null}) { Text("Close") }}) }
+    if(batchDelete) AlertDialog(onDismissRequest={batchDelete=false},title={Text("Move ${batchRows.size} selected items to Trash?")},text={Text("Files remain recoverable from Trash. Registered project roots cannot be removed here.")},confirmButton={TextButton(onClick={
+        batchDelete=false
+        fileOpScope.launch {
+            try {
+                check(batchRows.none { isProtectedPath(it.node.path) }) { "Manage project roots through Projects" }
+                batchRows.forEach { trash.put(context,it.node.path,project.name,(project.fsPath as? FsPath.Local)?.file?.path,TrashSource.Explorer) }
+                selectionState.clear();trashRevision++;viewModel.refresh()
+            } catch(e: Exception) { onSnackbar?.invoke("Trash operation paused: ${e.message}");viewModel.refresh() }
+        }
+    }) { Text("Move to Trash") }},dismissButton={TextButton(onClick={batchDelete=false}) { Text("Cancel") }})
     // Create dialog
     showCreateDialog?.let { target ->
         CreateRenameDialog(
@@ -721,6 +772,7 @@ private fun TreeViewContent(
         return
     }
 
+    val multi=LocalExplorerMultiSelection.current
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(rows, key = { it.id }) { row ->
             TreeRowItem(
@@ -728,8 +780,7 @@ private fun TreeViewContent(
                 isSelected = row.id in selectedIds,
                 onToggleExpand = onToggleExpand,
                 onClick = {
-                    selectionState.selectSingle(row.id)
-                    onRowClick(row)
+                    if(multi) selectionState.toggle(row.id) else { selectionState.selectSingle(row.id);onRowClick(row) }
                 },
                 onAction = onAction,
             )
@@ -884,6 +935,7 @@ private fun ListViewContent(
         return
     }
 
+    val multi=LocalExplorerMultiSelection.current
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(rows, key = { it.id }) { row ->
             var menuExpanded by remember { mutableStateOf(false) }
@@ -892,8 +944,7 @@ private fun ListViewContent(
                 modifier = Modifier
                     .combinedClickable(
                         onClick = {
-                            selectionState.selectSingle(row.id)
-                            onRowClick(row)
+                            if(multi) selectionState.toggle(row.id) else { selectionState.selectSingle(row.id);onRowClick(row) }
                         },
                         onLongClick = { menuExpanded = true },
                     )
@@ -1105,3 +1156,5 @@ private fun vcsStatusColor(status: String): Color = when (status.firstOrNull()) 
     'R', 'C' -> MaterialTheme.colorScheme.primary
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
+
+private val LocalExplorerMultiSelection=androidx.compose.runtime.compositionLocalOf { false }

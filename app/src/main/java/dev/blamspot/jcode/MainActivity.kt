@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
         if(currentFocus is dev.blamspot.jcode.core.term.TerminalView) return false
         if(event.keyCode==KeyEvent.KEYCODE_ENTER && currentFocus !is dev.blamspot.jcode.core.editor.EditorView) return false
         if (!event.isCtrlPressed || event.isAltPressed || event.isShiftPressed ||
-            event.keyCode !in setOf(KeyEvent.KEYCODE_F5, KeyEvent.KEYCODE_ENTER)) return false
+            (event.keyCode !in setOf(KeyEvent.KEYCODE_F5, KeyEvent.KEYCODE_ENTER) && event.scanCode!=63)) return false
         // Android routes some hardware function keys directly through dispatchKeyShortcutEvent.
         if (event.action == KeyEvent.ACTION_DOWN && runShortcutGate.accept(event.downTime,event.keyCode,event.repeatCount)) {
             android.util.Log.d("SuiKeyboard", "QuickRun key=${event.keyCode} scan=${event.scanCode} meta=${event.metaState}")
@@ -131,7 +131,7 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if(BuildConfig.DEBUG && (event.keyCode==KeyEvent.KEYCODE_F5 || event.keyCode==KeyEvent.KEYCODE_FUNCTION)) android.util.Log.d("SuiKeyboard","hardware action=${event.action} key=${event.keyCode} scan=${event.scanCode} meta=${event.metaState}")
+        if(BuildConfig.DEBUG && (event.keyCode==KeyEvent.KEYCODE_F5 || event.scanCode==63 || event.keyCode==KeyEvent.KEYCODE_FUNCTION)) android.util.Log.d("SuiKeyboard","hardware action=${event.action} key=${event.keyCode} scan=${event.scanCode} meta=${event.metaState}")
         if (dispatchRunShortcut(event)) return true
         if (mouseContextClick.shouldSwallowBack(event)) return true
         val keyCode = event.keyCode

@@ -53,6 +53,9 @@ class DebugController(
     private var activeSession: DebugSession? = null
     /** js-debug child sessions (the debuggee runs here); empty for single-session adapters. */
     private val children = java.util.concurrent.CopyOnWriteArrayList<DebugSession>()
+    private val observerJobs=java.util.concurrent.ConcurrentHashMap<DebugSession,java.util.concurrent.CopyOnWriteArrayList<kotlinx.coroutines.Job>>()
+    private fun observe(session: DebugSession,job: kotlinx.coroutines.Job) { observerJobs.computeIfAbsent(session) { java.util.concurrent.CopyOnWriteArrayList() }.add(job) }
+    private fun clearObservers() { observerJobs.values.forEach { jobs -> jobs.forEach { it.cancel() } };observerJobs.clear() }
     /** Current breakpoints (host path -> 0-based lines), so freshly-spawned child sessions get them too. */
     @Volatile private var launchSource: String?=null
     @Volatile private var launchProject: String?=null
@@ -167,8 +170,8 @@ class DebugController(
         s.onStartDebugging = { request, config -> spawnChild(request, config) }
         // While preparing we hold STARTING; ignore the fresh session's initial DISCONNECTED so the
         // panel doesn't flicker back to the launch row between build and adapter start.
-        scope.launch { s.state.collect { if (session===s && !(it == DebugState.DISCONNECTED && _state.value == DebugState.STARTING)) _state.value = it } }
-        scope.launch { s.stopped.collect { st -> if (st != null) onStopped(s, st) else clearStoppedView() } }
+        observe(s,scope.launch { s.state.collect { if (session===s && !(it == DebugState.DISCONNECTED && _state.value == DebugState.STARTING)) _state.value = it } })
+        observe(s,scope.launch { s.stopped.collect { st -> if (st != null) onStopped(s, st) else clearStoppedView() } })
 
         val distroBreakpoints = distroBps() // DAP lines are 1-based; applied on `initialized`
         pushOutput("Starting ${engine.name} on ${hostPath.substringAfterLast('/')}…\n")
@@ -206,7 +209,8 @@ class DebugController(
      * call-stack / variables / output feed the same UI; [activeSession] follows whichever child last
      * stopped so step/continue target the right one. Children can nest (workers / child processes).
      */
-    private fun spawnChild(request: String, config: JSONObject) {
+    @Synchronized private fun spawnChild(request: String, config: JSONObject) {
+        if(ended || session==null) return
         val port = config.optString("__jsDebugChildServer", "").toIntOrNull() ?: rootTcpPort
         if (port == null) {
             pushOutput("js-debug requested a child session without a server port; cannot attach.\n")
@@ -223,13 +227,13 @@ class DebugController(
         child.onOutput = { _, text -> pushOutput(text) }
         child.onStartDebugging = { req, cfg -> spawnChild(req, cfg) }
         child.onTerminated = { onChildTerminated(child) }
-        scope.launch { child.stopped.collect { st -> if (st != null) onStopped(child, st) else clearStoppedView() } }
+        observe(child,scope.launch { child.stopped.collect { st -> if (st != null) onStopped(child, st) else clearStoppedView() } })
         // Only the child's STOPPED/RUNNING drive the UI; its start-up states would flicker the panel.
-        scope.launch {
+        observe(child,scope.launch {
             child.state.collect { st ->
                 if (st == DebugState.STOPPED || st == DebugState.RUNNING) _state.value = st
             }
-        }
+        })
         scope.launch {
             runCatching { child.start(adapterCommand = "", request = request, configuration = config, breakpoints = distroBps()) }
             // start() swallows its own failures into DISCONNECTED/ERROR; if the child never reached a live
@@ -244,6 +248,7 @@ class DebugController(
     private fun onChildTerminated(child: DebugSession) {
         if (activeSession === child) { activeSession = session; _location.value = null }
         children.remove(child)
+        observerJobs.remove(child)?.forEach { it.cancel() }
         runCatching { child.close() }
         // The debuggee(s) ended once no child remains — end the whole session.
         if (children.isEmpty()) endSession()
@@ -356,6 +361,7 @@ class DebugController(
         generation.incrementAndGet()
         preparation?.cancel(); preparation=null
         ownerPackage=null;launchSource=null;launchProject=null
+        clearObservers()
         ended = true // a late `terminated` event must not resurrect the session as TERMINATED
         releaseAndroidAttachment()
         children.forEach { runCatching { it.close() } }
@@ -371,6 +377,7 @@ class DebugController(
     @Synchronized private fun endSession() {
         if (ended) return
         ended = true
+        clearObservers()
         _location.value = null
         releaseAndroidAttachment()
         children.forEach { runCatching { it.close() } }

@@ -1,0 +1,1 @@
+{"requirements":[{"bytes":null,"commands":["cmake","ninja"],"files":[],"id":"build-tools","name":"CMake and Ninja","packages":["cmake","ninja-build"],"provider":"ubuntu-apt","source":"https://archive.ubuntu.com","version":"Ubuntu signed candidate"}]}

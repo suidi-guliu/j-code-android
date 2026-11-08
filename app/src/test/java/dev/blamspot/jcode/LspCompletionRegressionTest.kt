@@ -8,6 +8,10 @@ class LspCompletionRegressionTest {
         val item=CompletionResult("println(String value) : void",2,null,null,"println(\${1:value})",2,"00001","println").toEditorItem()
         assertTrue(item.filterText.startsWith("pr"));assertEquals("println",item.filterText);assertNotNull(item.snippetText)
     }
+    @Test fun clangdLeadingSpaceInDisplayLabelDoesNotDiscardProjectFunction() {
+        val item=CompletionResult(" add(int a, int b)",3,null,null,"add(\${1:a}, \${2:b})",2,"0001","add").toEditorItem()
+        assertEquals("add",item.filterText);assertTrue(item.filterText.startsWith("ad"))
+    }
     @Test fun plainCompletionWithoutExplicitFilterStillMatchesIdentifier() {
         val item=CompletionResult("add(int a, int b)",3,null,null,"add",1,null).toEditorItem()
         assertEquals("add",item.filterText);assertEquals("add",item.insertText)

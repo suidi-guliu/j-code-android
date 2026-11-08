@@ -43,4 +43,5 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(project(":core:design"))
     testImplementation(kotlin("test"))
+    testImplementation("org.json:json:20240303")
 }

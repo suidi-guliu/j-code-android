@@ -24,6 +24,7 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
     val hostError by host.error.collectAsState()
     val panel by host.panel.collectAsState()
     val scope=rememberCoroutineScope()
+    val setupState by host.setup.state.collectAsState()
     var section by remember(initialSection) { mutableIntStateOf(initialSection.coerceIn(0,2)) }
     var pending by remember { mutableStateOf<PackagePreview?>(null) }
     var replyDialog by remember { mutableStateOf<Pair<String,String>?>(null) }
@@ -42,7 +43,7 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
         if(uri!=null) perform { pending=host.importDocument(uri) }
     }
     Column(modifier.padding(16.dp)) {
-        Text(listOf("Plugin Center","IDE Kit Center","Package Manager")[section],style=MaterialTheme.typography.titleLarge)
+        Text("Packages",style=MaterialTheme.typography.titleLarge)
         Text(source?.let { "Source context: $it" } ?: "Open a source file for language actions; project workflows use the selected Project",style=MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(12.dp))
         ScrollableTabRow(selectedTabIndex=section,edgePadding=0.dp) {
@@ -51,6 +52,16 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             OutlinedButton(enabled=!busy,onClick={perform { host.refreshLibrary() }}) { Text("Refresh") }
             OutlinedButton(enabled=!busy,onClick={picker.launch(arrayOf("*/*"))}) { Text("Import .suic / .suik") }
+        }
+        if(setupState.message.isNotEmpty()) {
+            Text(setupState.message)
+            if(setupState.installing) {
+                LinearProgressIndicator(progress={setupState.progress/100f},modifier=Modifier.fillMaxWidth())
+                TextButton(onClick=host.setup::cancel) { Text("Cancel installation safely") }
+            }
+            var showLog by remember { mutableStateOf(false) }
+            TextButton(onClick={showLog=true}) { Text("Installation log") }
+            if(showLog) AlertDialog(onDismissRequest={showLog=false},title={Text(setupState.logPath ?: "Setup log")},text={Text(setupState.log.takeLast(20000),Modifier.heightIn(max=400.dp).verticalScroll(rememberScrollState()))},confirmButton={TextButton(onClick={showLog=false}) { Text("Close") }})
         }
         feedback?.let { Text(it) }
         if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -82,13 +93,17 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
                             Text(if(row.pack.official) "Verified sui-code signature" else "Unverified publisher")
                             Text("Permissions: "+row.record.grants.joinToString { it.wire })
                             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                                TextButton(enabled=!busy,onClick={perform { if(row.record.enabled) host.disable(row.record.id) else host.enable(row.record.id) }}) { Text(if(row.record.enabled) "Disable" else "Enable") }
+                                TextButton(enabled=!busy,onClick={perform { if(row.record.enabled) host.disable(row.record.id) else if(row.pack.kind==PackKind.KIT) pending=host.setupPreview(row.record.id) else host.enable(row.record.id) }}) { Text(if(row.record.enabled) "Disable" else "Enable") }
                                 TextButton(enabled=!busy,onClick={perform { pending=host.rollbackPreview(row.record.id) }}) { Text("Rollback") }
                             }
-                            if(row.record.kind=="suik" && row.record.enabled) row.pack.declarations().filter { it.type !in setOf("project","language","environment") }.forEach { component ->
+                            if(row.record.kind=="suik") {
+                                Text(setupState.ready[row.record.id] ?: "Prerequisites not checked this session")
+                                TextButton(enabled=!setupState.busy && !busy,onClick={perform { pending=host.setupPreview(row.record.id) }}) { Text("Review dependencies / repair") }
+                            }
+                            if(row.record.kind=="suik" && row.record.enabled) row.pack.declarations().filter { it.type !in setOf("project","language","environment","setup","panel") }.forEach { component ->
                                 TextButton(enabled=!busy,onClick={perform {
                                     val reply=host.invoke(row.record.id,component.id)
-                                    check(reply.accepted) { reply.code }
+                                    check(reply.accepted) { reply.code+": "+reply.values.toString() }
                                     feedback="${component.id}: ${reply.code}"
                                     if(reply.values.isNotEmpty()) replyDialog=component.id to reply.values.entries.joinToString("\n") { "${it.key}: ${it.value}" }
                                 }}) { Text(component.id) }
@@ -103,29 +118,5 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
         }
     }
     replyDialog?.let { (title,text) -> AlertDialog(onDismissRequest={replyDialog=null},title={Text(title)},text={Text(text)},confirmButton={TextButton(onClick={replyDialog=null}) { Text("Close") }}) }
-    panel?.let { NativeKitPanel(host,it) }
-    pending?.let { preview ->
-        var grants by remember(preview.pack.digest) { mutableStateOf(emptySet<Capability>()) }
-        var allowUnverified by remember(preview.pack.digest) { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest={if(!busy) pending=null},
-            title={Text("Review native package")},
-            text={Column(Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text("${preview.pack.id} ${preview.pack.version}\n.${preview.suffix} · ${preview.bytes.size} bytes\n${preview.source}")
-                Text(if(preview.pack.official) "Official signature verified" else "Unverified publisher",color=if(preview.pack.official) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
-                Text("SHA-256: ${preview.pack.digest}")
-                Text("Dependencies: "+preview.pack.manifest.getValue("dependencies"))
-                Text("Declared behavior:")
-                preview.pack.declarations().forEach { c -> Text("${c.type}: ${c.id}\n${c.descriptor}",style=MaterialTheme.typography.bodySmall) }
-                Text("process.run executes code in Ubuntu with access permitted to the app/guest. PRoot is not a security sandbox. Only grant execution to packages you trust.")
-                TextButton(onClick={grants=preview.pack.permissions}) { Text("Select all requested permissions") }
-                preview.pack.permissions.forEach { permission ->
-                    Row { Checkbox(checked=permission in grants,onCheckedChange={selected -> grants=if(selected) grants+permission else grants-permission});Text(permission.wire,Modifier.padding(top=12.dp)) }
-                }
-                if(!preview.pack.official) Row { Checkbox(checked=allowUnverified,onCheckedChange={allowUnverified=it});Text("I trust this unverified publisher",Modifier.padding(top=12.dp)) }
-            }},
-            confirmButton={TextButton(enabled=!busy && (preview.pack.official || allowUnverified),onClick={perform { host.install(preview,grants,allowUnverified);pending=null;section=2 }}) { Text("Install and enable") }},
-            dismissButton={TextButton(enabled=!busy,onClick={pending=null}) { Text("Cancel") }}
-        )
-    }
+    pending?.let { preview -> NativePackageReview(host,preview,onDismiss={pending=null},onInstalled={section=2}) }
 }

@@ -179,16 +179,16 @@ internal fun WorkspaceHeader(
             }
         }
 
-        val tools=WorkbenchTool.entries.filter {
-            it.available && (it!=WorkbenchTool.DbManager || dbManagerAvailable) && (it!=WorkbenchTool.Scm || scmAvailable) && (it!=WorkbenchTool.VmManager || vmManagerAvailable)
-        }
-        Column(verticalArrangement=Arrangement.spacedBy(Space.xs)) {
-            tools.chunked(2).forEach { pair ->
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(Space.xs)) {
-                    pair.forEach { tool -> SidebarToolButton(tool,selectedTool==tool,{ onSelectTool(tool) },Modifier.weight(1f)) }
-                    if(pair.size==1) Spacer(Modifier.weight(1f))
-                }
-            }
+        // Daily navigation is a dedicated rail. Less common retained capabilities live in More.
+        var more by remember { mutableStateOf(false) }
+        Box {
+            WorkbenchIconActionButton(jcIcon(JCodeIcon.MoreVert),"More tools",{more=true})
+            CompactContextMenu(expanded=more,onDismissRequest={more=false},listActions=buildList {
+                add(ContextAction(JCodeIcon.Tasks,"Advanced tasks (.jcode/run.yaml)") { onSelectTool(WorkbenchTool.RunDebug) })
+                if(scmAvailable) add(ContextAction(JCodeIcon.Scm,"Source control") { onSelectTool(WorkbenchTool.Scm) })
+                if(dbManagerAvailable) add(ContextAction(JCodeIcon.Database,"Databases") { onSelectTool(WorkbenchTool.DbManager) })
+                if(vmManagerAvailable) add(ContextAction(JCodeIcon.Vm,"Virtual machines") { onSelectTool(WorkbenchTool.VmManager) })
+            })
         }
     }
 }
@@ -223,6 +223,7 @@ internal fun WorkbenchTopBar(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
+        Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -258,12 +259,11 @@ internal fun WorkbenchTopBar(
                     // to share its name with the tab open in it is still a real step on the way
                     // there, and taking it out would leave a path that goes somewhere else.
                     text = listOfNotNull(
-                        workspace?.name,
                         selectedProject?.name,
                         activeTab?.title,
                     ).let { if (it.lastOrNull() == heading) it.dropLast(1) else it }
                         .joinToString(" / ")
-                        .ifBlank { "Editor workspace" },
+                        .ifBlank { "Internal Files" },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -291,81 +291,6 @@ internal fun WorkbenchTopBar(
                             ContextAction(JCodeIcon.Discard, "Discard", destructive = true) { saveActions.onDiscard() },
                             ContextAction(JCodeIcon.Save, "Save all") { saveActions.onSaveAll() },
                         ),
-                    )
-                }
-            }
-            // Run toggles to Stop while a run is active. A tap runs the single/first config; with more
-            // than one config it opens a picker instead. Long-press always opens the menu — the list of
-            // run configs to launch, plus the debug/session controls.
-            // A running single-file QuickRun also needs the existing Stop control without a project.
-            val nativeRun = dev.blamspot.jcode.design.LocalEditorSaveActions.current
-            val nativeHost = dev.suicode.nativehost.NativePackageHost.get(androidx.compose.ui.platform.LocalContext.current)
-            val nativeRecords = nativeHost.rows.collectAsState().value
-            val nativeFile = nativeRecords.isNotEmpty() && activeTab?.takeIf { !it.isPage }?.filePath?.name?.let {
-                runCatching { nativeHost.resolve(it) }.getOrNull() != null
-            } == true
-            if (selectedProject != null || isRunning || nativeFile) {
-                var runMenuOpen by remember { mutableStateOf(false) }
-                val hasMultipleRuns = runConfigNames.size > 1
-                // A debug session owns this button while it lasts, but it stays a three-state control:
-                // Run to start, Continue at a breakpoint, Stop while anything is live. Pause is
-                // deliberately not here — it belongs with the stepping controls in this button's
-                // long-press menu and the Run panel, and putting it in the header meant the one
-                // obvious control could not end a session. Without the Continue state the header kept
-                // offering "Run" at a breakpoint, the one thing you cannot do from there.
-                val debug = LocalDebugSession.current
-                val paused = debug.state == DebugState.STOPPED
-                val debugging = paused || debug.state == DebugState.RUNNING
-                Box {
-                    WorkbenchIconActionButton(
-                        icon = when {
-                            paused -> jcIcon(JCodeIcon.Continue)
-                            debugging || isRunning -> jcIcon(JCodeIcon.Stop)
-                            else -> jcIcon(JCodeIcon.Run)
-                        },
-                        contentDescription = when {
-                            paused -> "Continue"
-                            debugging -> "Stop debugging"
-                            isRunning -> "Stop"
-                            else -> "Run"
-                        },
-                        onClick = {
-                            when {
-                                paused -> debug.onContinue()
-                                debugging -> debug.onStop()
-                                isRunning -> onStop()
-                                hasMultipleRuns -> runMenuOpen = true
-                                else -> if (selectedProject == null && nativeFile) nativeRun.onQuickRun(0) else onRun()
-                            }
-                        },
-                        active = isRunning || debugging,
-                        onLongClick = { runMenuOpen = true },
-                    )
-                    CompactContextMenu(
-                        expanded = runMenuOpen,
-                        onDismissRequest = { runMenuOpen = false },
-                        quickActions = listOfNotNull(
-                            if (nativeFile) ContextAction(JCodeIcon.Run, "Run current file", enabled = !nativeRun.quickRunActive) { nativeRun.onQuickRun(0) } else null,
-                            // The session controls, live only while it is paused — stepping a running
-                            // debuggee is not a thing, and these were dead placeholders before the
-                            // debugger existed.
-                            ContextAction(JCodeIcon.Continue, "Continue", enabled = paused) { debug.onContinue() },
-                            ContextAction(JCodeIcon.Pause, "Pause", enabled = debug.state == DebugState.RUNNING) {
-                                debug.onPause()
-                            },
-                            ContextAction(JCodeIcon.StepOver, "Step Over", enabled = paused) { debug.onStepOver() },
-                            ContextAction(JCodeIcon.StepInto, "Step Into", enabled = paused) { debug.onStepInto() },
-                            ContextAction(JCodeIcon.StepOut, "Step Out", enabled = paused) { debug.onStepOut() },
-                            if (debugging) {
-                                ContextAction(JCodeIcon.Stop, "Stop debugging") { debug.onStop() }
-                            } else {
-                                ContextAction(JCodeIcon.Rerun, "Rerun") { if (selectedProject == null && nativeFile) nativeRun.onQuickRun(0) else onRerun() }
-                            },
-                        ),
-                        // Each run config as its own row — tap to launch that one.
-                        listActions = runConfigNames.mapIndexed { index, name ->
-                            ContextAction(JCodeIcon.Run, name) { onRunConfig(index) }
-                        },
                     )
                 }
             }
@@ -418,6 +343,8 @@ internal fun WorkbenchTopBar(
                     active = canShowRightSidebar && rightSidebarVisible,
                 )
             }
+        }
+        NativeCommandStrip(activeTab,selectedProject)
         }
     }
 }

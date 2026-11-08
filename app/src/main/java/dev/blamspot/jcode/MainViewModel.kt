@@ -143,6 +143,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
@@ -300,7 +301,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return javaQuickRun.start(tab.filePath, repeatCount) { saveTabAwait(tab) }
     }
 
-    val setupTerminalRunner = SetupTerminalRunner(appContext, distroService)
+    val setupTerminalRunner = SetupTerminalRunner.get(appContext, distroService)
 
     private val _runTerminalCompletions = MutableSharedFlow<Pair<String, Int>>(extraBufferCapacity = 16)
 
@@ -2461,7 +2462,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         require(section in 0..3)
         _bringEditorToFront.tryEmit(Unit)
         openDetailPage("sui-native-packages:$section",EditorPageKind.ExtensionSources) {
-            listOf("Plugin Center","IDE Kit Center","Package Manager","Language Center")[section]
+            if(section==3) "Languages" else "Packages"
         }
         if(section==3) viewModelScope.launch { distroService.checkSdkStatuses();distroService.checkLspStatuses();distroService.checkDebugEngineStatuses() }
     }
@@ -2758,6 +2759,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun openLspLocation(location: LocationResult) {
+        if (!location.path.startsWith("/") && location.path.contains("://")) {
+            val text = lspController.virtualDocument(location.path)
+            if (text == null) { emitMessage("Language server could not load this source: ${location.path}"); return }
+            val digest = java.security.MessageDigest.getInstance("SHA-256").digest(location.path.toByteArray()).joinToString("") { "%02x".format(it) }
+            val file = withContext(Dispatchers.IO) {
+                File(getApplication<Application>().cacheDir,"language-sources/$digest/" + location.path.substringBefore('?').substringAfterLast('/').ifBlank { "Source.java" }.removeSuffix(".class")+".java").apply { parentFile!!.mkdirs();writeText(text) }
+            }
+            openLocalFile(file,line=location.line+1,column=location.character+1)
+            _editorGroup.value.tabs.firstOrNull { it.filePath.path==file.path }?.editorState?.readOnly=true
+            return
+        }
         val file = File(location.path)
         if (!file.isFile) {
             emitMessage("Can't open ${file.name}: file not found")
@@ -2918,6 +2930,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         nativePackages.bind(dev.suicode.packages.Operation.PROJECT_READ,dev.suicode.packages.CoreBackend { request ->
             val project=selectedProject.value
+            if(project==null && request.arguments["action"]=="statistics") return@CoreBackend dev.suicode.packages.Reply(true,"NOT_APPLICABLE",mapOf("name" to "No Project selected", "files" to "N/A", "bytes" to "N/A", "reason" to "Internal Files can run independently. Open a Project for project statistics."))
             val root=(project?.fsPath as? FsPath.Local)?.file ?: dev.blamspot.jcode.fs.InternalFiles.root(appContext.filesDir)
             var count=0L;var bytes=0L
             if(request.arguments["action"]=="statistics") java.nio.file.Files.walkFileTree(root.toPath(),object: java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
@@ -3009,19 +3022,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Installing (or removing) a Dev Pack changes which servers are paired, so the files already
         // open have to be re-evaluated rather than waiting for the user to reopen them.
         viewModelScope.launch {
-            nativePackages.rows
-                .onEach { rows ->
-                    refreshInstalledExtensions()
-                    val entries = dev.suicode.nativehost.NativeLanguageServices.entries(rows) { error -> _messages.tryEmit(error) }
-                    dev.blamspot.jcode.core.distro.DebugEngineCatalog.setContributed(dev.suicode.nativehost.NativeLanguageServices.engines(rows) { error -> _messages.tryEmit(error) })
-                    dev.blamspot.jcode.core.distro.LspServerCatalog.registerNative(entries)
-                    distroService.refreshLspCatalog()
-                    distroService.refreshDebugEngineCatalog()
-                }
-                .map { rows -> rows.map { it.record } }
-                .distinctUntilChanged()
-                .drop(1)
-                .collect { lspController.shutdownAll(); lspController.retryOpenDocuments() }
+            nativePackages.rows.map { rows -> rows.map { it.record } }.distinctUntilChanged().collect {
+                refreshInstalledExtensions()
+                lspController.shutdownAll()
+                dev.suicode.nativehost.NativeLanguageServices.refreshAndCheck(nativePackages,distroService) { error -> _messages.tryEmit(error) }
+                lspController.retryOpenDocuments()
+            }
         }
         // .jcode YAML config parse errors are real project issues; mirror them onto the bus.
         viewModelScope.launch {
@@ -3734,7 +3740,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun removeProject(projectId: Long) {
         viewModelScope.launch {
             workspaceManager.removeProject(projectId)
-            emitMessage("Removed from workspace.")
+            emitMessage("Removed from the project list. Files remain in Internal Files.")
+        }
+    }
+
+    fun removeRecent(uri: String) { viewModelScope.launch { workspaceManager.removeRecent(uri) } }
+    fun trashProject(project: Project) {
+        viewModelScope.launch {
+            try {
+                javaQuickRun.stop();debugController.stop();lspController.shutdownAll()
+                check(project.fsPath is FsPath.Local) { "Manage external SAF project deletion through the authorized file provider" }
+                WorkspaceServiceLocator.trash(appContext).put(appContext,project.fsPath,project.name,(project.fsPath as FsPath.Local).file.path,dev.blamspot.jcode.fs.TrashSource.Explorer)
+                workspaceManager.removeProject(project.id)
+                workspaceManager.removeRecent(project.location)
+                emitMessage("Project files moved to Trash. Restore from Files → Trash; Ubuntu and installed tools retained.")
+            } catch(e: Exception) { emitMessage("Project deletion stopped: ${e.message}. Check Trash and Internal Files before retrying.") }
         }
     }
 
@@ -3810,8 +3830,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun renameProject(projectId: Long, newName: String) {
         viewModelScope.launch {
-            val ok = workspaceManager.renameProject(projectId, newName)
-            emitMessage(if (ok) "Renamed to '${newName.trim()}'." else "Rename failed.")
+            try {
+                val ok=workspaceManager.renameProject(projectId,newName)
+                emitMessage(if(ok) "Renamed to '$newName'." else "Rename failed: destination exists or the project is unavailable.")
+            } catch(e: Exception) { emitMessage("Rename rejected: ${e.message}. Project files were not overwritten.") }
         }
     }
 
@@ -5295,6 +5317,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * request survives the immediate [Runtime.exit], which the system carries out in a new process.
      */
     fun restartApp() {
+        if(distroService.kitInstallationActive || distroService.nativeEnvironmentManager.state.value.installing) {
+            viewModelScope.launch { emitMessage("Finish or safely cancel package installation before restarting. Existing Ubuntu and data are retained.") }
+            return
+        }
         if (distroService.nativeEnvironmentManager.state.value.installing) {
             distroService.nativeEnvironmentManager.cancel()
             viewModelScope.launch { emitMessage("Restart postponed: wait for apt/dpkg to reach a safe cancellation boundary.") }
@@ -5951,6 +5977,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    init {
+        viewModelScope.launch {
+            dev.blamspot.jcode.fs.FileMutations.changes.collect { change ->
+                change.barrier?.let { it.complete(Unit);return@collect }
+                val old=(change.from as? FsPath.Local)?.file?.absolutePath ?: return@collect
+                val moved=(change.to as? FsPath.Local)?.file
+                if(!change.restored) { javaQuickRun.sourceMoved(old);debugController.sourceMoved(old) }
+                if(moved!=null) _breakpoints.update { bps -> bps.mapKeys { (path,_) -> if(path==old || path.startsWith(old+"/")) moved.absolutePath+path.removePrefix(old) else path } }
+                val affected=_editorGroup.value.tabs.filter { !it.isPage && (it.filePath.absolutePath==old || it.filePath.absolutePath.startsWith(old+"/")) }
+                affected.forEach { tab ->
+                    lspController.documentClosed(tab.filePath.path)
+                    if(moved==null) {
+                        tab.editorState?.readOnly=true
+                        emitMessage("${tab.title} moved to Trash/deleted. Open buffer retained read-only; restore the file before saving.")
+                    } else {
+                        val file=File(moved.absolutePath+tab.filePath.absolutePath.removePrefix(old))
+                        val updated=tab.copy(filePath=file,title=file.name)
+                        if(change.restored) tab.editorState?.readOnly=false
+                        untrackDirty(tab.id)
+                        _editorGroup.value=_editorGroup.value.withTabUpdated(updated)
+                        diskSignatures.remove(tab.id)
+                        trackDirty(updated)
+                        lspController.documentOpened(file.path)
+                        if(nativeSourceId==tab.id) nativePackages.setSource(file.path)
+                    }
+                }
+                notifyWorkspaceFilesChanged()
+            }
+        }
+    }
+
     private fun untrackDirty(tabId: String) {
         dirtyJobs.remove(tabId)?.cancel()
     }
@@ -6066,7 +6123,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val tab = _editorGroup.value.activeTab ?: return
         val state = tab.editorState ?: return
         if (!tab.isDirty) return
-        val file = tab.filePath
+        if(state.readOnly) return
+        val file=tab.filePath
         if (file.path.isBlank()) {
             viewModelScope.launch { emitMessage("Can't discard \"${tab.title}\": unsupported file source") }
             return
@@ -6166,7 +6224,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     private suspend fun saveTabAwait(tab: EditorTab): Boolean {
         val state = tab.editorState ?: return false // page tab: nothing to persist
-        val file = tab.filePath
+        if(state.readOnly) { emitMessage("${tab.title} is read-only. Restore a removed file or export the buffer before saving.");return false }
+        dev.blamspot.jcode.fs.FileMutations.awaitEditor()
+        val file = _editorGroup.value.tabs.firstOrNull { it.id==tab.id }?.filePath ?: return false
+        if(state.readOnly) { emitMessage("Restore the removed file before saving; open edits retained.");return false }
         if (file.path.isBlank()) {
             emitMessage("Can't save \"${tab.title}\": unsupported file source")
             return false
@@ -6185,8 +6246,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val snapshot = state.snapshot.value
         return runCatching {
             withContext(Dispatchers.IO) {
-                val bytes = snapshot.readRange(0, snapshot.byteLength)
-                workspaceManager.fsFor(FsPath.Local(file)).write(FsPath.Local(file), bytes)
+                dev.blamspot.jcode.fs.FileMutations.mutex.withLock {
+                    dev.blamspot.jcode.fs.FileMutations.awaitEditor()
+                    check(!state.readOnly) { "File was removed during save; restore it first" }
+                    val destination=_editorGroup.value.tabs.firstOrNull { it.id==tab.id }?.filePath ?: error("Tab closed during save")
+                    val bytes = snapshot.readRange(0, snapshot.byteLength)
+                    workspaceManager.fsFor(FsPath.Local(destination)).write(FsPath.Local(destination), bytes)
+                }
             }
             // A keystroke landing mid-write mints a newer snapshot: the write succeeded but the tab is
             // dirty again, so don't clear dirty and report the tab as still-unsaved (not a false "Saved").
@@ -6237,7 +6303,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // is text) renders rather than opening as XML source.
                 file.extension.lowercase() in IMAGE_EXTENSIONS -> OpenPrep.Image
                 !file.isLikelyTextFile() -> OpenPrep.Binary
-                else -> OpenPrep.Text(EditorTab.create(file, stableId), file.diskSignatureOrNull())
+                else -> OpenPrep.Text(EditorTab.create(file,stableId).also { tab ->
+                    if(file.canonicalPath.startsWith(File(appContext.cacheDir,"language-sources").canonicalPath+"/")) tab.editorState?.readOnly=true
+                }, file.diskSignatureOrNull())
             }
         }
         when (prep) {

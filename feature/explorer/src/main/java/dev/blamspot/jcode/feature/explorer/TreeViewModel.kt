@@ -101,6 +101,10 @@ class TreeViewModel(
     private val _breadcrumb = MutableStateFlow<List<BreadcrumbEntry>>(emptyList())
     val breadcrumb: StateFlow<List<BreadcrumbEntry>> = _breadcrumb.asStateFlow()
 
+    enum class Sort { Name, Modified, Size }
+    var sort: Sort=Sort.Name
+        private set
+    suspend fun setSort(value: Sort) { sort=value;refresh() }
     private var projectRootPath: FsPath? = null
     private var rootNode: FsNode? = null
 
@@ -301,8 +305,12 @@ class TreeViewModel(
      *  stays). In "hide" mode matched entries are dropped; in "grey out" mode they are kept and later
      *  dimmed via [isExcludedAtRoot]. */
     private fun filterHiddenAtRoot(parentPath: FsPath, children: List<FsNode>): List<FsNode> {
-        if (greyOut || hiddenPatterns.isEmpty() || parentPath.stableId != projectRootPath?.stableId) return children
-        return children.filterNot { child -> hiddenPatterns.any { matchesHidden(it, child.name) } }
+        val visible=if(greyOut || hiddenPatterns.isEmpty() || parentPath.stableId != projectRootPath?.stableId) children else children.filterNot { child -> hiddenPatterns.any { matchesHidden(it, child.name) } }
+        return visible.sortedWith(compareBy<FsNode> { it.kind!=FsKind.Directory }.thenComparator { a,b -> when(sort) {
+            Sort.Name -> a.name.lowercase(java.util.Locale.ROOT).compareTo(b.name.lowercase(java.util.Locale.ROOT))
+            Sort.Modified -> b.modifiedAtMillis.compareTo(a.modifiedAtMillis)
+            Sort.Size -> b.sizeBytes.compareTo(a.sizeBytes)
+        } }.thenBy { it.name })
     }
 
     /** Whether [node] is a project-root child matched by the exclude list while the effect is grey-out. */

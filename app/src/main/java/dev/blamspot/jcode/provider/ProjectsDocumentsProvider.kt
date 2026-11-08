@@ -9,10 +9,14 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import java.io.File
+import dev.blamspot.jcode.fs.*
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Exposes the app-private ext4 projects tree (`filesDir/workspace/projects`) to the system Files app
- * and any SAF picker as a browsable, read/write root titled "JCode Projects".
+ * and any SAF picker as a browsable, read/write root titled "sui-code Internal Files".
  *
  * Projects deliberately live on app-private internal storage (ext4: symlinks + exec, needed by npm and
  * git; see core:distro WorkspaceHostPaths) rather than shared /storage, which makes them invisible to
@@ -44,7 +48,7 @@ class ProjectsDocumentsProvider : DocumentsProvider() {
         cursor.newRow().apply {
             add(Root.COLUMN_ROOT_ID, ROOT_ID)
             add(Root.COLUMN_DOCUMENT_ID, docIdFor(root))
-            add(Root.COLUMN_TITLE, "JCode Projects")
+            add(Root.COLUMN_TITLE, "sui-code Internal Files")
             add(Root.COLUMN_FLAGS, Root.FLAG_SUPPORTS_CREATE or Root.FLAG_SUPPORTS_IS_CHILD or Root.FLAG_LOCAL_ONLY)
             add(Root.COLUMN_ICON, requireContext().applicationInfo.icon)
             add(Root.COLUMN_MIME_TYPES, Document.MIME_TYPE_DIR)
@@ -85,6 +89,7 @@ class ProjectsDocumentsProvider : DocumentsProvider() {
 
     override fun createDocument(parentDocumentId: String, mimeType: String, displayName: String): String {
         val parent = fileFor(parentDocumentId)
+        DocumentPaths.name(displayName)
         var target = File(parent, displayName)
         // De-dupe like the system provider does: "name", "name (1)", "name (2)"…
         if (target.exists()) {
@@ -94,22 +99,28 @@ class ProjectsDocumentsProvider : DocumentsProvider() {
             var n = 1
             while (target.exists()) target = File(parent, "$stem ($n)$ext").also { n++ }
         }
-        val ok = if (mimeType == Document.MIME_TYPE_DIR) target.mkdir() else target.createNewFile()
-        check(ok) { "failed to create $displayName" }
-        return docIdFor(target)
+        val created=SafeLocalFiles.create(parent,target.name,mimeType==Document.MIME_TYPE_DIR)
+        return docIdFor(created)
     }
 
     override fun deleteDocument(documentId: String) {
-        check(fileFor(documentId).deleteRecursively()) { "failed to delete $documentId" }
+        val file=fileFor(documentId)
+        checkMutable(file)
+        runBlocking(Dispatchers.IO) {
+            WorkspaceServiceLocator.trash(requireContext()).put(requireContext(),FsPath.Local(file),"Internal Files",projectsRoot.path,TrashSource.Explorer)
+        }
     }
 
     override fun removeDocument(documentId: String, parentDocumentId: String) = deleteDocument(documentId)
 
     override fun renameDocument(documentId: String, displayName: String): String {
         val file = fileFor(documentId)
-        val target = File(file.parentFile, displayName)
-        check(!target.exists()) { "'$displayName' already exists" }
-        check(file.renameTo(target)) { "failed to rename $documentId" }
+        checkMutable(file)
+        val target=runBlocking(Dispatchers.IO) {
+            FileMutations.mutex.withLock {
+                SafeLocalFiles.rename(file,DocumentPaths.name(displayName)).also { FileMutations.moved(FsPath.Local(file),FsPath.Local(it)) }
+            }
+        }
         return docIdFor(target)
     }
 
@@ -118,7 +129,7 @@ class ProjectsDocumentsProvider : DocumentsProvider() {
     private fun includeFile(cursor: MatrixCursor, file: File) {
         val mime = mimeTypeOf(file)
         var flags = 0
-        if (file.canWrite()) {
+        if (file.canWrite() && !java.nio.file.Files.isSymbolicLink(file.toPath())) {
             flags = flags or Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE or Document.FLAG_SUPPORTS_RENAME
             if (file.isDirectory) flags = flags or Document.FLAG_DIR_SUPPORTS_CREATE
         }
@@ -136,18 +147,17 @@ class ProjectsDocumentsProvider : DocumentsProvider() {
     private fun docIdFor(file: File): String = file.absolutePath
 
     /** Resolve a document id back to a file, refusing anything outside the projects root. */
-    private fun fileFor(documentId: String): File {
-        val file = File(documentId)
-        val root = projectsRoot.canonicalFile
-        val canonical = runCatching { file.canonicalFile }.getOrDefault(file)
-        require(canonical.path == root.path || canonical.path.startsWith(root.path + File.separator)) {
-            "document id outside the projects root: $documentId"
+    private fun fileFor(documentId: String): File = DocumentPaths(projectsRoot).resolve(documentId)
+
+    private fun checkMutable(file: File) {
+        val registered=runBlocking(Dispatchers.IO) { WorkspaceServiceLocator.workspaceManager(requireContext()).registeredProjectRootsNow() }
+        require(file.canonicalFile!=projectsRoot.canonicalFile && !InternalFiles.protectsProject(file,registered)) {
+            "Manage registered project roots through sui-code Projects; Internal Files is permanent"
         }
-        return file
     }
 
     private fun mimeTypeOf(file: File): String {
-        if (file.isDirectory) return Document.MIME_TYPE_DIR
+        if (file.isDirectory && !java.nio.file.Files.isSymbolicLink(file.toPath())) return Document.MIME_TYPE_DIR
         val ext = file.extension.lowercase()
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
     }

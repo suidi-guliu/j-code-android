@@ -3,9 +3,11 @@ set -eu
 SOURCE=$1
 PROJECT=$2
 OUT="$PROJECT/.sui-code/debug"
+BUILD="$OUT"
+. "$(dirname "$0")/migrate-build.sh"
 mkdir -p "$OUT"
 if [ -f "$PROJECT/CMakeLists.txt" ]; then
-    cmake -S "$PROJECT" -B "$OUT" -G Ninja -DCMAKE_BUILD_TYPE=Debug >&2
+    cmake -S "$PROJECT" -B "$OUT" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >&2
     cmake --build "$OUT" >&2
     PROGRAM="$OUT/app"
     [ -x "$PROGRAM" ] || { echo 'Configure a CMake executable target named app for this Kit workflow.' >&2; exit 64; }

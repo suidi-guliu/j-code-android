@@ -112,6 +112,8 @@ internal fun ProjectRoster(
     onOpenProjectSettings: (Long) -> Unit,
     onExportProject: (Project) -> Unit,
 ) {
+    val trashProject=LocalProjectTrash.current
+    var trashTarget by remember { mutableStateOf<Project?>(null) }
     var renameTarget by remember { mutableStateOf<Project?>(null) }
     var openMenuId by remember { mutableStateOf<Long?>(null) }
 
@@ -194,7 +196,8 @@ internal fun ProjectRoster(
                                 onDismissRequest = { openMenuId = null },
                                 quickActions = listOf(
                                     ContextAction(JCodeIcon.Rename, "Rename") { renameTarget = project },
-                                    ContextAction(JCodeIcon.Delete, "Remove", destructive = true) { onRemoveProject(project.id) },
+                                    ContextAction(JCodeIcon.Close, "Remove from list (keep files)") { onRemoveProject(project.id) },
+                                    ContextAction(JCodeIcon.Trash, "Delete project files to Trash", destructive=true) { trashTarget=project },
                                 ),
                                 listActions = listOf(
                                     ContextAction(JCodeIcon.Open, if (isWorkspace) "Open workspace" else "Open") { onOpenProject(project) },
@@ -209,6 +212,9 @@ internal fun ProjectRoster(
         }
     }
 
+    trashTarget?.let { target ->
+        AlertDialog(onDismissRequest={trashTarget=null},title={Text("Delete project files?")},text={Text("${target.name}\n${target.location}\nThe complete directory moves to Trash for recovery. Removing from the list is a separate action.")},confirmButton={CompactFilledButton(text="Move project to Trash",onClick={trashTarget=null;trashProject(target)})},dismissButton={CompactOutlinedButton(text="Cancel",onClick={trashTarget=null})})
+    }
     renameTarget?.let { target ->
         var newName by remember(target.id) { mutableStateOf(target.name) }
         AlertDialog(

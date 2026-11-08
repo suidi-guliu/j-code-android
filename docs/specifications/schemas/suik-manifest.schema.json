@@ -113,7 +113,8 @@
               "project",
               "workflow",
               "command",
-              "panel"
+              "panel",
+              "setup"
             ]
           },
           "entry": {

@@ -58,6 +58,7 @@ class VerifiedPack internal constructor(
     manifest: JsonObject, payload: Map<String,ByteArray>
 ) {
     private val payload = payload.mapValues { it.value.copyOf() }
+    fun resourcePaths(): List<String> = payload.keys.filter { it.startsWith("resources/") }.sorted()
     fun content(path: String): ByteArray = payload[path]?.copyOf() ?: fail("E_COMPONENT", "Missing package content: $path")
     fun declarations(): List<PackageComponent> = manifest.array("components").map { c ->
         val entry=c.jsonObject
@@ -75,7 +76,7 @@ class VerifiedPack internal constructor(
 
 /** Bounded, in-memory verification. Never extracts, starts a process or loads package code. */
 class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMap()) {
-    fun verify(bytes: ByteArray, suffix: String, installed: Map<String, String> = emptyMap()): VerifiedPack {
+    fun verify(bytes: ByteArray, suffix: String, installed: Map<String, String> = emptyMap(), checkDependencies: Boolean = true): VerifiedPack {
         if (bytes.size !in 20..(32*1024*1024)) fail("E_SIZE", "Package size out of bounds")
         val kind = PackKind.entries.firstOrNull { bytes.copyOfRange(0,8).contentEquals(it.magic.toByteArray()) } ?: fail("E_MAGIC", "Not a sui-code package")
         if (suffix != kind.suffix) fail("E_KIND", "Suffix/header mismatch")
@@ -124,22 +125,30 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
             if (depId==id || !depId.matches(Regex("[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+"))) fail("E_DEPENDENCY","Invalid dependency ID")
             val low=dep.string("min"); val high=dep.string("max")
             if (compareVersion(low, high)>=0) fail("E_DEPENDENCY","Empty version interval")
-            val v=installed[depId] ?: fail("E_DEPENDENCY","Missing $depId")
-            if (compareVersion(v,low)<0 || compareVersion(v,high)>=0) fail("E_DEPENDENCY","Incompatible $depId")
+            if(checkDependencies) {
+                val v=installed[depId] ?: fail("E_DEPENDENCY","Missing $depId")
+                if (compareVersion(v,low)<0 || compareVersion(v,high)>=0) fail("E_DEPENDENCY","Incompatible $depId")
+            }
         }
-        val allowed=if(kind==PackKind.PLUGIN) setOf("language","simpleRun","environment","basicBuild") else setOf("language","simpleRun","environment","lsp","dap","build","test","format","lint","project","workflow","command","panel")
+        if(m.array("components").count { it.jsonObject["type"]?.jsonPrimitive?.content=="setup" }>1) fail("E_COMPONENT","Only one setup component is permitted")
+        if(m.array("components").any { it.jsonObject["type"]?.jsonPrimitive?.content=="setup" } && !permissions.containsAll(setOf(Capability.FILE_READ,Capability.FILE_WRITE,Capability.RUN))) fail("E_PERMISSION","Kit setup requires declared file.read, file.write and process.run")
+        val allowed=if(kind==PackKind.PLUGIN) setOf("language","simpleRun","environment","basicBuild") else setOf("language","simpleRun","environment","lsp","dap","build","test","format","lint","project","workflow","command","panel","setup")
         val componentIds=mutableMapOf<String, Operation?>()
         m.array("components").forEach { c ->
             val comp=c as? JsonObject ?: fail("E_COMPONENT","Expected object")
             comp.keysExactly(setOf("id","type","entry"))
             if (!comp.string("id").matches(Regex("[a-z][a-z0-9.-]{0,63}")) || componentIds.containsKey(comp.string("id"))) fail("E_COMPONENT","Duplicate/invalid component ID")
             if (comp.string("type") !in allowed) fail("E_BOUNDARY","Component outside ${kind.suffix} scope")
+            if(comp.string("type")=="setup" && min<3) fail("E_API","setup requires API 3")
             val entry=comp.string("entry")
             val prefix=if(kind==PackKind.PLUGIN) "plugin/" else "ide/"
             if (!entry.startsWith(prefix) || entry !in files || !entry.endsWith(".json")) fail("E_COMPONENT","Missing declarative component $entry")
             componentIds[comp.string("id")]=validateDescriptor(comp.string("type"), jsonObject(files.getValue(entry)))
         }
         m.array("components").forEach { c ->
+            if(c.jsonObject.string("type")=="setup") KitRequirements.parse(jsonObject(files.getValue(c.jsonObject.string("entry")))).forEach { req ->
+                if(req.resource!=null && req.resource !in files) fail("E_COMPONENT","Missing setup resource ${req.resource}")
+            }
             if(c.jsonObject.string("type")=="panel") {
                 val d=jsonObject(files.getValue(c.jsonObject.string("entry")))
                 if("nodes" in d) {

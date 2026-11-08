@@ -14,10 +14,11 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开�
 - [UI Extension & Design Specification](docs/specifications/SuiCode-UI-Design-Specification.md)
 - [规范索引、完整 Schema、SDK 与示例](docs/specifications/README.md)
 - [官方六个签名包与可审阅源码](native-library/)
+- [v0.5 工作台整合测试与升级报告](docs/sui-code-workbench-0.5.md)
 - [最终原生架构说明和数据保护](docs/sui-code-native-architecture.md)
 - [原 JCode README 与项目来源](docs/upstream-README.md) · [LICENSE](LICENSE)
 
-源码分支 `sui-code/final-product`，不修改 main、不发布正式 Release。最终 Debug APK、源码包、SDK、SHA-256 和测试报告通过该分支的 GitHub Actions 交付。云端 Linux x64 测试与 Android ARM64 平板验收严格分开；具体构建和验证结果以交付报告为准。
+v0.5 开发分支 `sui-code/v0.5-workbench-reliability`（基于已验证 v0.4 的 `50aec6a`），不修改 main、不发布正式 Release。最终 Debug APK、源码包、SDK、SHA-256 和测试报告通过该分支的 GitHub Actions 交付。云端 Linux x64 测试与 Android ARM64 平板验收严格分开；具体构建和验证结果以交付报告为准。
 
 ## 开发验证
 
@@ -30,4 +31,4 @@ bash gradlew :core:native-packages:testDebugUnitTest :core:distro:testDebugUnitT
 bash gradlew :app:assembleDebug
 ```
 
-默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070802；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
+默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070803；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
