@@ -1,0 +1,12 @@
+{
+  "sourceCommit": "70c458a5fe0010d9981aa433ea85c7c9259edc16",
+  "applicationId": "dev.suicode.ide.debug",
+  "versionCode": 1070802,
+  "versionName": "0.4.0",
+  "bytes": 86760725,
+  "sha256": "d392d22003dbe8aee0e7cb63669fac8b5285cb7b2f3ab01bb5ade4046ffd4128",
+  "signerSHA256": "62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0",
+  "abi": "arm64-v8a",
+  "nativeLibraries": 11,
+  "v01SignerCompatible": true
+}
