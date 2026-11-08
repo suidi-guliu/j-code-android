@@ -1,0 +1,100 @@
+name: Deliver sui-code v0.5 integrated workbench
+on:
+  push:
+    branches: [sui-code/v0.5-workbench-reliability]
+    paths:
+      - '.github/workflows/deliver-sui-code-v0.5.yml'
+      - '.delivery/sui-code-v0.5/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deliver:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5-workbench-reliability'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_APK_SHA256: d8c968ff33288a50d1ebdbb4b85ce7da5d2d4ce2e5cf48bc8979b864d9d1be8a
+      EXPECTED_APK_BYTES: '86956384'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify immutable prebuilt delivery (no rebuild)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .delivery/sui-code-v0.5
+          sha256sum --check --strict SHA256SUMS
+          test "$(stat -c %s sui-code-v0.5-debug.apk)" = "$EXPECTED_APK_BYTES"
+          printf '%s  %s\n' "$EXPECTED_APK_SHA256" sui-code-v0.5-debug.apk | sha256sum --check --strict
+      - name: Verify upgrade identity, architecture and original v0.1 signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd .delivery/sui-code-native-0.4 && sha256sum --check --strict SHA256SUMS)
+          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          old=.delivery/sui-code-v0.1/sui-code-v0.1-debug.apk
+          new=.delivery/sui-code-v0.5/sui-code-v0.5-debug.apk
+          printf '%s  %s\n' 1554f7e7cb7359b4b90161d08e76bf515b0e0805adf4777bdb8851ef23f2cb06 "$old" | sha256sum --check --strict
+          old_cert=$("$signer" verify --print-certs "$old" | awk '/certificate SHA-256 digest:/ {print $NF}')
+          new_cert=$("$signer" verify --print-certs "$new" | awk '/certificate SHA-256 digest:/ {print $NF}')
+          test "$old_cert" = "$new_cert"
+          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
+          "$(dirname "$signer")/aapt" dump badging "$new" > "$RUNNER_TEMP/native-badging.txt"
+          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070803' versionName='0.5.0'" "$RUNNER_TEMP/native-badging.txt"
+          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/native-badging.txt"
+      - name: Verify SDK, full source, specifications and six real packages
+        shell: python
+        run: |
+          import pathlib, zipfile, json, hashlib
+          root=pathlib.Path('.delivery/sui-code-v0.5')
+          with zipfile.ZipFile(root/'source.zip') as z:
+              names=z.namelist()
+              for suffix in ['app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt','docs/specifications/SUIC-SUIK-Development-Specification.md','docs/specifications/SuiCode-UI-Design-Specification.md']:
+                  assert any(n.endswith('/'+suffix) for n in names), suffix
+          with zipfile.ZipFile(root/'native-sdk.zip') as z:
+              assert any(n.endswith('/API-SOURCE-SHA256SUMS') for n in z.namelist())
+          with zipfile.ZipFile(root/'official-packages.zip') as z:
+              index=json.loads(z.read('official-packages/index.json'))
+              assert len(index['packages'])==6
+              for item in index['packages']:
+                  data=z.read('official-packages/'+item['url'].rsplit('/',1)[1])
+                  assert len(data)==item['bytes'] and hashlib.sha256(data).hexdigest()==item['sha256']
+                  assert data[:8] in [b'SUICPKG\0',b'SUIKPKG\0']
+                  assert item['version']=='1.1.0'
+      - name: Upload complete native IDE delivery
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sui-code-v0.5-integrated
+          path: .delivery/sui-code-v0.5/*
+          if-no-files-found: error
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 30
+      - name: Download uploaded artifact for byte-for-byte verification
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
+          path: ${{ runner.temp }}/native-roundtrip
+          merge-multiple: true
+      - name: Verify downloaded files and publish real download entry
+        shell: bash
+        env:
+          DOWNLOAD_DIR: ${{ runner.temp }}/native-roundtrip
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          (cd "$DOWNLOAD_DIR" && sha256sum --check --strict SHA256SUMS)
+          test "$(stat -c %s "$DOWNLOAD_DIR/sui-code-v0.5-debug.apk")" = "$EXPECTED_APK_BYTES"
+          for source in .delivery/sui-code-v0.5/*; do
+            cmp "$source" "$DOWNLOAD_DIR/$(basename "$source")"
+          done
+          echo UPLOAD_DOWNLOAD_ROUND_TRIP_PASSED
+          {
+            echo '## sui-code v0.5 delivery verified'
+            printf '[Download complete artifact](%s) · [Workflow run](%s)\n\n' "$ARTIFACT_URL" "$RUN_URL"
+            printf 'APK: **%s bytes** · SHA-256 `%s`\n\n' "$EXPECTED_APK_BYTES" "$EXPECTED_APK_SHA256"
+            echo 'Identity dev.suicode.ide.debug, versionCode 1070803, ARM64; original v0.1 signer matches.'
+            echo 'APK, full source, standalone SDK, six signed packages, public specifications, report, patch and evidence uploaded and downloaded identically. No Release or main change.'
+          } >> "$GITHUB_STEP_SUMMARY"

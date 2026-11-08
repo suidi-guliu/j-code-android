@@ -10,7 +10,7 @@
 
 **LSP/DAP**：正确编码file URI且不把加号解码成空格；请求前同步最新缓冲区，保留服务器filterText，取消传到服务器。只有文字修改或Ctrl+Space触发补全；锚点/快照保护拒绝过期结果。冷索引阶段最多三次200ms后台重试，不增加正常请求超时。Kit声明的虚拟JDK源码以只读缓存打开。Java启动目标精确匹配优先、唯一工程入口回退、空索引有界重试；多入口给出候选。DAP关闭先发送并等待terminateDebuggee再关传输；清理观察任务和超时请求。LSP启动/关闭竞争会回收迟到的进程传输。
 
-**C/C++路径**：Project任务和LSP/DAP使用稳定guest目录，不再把/sui-quickrun写进持久CMake缓存。新版Kit为旧build/debug缓存保留时间戳备份再重新生成，clangd指向真实compile_commands，调试用Debug信息并显示断点验证结果。新模板将入口展开为可逐行调试的源码。
+**C/C++路径**：Project任务和LSP/DAP使用稳定guest目录，不再把/sui-quickrun写进持久CMake缓存。新版Kit为旧build/debug缓存保留时间戳备份再重新生成，clangd指向真实compile_commands，调试使用Debug信息并显示断点验证结果。新模板将入口展开为可逐行调试的源码。
 
 **键盘/终端**：Ctrl+F5连接Activity普通及shortcut分发、Linux F5扫描码和去重门禁；编辑器Ctrl+Enter兼容入口不拦截终端输入。QuickRun Stop只结束任务子树，保留shell与输出。su改用--session-command保留控制终端。剪贴板/IME输入清理重复bracketed paste包装。
 
@@ -34,11 +34,11 @@
 
 ## 3. 分支与提交
 
-分支`sui-code/v0.5-workbench-reliability`；可靠性阶段提交`6718501`。整合源码、构建和交付提交的最终对应关系记入apk-metadata.json及Git提交记录。
+分支`sui-code/v0.5-workbench-reliability`；可靠性阶段提交`6718501`；整合功能提交`5806a99`。最终源码归档、APK构建和交付提交的对应关系记入apk-metadata.json及Git提交记录。
 
 ## 4. 构建
 
-JDK21、Android SDK36、Gradle wrapper、NDK27.2及既有ARM64原生工具链。最终Debug构建包含全部原生模块。Standalone SDK已独立编译，12个API源文件与生产源码逐字节一致。APK、完整构建日志及实际元数据将在构建完成后补入本报告；不以编译成功代替实机验收。
+JDK21、Android SDK36、Gradle wrapper、NDK27.2及既有ARM64原生工具链。最终Debug构建包含全部原生模块。Standalone SDK已独立编译，12个API源文件与生产源码逐字节一致。`:app:assembleDebug`已成功，耗时2分12秒，697项任务（31执行、666复用）。APK为86,956,384字节。完整build.log、签名/badging及apk-metadata.json随交付；不以编译成功代替实机验收。
 
 ## 5. 自动化和集成测试
 
@@ -62,9 +62,9 @@ JDK21、Android SDK36、Gradle wrapper、NDK27.2及既有ARM64原生工具链。
 |---|---|
 |三语言Project Build/Test/Run|9条工作流通过，真实测试及Hello42输出|
 |Java System.out.pr/JDK定义|JDT LS真实成员候选及classFileContents通过|
-|Java Maven项目|辅助文件上下文发现唯一入口、中文/空格/+/hash路径的项目定义跳转、真实第5行断点→第6行单步→value41→继续输出42→结束通过|
-|CMake/clangd/LLDB|重现旧临时别名缓存，迁移保留备份、真实CTest、头文件定义和真实断点/单步/继续通过；冷索引补全以最终日志为准|
-|Python pylsp/debugpy|os.path补全及项目断点/单步/继续通过；一次x64测量冷约2222ms、稳定约119ms|
+|Java Maven项目|辅助文件上下文发现唯一入口、中文/空格/+/hash路径的项目定义跳转、真实第5行断点→第6行单步→value41→继续输出42→结束通过；第二次会话terminateDebuggee后/proc确认子进程消失，语言服务器仍存活|
+|CMake/clangd/LLDB|重现旧临时别名缓存，迁移保留备份、真实CTest、头文件定义和真实断点/单步/继续/终止通过，项目math.hpp的add补全通过；一次x64冷定义查询约896ms|
+|Python pylsp/debugpy|os.path补全及项目断点/单步/继续通过；最终一次x64测量冷约1017ms、稳定约113ms（非平板性能承诺）|
 |PTY|旧su -c复现两条job-control警告且tcgetpgrp失败；新--session-command无警告，前台进程组/交互输入通过|
 |官方Java工具|真实下载并校验JDT LS、Java Debug、Maven；Maven3.9.11在保留的JDK27运行|
 |规范/SDK|88个声明通过Schema/内嵌快照；独立生产验证器检查17个包，非法插件被E_BOUNDARY拒绝|
@@ -73,13 +73,21 @@ Java环境文件在工程流程前后逐字节一致。日志/XML/脚本随交�
 
 ## 6. 安装身份、签名与数据
 
-目标身份`dev.suicode.ide.debug`，versionName`0.5.0`，versionCode`1070803`（v0.4为1070802），ARM64。构建后实际核查同一签名证书：`62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0`。
+实际核验身份`dev.suicode.ide.debug`，versionName`0.5.0`，versionCode`1070803`（v0.4为1070802），ARM64。apksigner已实际比较v0.1、v0.4与v0.5，三者证书相同：`62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0`。
 
 不清除数据，不重装Ubuntu，不改变既有JDK/工具链/数据库/配置身份。私钥不纳入源码、SDK或Artifact。元数据兼容检查不等于实机覆盖安装已经通过。
 
 ## 7. 下载、哈希及公共规范
 
-最终使用本分支GitHub Actions上传并下载回验完整交付，补入真实运行页、Artifact入口及APK SHA-256；容器路径不算交付。GitHub Artifact需要登录且有保留期。
+安装包：`sui-code-v0.5-debug.apk`，**86,956,384字节**。SHA-256：
+
+```text
+d8c968ff33288a50d1ebdbb4b85ce7da5d2d4ce2e5cf48bc8979b864d9d1be8a
+```
+
+[整合交付工作流及Artifact入口](https://github.com/suidi-guliu/j-code-android/actions/workflows/deliver-sui-code-v0.5.yml)；选择成功运行，在Artifacts下载`sui-code-v0.5-integrated`。工作流校验预构建APK、不重新签名，上传后下载回验全部字节和SHA；运行页Summary提供该次Artifact直达入口。GitHub Artifact需要登录，保留30天；并非永久Release。最终完成状态及具体运行/Artifact地址以本报告末尾的公开交付回执及最终消息为准。
+
+[独立云端回归运行](https://github.com/suidi-guliu/j-code-android/actions/runs/42486471448)。完整包同时包含源码、SDK、6个签名官方包、两个规范、补丁、文件清单、测试证据和构建日志。
 
 - [扩展开发规范](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-workbench-reliability/docs/specifications/SUIC-SUIK-Development-Specification.md)
 - [UI设计规范](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-workbench-reliability/docs/specifications/SuiCode-UI-Design-Specification.md)
