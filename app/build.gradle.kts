@@ -10,7 +10,7 @@ plugins {
 // open release train (see docs/specifications/09-platform/02-build-variants-and-release.md), and
 // merges no longer move it. The release scripts parse this line, and `-PjcodeVersionName=…`
 // overrides it to add the pre-release label a Beta build carries (e.g. 1.7.7-beta.1).
-val jcodeVersion = "0.5.0"
+val jcodeVersion = "0.5.1"
 
 val jcodeVersionName: String =
     (project.findProperty("jcodeVersionName") as? String)?.trim()?.takeIf { it.isNotBlank() }
@@ -96,7 +96,7 @@ android {
         applicationId = jcodeApplicationId
         minSdk = 33
         targetSdk = 33
-        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: 1070803
+        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: 1070804
         versionName = jcodeVersionName
 
         buildConfigField("String", "UPDATE_CHANNEL", "\"$jcodeUpdateChannel\"")
