@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Generated from ic_launcher_foreground.xml: the same three paths, the solid S. drawn as a filled glyph
-  outline instead of a fill. The variants differ by how much of the mark is hollow, not by
-  background colour, so every build sits on the same tile and the shape says which one it is.
-  Regenerate from the base rather than hand-editing: the gradients are shared.
+  Preserve the original beta icon's side symbols and gradients.
+  Only the former central J has been replaced by the solid S. glyph.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
