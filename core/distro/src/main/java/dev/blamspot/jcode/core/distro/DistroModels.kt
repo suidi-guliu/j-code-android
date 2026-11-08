@@ -208,10 +208,11 @@ object WorkspaceHostPaths {
 
     /** Host absolute path -> guest /workspace path (returned unchanged if not under the projects root). */
     fun hostToGuest(hostPath: String): String {
-        val root = projectsRoot
+        val root = java.io.File(projectsRoot).canonicalPath
+        val normalized = runCatching { java.io.File(hostPath).canonicalPath }.getOrDefault(hostPath)
         return when {
-            hostPath == root -> DEFAULT_DISTRO_WORKDIR
-            hostPath.startsWith("$root/") -> DEFAULT_DISTRO_WORKDIR + hostPath.removePrefix(root)
+            normalized == root -> DEFAULT_DISTRO_WORKDIR
+            normalized.startsWith("$root/") -> DEFAULT_DISTRO_WORKDIR + normalized.removePrefix(root)
             else -> hostPath
         }
     }

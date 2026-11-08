@@ -28,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import kotlinx.coroutines.ensureActive
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -532,9 +533,11 @@ fun EditorViewHost(
                 completionItems = emptyList()
                 return@LaunchedEffect
             }
+            completionItems = emptyList()
+            kotlinx.coroutines.delay(100)
             val snapshot = editorState.snapshot.value
             val (line, character) = snapshot.offsetToUtf16Position(current.caret)
-            completionItems = completionSource.completions(
+            val results = completionSource.completions(
                 CompletionQuery(
                     prefix = current.prefix,
                     path = documentPath,
@@ -542,13 +545,15 @@ fun EditorViewHost(
                     character = character,
                 ),
             )
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (completionAnchor == current && editorState.snapshot.value === snapshot) completionItems = results
         }
         if (anchor != null && completionItems.isNotEmpty()) {
             CompletionWindow(
                 context = CompletionContext(completionItems, anchor.replaceStart, null),
                 anchorX = anchor.xPx,
                 anchorY = anchor.yPx,
-                onDismiss = { completionAnchor = null },
+                onDismiss = { view?.dismissCompletions(); completionAnchor = null },
                 onSelect = { item ->
                     view?.let { v ->
                         val snippet = item.snippetText

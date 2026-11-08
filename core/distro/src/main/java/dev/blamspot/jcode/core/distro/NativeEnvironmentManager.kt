@@ -83,12 +83,13 @@ class NativeEnvironmentManager(private val distro: DistroService) {
                 val command = "mkdir -p /opt/sui-code/logs && /bin/bash -o pipefail -c " + shellQuote("/bin/bash -c ${shellQuote(plan.script(cancelPath))} 2>&1 | tee ${shellQuote(logPath)}")
                 val result = runner("${plan.language.title} environment", command, 2_100_000, plan.distroId)
                     ?: error("Could not open Setup terminal. Nothing was installed silently.")
-                if (result.succeeded) scope.launch { runCatching { distro.checkSdkStatuses() } }
-                mutable.update { it.copy(message = when {
-                    result.succeeded -> "${plan.language.title} verified. QuickRun is ready; the Java environment is unchanged."
-                    result.exitCode == 130 -> "Cancelled at a safe package boundary. Completed package operations are retained. You can retry."
-                    else -> "Installation failed (${result.exitCode}). ${result.internalError.orEmpty()} Inspect the log and retry; no lock files will be deleted."
-                }) }
+                val required=plan.language.packages.joinToString(" && ") { "dpkg-query -W -f='\${db:Status-Abbrev}' ${shellQuote(it)} 2>/dev/null | grep -q '^ii '" }
+                val verify=distro.execOwned("set -eu; . /opt/sui-code/${plan.language.key}.env; TOOL=\"\${${plan.language.variable}}\"; test -x \"\$TOOL\"; \"\$TOOL\" --version; $required","/tmp","sui-kit:native-environment-verify",60000)
+                val outcome=InstallationOutcome.assess(result.exitCode,verify.succeeded,result.exitCode==130)
+                distro.invalidateCatalogProbes()
+                scope.launch { runCatching { distro.checkSdkStatuses() } }
+                mutable.update { it.copy(message="${plan.language.title}: ${outcome.message}. Java environment unchanged."+(outcome.warning?.let { "\n$it" } ?: ""),log=(it.log+"\n[post-verification] "+verify.stdout+verify.stderr).takeLast(65536)) }
+
             } catch (error: Exception) { mutable.update { it.copy(message = error.message ?: "Native environment setup failed.") }
             } finally { withContext(NonCancellable) {
                 poller?.cancelAndJoin()

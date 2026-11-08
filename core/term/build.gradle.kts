@@ -18,6 +18,7 @@ android {
 }
 
 dependencies {
+    testImplementation(kotlin("test"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.core.ktx)

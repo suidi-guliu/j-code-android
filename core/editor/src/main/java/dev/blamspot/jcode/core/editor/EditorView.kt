@@ -86,6 +86,7 @@ class EditorView @JvmOverloads constructor(
     // Whether a completion anchor was last delivered (popup likely open) — lets a caret-follow scroll
     // re-anchor the popup without spuriously re-opening it after a completion is accepted.
     private var completionAnchorActive = false
+    private val completionTrigger=CompletionTriggerPolicy()
 
     /** When true (app setting), a one-finger drag moves the caret (view follows) instead of scrolling. */
     var dragMovesCursor: Boolean = false
@@ -231,7 +232,7 @@ class EditorView @JvmOverloads constructor(
                     // Restart input so the IME re-reads the new cursor (via onCreateInputConnection's
                     // initialSel) and drops any stale composing region; otherwise it corrupts the buffer.
                     imm().restartInput(this@EditorView)
-                    updateCompletionAnchor()
+                    dismissCompletions()
                 }
                 return true
             }
@@ -501,6 +502,8 @@ class EditorView @JvmOverloads constructor(
         removeCallbacks(ensureCaretAfterResize)
         observationScope?.cancel()
         this.editorState = editorState
+        completionTrigger.reset(editorState.snapshot.value)
+        dismissCompletions()
         this.renderer = Renderer(typeface, density)
         // The cached content display list belongs to the previous tab's state; force a re-record
         // (and drop the height watermark) for the fresh one.
@@ -1001,6 +1004,11 @@ class EditorView @JvmOverloads constructor(
 
     // --- completion popup support ---------------------------------------------------------------
 
+    fun dismissCompletions() {
+        completionAnchorActive = false
+        onCompletionAnchorChanged?.invoke(null)
+    }
+
     /** Recompute the identifier prefix at the caret and notify the host (null when there's none). */
     fun updateCompletionAnchor() {
         val cb = onCompletionAnchorChanged ?: return
@@ -1144,6 +1152,10 @@ class EditorView @JvmOverloads constructor(
             return true
         }
 
+        if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_SPACE) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) updateCompletionAnchor()
+            return true
+        }
         // Ctrl+Z / Ctrl+Shift+Z for undo/redo
         if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_Z) {
             if (event.action == KeyEvent.ACTION_DOWN) {
@@ -1433,8 +1445,12 @@ class EditorView @JvmOverloads constructor(
             composingStart,
             composingEnd,
         )
-        // Every edit/caret move funnels through here, so refresh the completion popup anchor too.
-        if (!suppressAnchorUpdate) updateCompletionAnchor()
+        // Only text mutations trigger automatic suggestions. Selection, arrows and taps dismiss.
+        val snapshot = editorState?.snapshot?.value
+        val changed = completionTrigger.textChanged(snapshot)
+        if (!suppressAnchorUpdate) {
+            if (changed) updateCompletionAnchor() else dismissCompletions()
+        }
     }
 
     /** Get the InputMethodManager for this view. */

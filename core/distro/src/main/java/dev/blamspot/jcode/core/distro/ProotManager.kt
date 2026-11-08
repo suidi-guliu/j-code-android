@@ -53,7 +53,7 @@ class ProotManager(private val context: Context) {
                 // `su -` starts the user from an empty environment, so every variable above is named for
                 // -w to carry across; otherwise the user's processes get none of them.
                 val carried = mergedEnv.keys.filterNot { it in SU_MANAGED_ENV }.sorted().joinToString(",")
-                "exec su -w ${shellQuote(carried)} - ${shellQuote(user)} -c ${shellQuote(shellCommand)}"
+                "exec su -w ${shellQuote(carried)} - ${shellQuote(user)} --session-command ${shellQuote(shellCommand)}"
             }
             return "$envExports; $execution"
         }

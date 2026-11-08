@@ -54,6 +54,8 @@ class DebugController(
     /** js-debug child sessions (the debuggee runs here); empty for single-session adapters. */
     private val children = java.util.concurrent.CopyOnWriteArrayList<DebugSession>()
     /** Current breakpoints (host path -> 0-based lines), so freshly-spawned child sessions get them too. */
+    @Volatile private var launchSource: String?=null
+    @Volatile private var launchProject: String?=null
     private var currentBps: Map<String, Set<Int>> = emptyMap()
     /** Distro cwd of the active launch, reused as the child sessions' project root. */
     private var sessionCwd: String = ""
@@ -104,6 +106,7 @@ class DebugController(
     /** Start debugging [hostPath] (its language picks the engine) with the current [bps] breakpoints. */
     @Synchronized fun startDebug(hostPath: String, projectDir: String, bps: Map<String, Set<Int>>) {
         stop()
+        launchSource=hostPath;launchProject=projectDir
         currentBps = bps
         ended = false
         val engine = engineForFile(hostPath, projectDir)
@@ -283,6 +286,12 @@ class DebugController(
         _variables.value = emptyList()
     }
 
+    fun sourceMoved(from: String) {
+        if(launchSource?.let { it==from || it.startsWith(from+"/") }==true || launchProject?.let { from==it || from.startsWith(it+"/") || it.startsWith(from+"/") }==true) {
+            stop();pushOutput("Debug source moved/deleted; launch again using its current path.\n")
+        }
+    }
+
     /** Called when the user toggles a breakpoint; remembers it and pushes to every live session. */
     fun onBreakpointsChanged(hostPath: String, lines: Set<Int>) {
         currentBps = currentBps.toMutableMap().apply { if (lines.isEmpty()) remove(hostPath) else put(hostPath, lines) }
@@ -346,7 +355,7 @@ class DebugController(
     @Synchronized fun stop() {
         generation.incrementAndGet()
         preparation?.cancel(); preparation=null
-        ownerPackage=null
+        ownerPackage=null;launchSource=null;launchProject=null
         ended = true // a late `terminated` event must not resurrect the session as TERMINATED
         releaseAndroidAttachment()
         children.forEach { runCatching { it.close() } }
@@ -407,7 +416,7 @@ class DebugController(
     fun debugEngineIdFor(hostPath: String): String? = engineForFile(hostPath)?.id
 
     private fun hostToDistro(p: String): String =
-        dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(p).replace("\\", "/")
+        dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(p)
 
     private companion object {
         const val KOTLIN_EXT = ".kt"

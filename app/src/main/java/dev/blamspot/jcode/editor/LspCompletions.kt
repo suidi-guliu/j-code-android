@@ -20,7 +20,7 @@ fun CompletionResult.toEditorItem(): CompletionItem {
         insertText = if (isSnippet) null else insertText,
         snippetText = if (isSnippet) insertText else null,
         sortText = sortText ?: label,
-        filterText = label,
+        filterText = filterText ?: insertText.substringBefore('(').ifBlank { label },
         source = "lsp",
     )
 }

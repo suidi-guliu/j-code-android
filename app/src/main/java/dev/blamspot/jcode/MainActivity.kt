@@ -34,6 +34,8 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this)[MainViewModel::class.java]
     }
 
+    private var heartbeat: MainThreadHeartbeat?=null
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -42,6 +44,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_JCode)
         super.onCreate(savedInstanceState)
+        if(BuildConfig.DEBUG) heartbeat=MainThreadHeartbeat()
         // Hardware acceleration is opt-out via Settings → Performance. The manifest disables it for
         // this activity (window level can only ENABLE), so apply the flag here — before setContent,
         // after which it is immutable for this window. Synchronous SharedPreferences (mirrored from
@@ -109,8 +112,27 @@ class MainActivity : ComponentActivity() {
     // resolves to here — so lint reads "an app is calling androidx-internal code" where what is
     // actually happening is an override delegating to its supertype. Not delegating is not an
     // option; dropping the super call would swallow every key the app does not handle itself.
+    private val runShortcutGate=dev.blamspot.jcode.core.distro.RunShortcutGate()
+    private fun dispatchRunShortcut(event: KeyEvent): Boolean {
+        if(currentFocus is dev.blamspot.jcode.core.term.TerminalView) return false
+        if(event.keyCode==KeyEvent.KEYCODE_ENTER && currentFocus !is dev.blamspot.jcode.core.editor.EditorView) return false
+        if (!event.isCtrlPressed || event.isAltPressed || event.isShiftPressed ||
+            event.keyCode !in setOf(KeyEvent.KEYCODE_F5, KeyEvent.KEYCODE_ENTER)) return false
+        // Android routes some hardware function keys directly through dispatchKeyShortcutEvent.
+        if (event.action == KeyEvent.ACTION_DOWN && runShortcutGate.accept(event.downTime,event.keyCode,event.repeatCount)) {
+            android.util.Log.d("SuiKeyboard", "QuickRun key=${event.keyCode} scan=${event.scanCode} meta=${event.metaState}")
+            return viewModel.quickRunActiveFile(0)
+        }
+        return true
+    }
+
+    override fun dispatchKeyShortcutEvent(event: KeyEvent): Boolean =
+        dispatchRunShortcut(event) || super.dispatchKeyShortcutEvent(event)
+
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if(BuildConfig.DEBUG && (event.keyCode==KeyEvent.KEYCODE_F5 || event.keyCode==KeyEvent.KEYCODE_FUNCTION)) android.util.Log.d("SuiKeyboard","hardware action=${event.action} key=${event.keyCode} scan=${event.scanCode} meta=${event.metaState}")
+        if (dispatchRunShortcut(event)) return true
         if (mouseContextClick.shouldSwallowBack(event)) return true
         val keyCode = event.keyCode
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
@@ -133,6 +155,8 @@ class MainActivity : ComponentActivity() {
         }
         return super.dispatchKeyEvent(event)
     }
+
+    override fun onDestroy() { heartbeat?.close();heartbeat=null;super.onDestroy() }
 
     override fun onResume() {
         super.onResume()

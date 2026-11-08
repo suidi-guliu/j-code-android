@@ -542,7 +542,7 @@ class TerminalView @JvmOverloads constructor(
      *  marker embedded in the pasted text is stripped — it would terminate the bracket early and
      *  let the remainder run as keyboard input. */
     private fun sendPaste(text: String) {
-        val normalized = text.replace("\r\n", "\r").replace("\n", "\r")
+        val normalized = TerminalPaste.normalize(text)
         val modes = currentInputModes()
         val bracketed = (modes and VtParser.MODE_BRACKETED_PASTE) != 0
         // Whether to wrap is read from ?2004 as the app last reported it, and the app can be out
@@ -554,11 +554,7 @@ class TerminalView @JvmOverloads constructor(
             "modes=0x${modes.toString(16)} bracketed=$bracketed " +
                 "chars=${normalized.length} lines=${normalized.count { it.code == 13 } + 1}"
         }
-        if (bracketed) {
-            sendInput("\u001B[200~" + normalized.replace("\u001B[201~", "") + "\u001B[201~")
-        } else {
-            sendInput(normalized)
-        }
+        sendInput(TerminalPaste.encode(normalized,bracketed))
     }
 
     /** Single-quote a path for the shell so any spaces or specials in it are treated literally. */
@@ -1533,8 +1529,9 @@ class TerminalView @JvmOverloads constructor(
                     // Committed text already carries the keyboard's own shift state, so the latch has
                     // nothing left to add — but it must still be spent here, or it leaks onto the next key.
                     consumePendingShift()
-                    val mapped = it.replace("\r\n", "\r").replace("\n", "\r")
-                    if (!sendWithPendingModifiers(mapped)) sendInput(mapped)
+                    val mapped=TerminalPaste.normalize(it)
+                    if(it.contains("\u001b[200~") || it.contains("\u001b[201~") || (it.length>1 && (it.contains('\n') || it.contains('\r')))) sendPaste(mapped)
+                    else if (!sendWithPendingModifiers(mapped)) sendInput(mapped)
                 }
                 return true
             }

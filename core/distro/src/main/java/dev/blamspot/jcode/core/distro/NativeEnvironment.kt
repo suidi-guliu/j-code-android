@@ -64,6 +64,16 @@ data class NativeInstallPlan(val language: NativeEnvironment, val packages: List
             TMP=${'$'}(mktemp -d /opt/sui-code/.${lang.key}-install-XXXXXX)
             trap 'rm -rf -- "${'$'}TMP"' EXIT
             check_cancel
+            ${if(lang==NativeEnvironment.Cpp) """
+            ensure_c_environment() {
+                if [ ! -e /opt/sui-code/c.env ]; then
+                    /usr/bin/gcc --version
+                    printf '%s\n' 'export SUI_C=/usr/bin/gcc' > "${'$'}TMP/c.env"
+                    chmod 644 "${'$'}TMP/c.env"
+                    ln "${'$'}TMP/c.env" /opt/sui-code/c.env || test -e /opt/sui-code/c.env
+                fi
+            }
+            """.trimIndent() else "ensure_c_environment() { :; }"}
             PRESERVED_TOOL=''
             if [ -r "${'$'}ENV_FILE" ]; then
                 . "${'$'}ENV_FILE"
@@ -72,6 +82,7 @@ data class NativeInstallPlan(val language: NativeEnvironment, val packages: List
                     $existingSmoke
                     check_cancel
                     if ${if(upgrade) "false" else "true"} && $completeToolchain; then
+                        ensure_c_environment
                         echo 'Existing managed ${lang.title} is usable and preserved. No packages or environment files changed.'
                         exit 0
                     fi
@@ -92,6 +103,7 @@ data class NativeInstallPlan(val language: NativeEnvironment, val packages: List
             ${lang.smoke("/usr/bin/${lang.tool}")}
             ${if(lang==NativeEnvironment.Cpp) "/usr/bin/gcc --version; /usr/bin/gdb --version; /usr/bin/cmake --version; /usr/bin/ninja --version" else "true"}
             check_cancel
+            ensure_c_environment
             if [ -n "${'$'}PRESERVED_TOOL" ]; then
                 echo 'Existing compiler selection retained; missing toolchain components were added.'
                 exit 0

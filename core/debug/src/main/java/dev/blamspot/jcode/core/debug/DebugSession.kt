@@ -95,8 +95,15 @@ class DebugSession(
             _state.value = DebugState.INITIALIZING
 
             onInitialized = {
-                for ((path, lines) in breakpoints) runCatching { setBreakpoints(path, lines) }
-                runCatching { sendRequest("configurationDone", JSONObject()) }
+                try {
+                    for ((path, lines) in breakpoints) setBreakpoints(path, lines)
+                    sendRequest("configurationDone", JSONObject())
+                } catch (e: Exception) {
+                    onOutput?.invoke("stderr", "Breakpoint configuration failed: ${e.message}\n")
+                    _state.value = DebugState.ERROR
+                    runCatching { sendRequest("disconnect", JSONObject().put("terminateDebuggee", true)) }
+                    throw e
+                }
                 if (_state.value == DebugState.INITIALIZING) _state.value = DebugState.RUNNING
             }
 
@@ -135,7 +142,12 @@ class DebugSession(
             put("breakpoints", JSONArray().apply { lines.forEach { put(JSONObject().put("line", it)) } })
             put("lines", JSONArray().apply { lines.forEach { put(it) } })
         })
-        return parseBreakpoints(body)
+        return parseBreakpoints(body).also { resolved ->
+            resolved.forEachIndexed { index, bp ->
+                onOutput?.invoke(if(bp.verified) "console" else "stderr",
+                    "Breakpoint $distroPath:${lines.getOrNull(index)} → ${bp.line}: ${if(bp.verified) "verified" else "pending/unverified"}${bp.message?.let { ": $it" } ?: ""}\n")
+            }
+        }
     }
 
     suspend fun continueThread(threadId: Int) { sendRequest("continue", JSONObject().put("threadId", threadId)); clearStopped() }
@@ -355,7 +367,7 @@ class DebugSession(
 
     /** Host project path -> distro path (mirrors LspSession's translation). */
     fun hostToDistroPath(hostPath: String): String =
-        dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(hostPath).replace("\\", "/")
+        dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(hostPath)
 
     fun distroToHostPath(distroPath: String): String =
         dev.blamspot.jcode.core.distro.WorkspaceHostPaths.guestToHost(distroPath).replace("/", java.io.File.separator)
@@ -377,7 +389,7 @@ class DebugSession(
         val arr = body.optJSONArray("breakpoints") ?: return emptyList()
         return (0 until arr.length()).map { i ->
             val b = arr.getJSONObject(i)
-            DapBreakpoint(id = b.optInt("id", -1), verified = b.optBoolean("verified", false), line = b.optInt("line", 0))
+            DapBreakpoint(id = b.optInt("id", -1), verified = b.optBoolean("verified", false), line = b.optInt("line", 0), message = b.optString("message").takeIf { it.isNotBlank() })
         }
     }
 
@@ -443,7 +455,7 @@ data class DapEvaluation(
 ) {
     val expandable: Boolean get() = variablesReference > 0
 }
-data class DapBreakpoint(val id: Int, val verified: Boolean, val line: Int)
+data class DapBreakpoint(val id: Int, val verified: Boolean, val line: Int, val message: String? = null)
 data class StoppedInfo(val reason: String, val threadId: Int, val description: String, val text: String)
 
 class DebugException(message: String) : Exception(message)

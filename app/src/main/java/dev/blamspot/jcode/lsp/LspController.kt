@@ -1,5 +1,6 @@
 package dev.blamspot.jcode.lsp
 
+import kotlinx.coroutines.cancelAndJoin
 import dev.blamspot.jcode.core.distro.DistroService
 import dev.blamspot.jcode.core.distro.LspCatalogEntry
 import dev.blamspot.jcode.core.distro.LspServerCatalog
@@ -73,6 +74,8 @@ class LspController(
     private val isServerPaired: (serverId: String, fileName: String) -> Boolean,
 ) {
 
+    private val backgroundScope=CoroutineScope(scope.coroutineContext + Dispatchers.IO)
+
     private data class SessionKey(val serverId: String, val root: String)
 
     private class Managed(
@@ -101,6 +104,8 @@ class LspController(
         // documentOpened and the READY replay gets there first, and only one of them may win.
         val opened = AtomicBoolean(false)
         val version = AtomicInteger(1)
+        var sentText: String? = null
+        val syncMutex = Mutex()
         var changeJob: Job? = null
     }
 
@@ -123,7 +128,7 @@ class LspController(
         // Installing a server from the prompt has to affect the file that triggered the prompt, which
         // is already open — otherwise the user installs and nothing visibly happens until they close
         // and reopen the tab.
-        scope.launch {
+        backgroundScope.launch {
             distroService.lspCatalogState
                 .map { it.installedEntryIds }
                 .distinctUntilChanged()
@@ -159,25 +164,25 @@ class LspController(
     fun documentChanged(hostPath: String) {
         val document = documents[hostPath] ?: return
         document.changeJob?.cancel()
-        document.changeJob = scope.launch {
+        document.changeJob = backgroundScope.launch {
             delay(CHANGE_DEBOUNCE_MS)
             val managed = sessions[document.key] ?: return@launch
             if (!document.opened.get() || managed.session.state.value != LspState.READY) return@launch
             val text = documentText(hostPath) ?: return@launch
-            runCatching { managed.session.didChange(document.uri, document.version.incrementAndGet(), text) }
+            runCatching { syncDocument(managed, document, text) }
         }
     }
 
     fun documentSaved(hostPath: String) {
         val document = documents[hostPath] ?: return
         val managed = sessions[document.key] ?: return
-        scope.launch {
+        backgroundScope.launch {
             // Flush any pending debounced edit first, so the server saves what is actually on disk.
             document.changeJob?.cancel()
             if (!document.opened.get() || managed.session.state.value != LspState.READY) return@launch
             val text = documentText(hostPath) ?: return@launch
             runCatching {
-                managed.session.didChange(document.uri, document.version.incrementAndGet(), text)
+                syncDocument(managed, document, text)
                 managed.session.didSave(document.uri, text)
             }
         }
@@ -187,7 +192,7 @@ class LspController(
         val document = documents.remove(hostPath) ?: return
         document.changeJob?.cancel()
         val managed = sessions[document.key] ?: return
-        scope.launch {
+        backgroundScope.launch {
             if (document.opened.get()) runCatching { managed.session.didClose(document.uri) }
             // The last file for a server is worth reclaiming: these processes are heavy (jdtls holds
             // a JVM, rust-analyzer an index) and a phone has no room for idle ones.
@@ -200,7 +205,7 @@ class LspController(
      * Dev Pack for a language is what pairs its server, and that must light up the files already open.
      */
     fun retryOpenDocuments() {
-        scope.launch { openDocumentPaths().forEach { documentOpened(it) } }
+        backgroundScope.launch { openDocumentPaths().forEach { documentOpened(it) } }
     }
 
     /** Tears every session down — a different project's files never belong to the same server root. */
@@ -215,6 +220,15 @@ class LspController(
 
     suspend fun executeCommand(hostPath: String,command: String,arguments: org.json.JSONArray = org.json.JSONArray()): Any? =
         withReadySession(hostPath,null) { session,_ -> session.sendRequest("workspace/executeCommand",JSONObject().put("command",command).put("arguments",arguments),180_000L) }
+
+    suspend fun virtualDocument(uri: String): String? {
+        val scheme = java.net.URI(uri).scheme ?: return null
+        val managed = sessions.values.firstOrNull { candidate ->
+            org.json.JSONObject(candidate.descriptor.initializationOptions).optJSONObject("virtualDocuments")?.has(scheme) == true
+        } ?: return null
+        val method = org.json.JSONObject(managed.descriptor.initializationOptions).getJSONObject("virtualDocuments").getString(scheme)
+        return managed.session.sendRequest(method, JSONObject().put("uri", uri), 30000L) as? String
+    }
 
     suspend fun completions(hostPath: String, line: Int, character: Int): List<CompletionResult> =
         withReadySession(hostPath, emptyList()) { session, uri -> session.completion(uri, line, character) }
@@ -358,7 +372,17 @@ class LspController(
         block: suspend (LspSession, String) -> T,
     ): T {
         val (managed, document) = readySession(hostPath) ?: return fallback
-        return try { block(managed.session, document.uri) }
+        return try {
+            // Flush debounced edits before asking about their new caret coordinates.
+            document.changeJob?.cancelAndJoin()
+            document.changeJob = null
+            val text = documentText(hostPath)
+            if (text != null && document.opened.get()) syncDocument(managed, document, text)
+            val started = android.os.SystemClock.elapsedRealtime()
+            block(managed.session, document.uri).also {
+                android.util.Log.d("SuiPerformance", "lsp request server=${managed.descriptor.id} elapsedMs=${android.os.SystemClock.elapsedRealtime()-started}")
+            }
+        }
         catch(e: kotlinx.coroutines.CancellationException) { throw e }
         catch(_: Exception) { fallback }
     }
@@ -424,7 +448,7 @@ class LspController(
             onApplyEdit?.invoke(session.parseWorkspaceEdit(edit)) ?: false
         }
         val source = diagnosticsSource(key)
-        managed.diagnosticsJob = scope.launch {
+        managed.diagnosticsJob = backgroundScope.launch {
             session.diagnostics.collect { byPath ->
                 // Detached documents are not the user's files — they are page sources handed to a
                 // running server for colouring (see detachedSemanticTokens). Problems reported
@@ -433,7 +457,7 @@ class LspController(
                 diagnosticsBus.updateSourceDiagnostics(source, byPath.filterKeys { DETACHED_DIR !in it })
             }
         }
-        managed.stateJob = scope.launch {
+        managed.stateJob = backgroundScope.launch {
             session.state.collect { state ->
                 publishStatus()
                 when (state) {
@@ -446,7 +470,7 @@ class LspController(
                 }
             }
         }
-        scope.launch {
+        backgroundScope.launch {
             log("starting ${descriptor.id} in ${key.root.substringAfterLast('/')}")
             session.start(session.hostToDistroUri(key.root))
             if (session.state.value != LspState.READY) return@launch
@@ -459,6 +483,15 @@ class LspController(
         return managed
     }
 
+    private suspend fun syncDocument(managed: Managed, document: OpenDocument, text: String) {
+        document.syncMutex.withLock {
+            if (document.sentText != text) {
+                managed.session.didChange(document.uri, document.version.incrementAndGet(), text)
+                document.sentText = text
+            }
+        }
+    }
+
     private suspend fun sendDidOpen(managed: Managed, hostPath: String, document: OpenDocument) {
         if (!document.opened.compareAndSet(false, true)) return
         val text = documentText(hostPath)
@@ -468,6 +501,7 @@ class LspController(
         }
         runCatching {
             managed.session.didOpen(document.uri, document.languageId, document.version.get(), text)
+            document.sentText = text
         }.onFailure { document.opened.set(false) }
     }
 
@@ -508,7 +542,7 @@ class LspController(
      */
     private fun promptInstall(serverId: String) {
         if (!promptedServerIds.add(serverId)) return
-        scope.launch {
+        backgroundScope.launch {
             // Wait for the catalog to actually report itself loaded. Timing cannot substitute for
             // this: on a cold launch the environment is probed first, so the installed set stays
             // empty AND quiet for ~10s, which is indistinguishable from a fresh device with nothing

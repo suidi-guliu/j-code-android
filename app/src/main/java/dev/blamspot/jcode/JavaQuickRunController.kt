@@ -22,7 +22,10 @@ class JavaQuickRunController(private val context: Context,private val distro: Di
     private val focus=MutableSharedFlow<String>(extraBufferCapacity=1)
     val focusRequests=focus.asSharedFlow()
     private var job: Job?=null
+    private var stopping=false
+    private val teardownScope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
     @Volatile private var ownerPackage: String?=null
+    @Volatile private var sourcePath: String?=null
     @Volatile private var sessionId: String?=null
     private val payloads=ConcurrentHashMap<String,String>()
     private val terminals get()=TerminalSessionHost.manager(context)
@@ -57,17 +60,23 @@ class JavaQuickRunController(private val context: Context,private val distro: Di
                 check(distro.environmentState.value.runtime.selectedDistro.id==runtime.selectedDistro.id) { "Ubuntu environment changed while saving; retry" }
                 sessionId?.let(::close)
                 val actual=File(path)
+                sourcePath=actual.path
                 val token=UUID.randomUUID().toString()
                 val mount=QuickRunFileMount.forFile(actual,project)
-                val guestProject=project?.canonicalFile?.relativeTo(mount.hostDirectory)?.invariantSeparatorsPath?.let { "/sui-quickrun"+if(it.isEmpty()) "" else "/$it" } ?: mount.guestDirectory
+                // Project build outputs persist: use the same guest path as LSP/DAP, never a task alias.
+                val stableProject=project?.canonicalPath?.let(WorkspaceHostPaths::hostToGuest)
+                val mapped=stableProject!=null && stableProject!=project.canonicalPath
+                val guestSource=if(mapped) WorkspaceHostPaths.hostToGuest(actual.path) else mount.guestFile
+                val guestProject=if(mapped) stableProject!! else project?.canonicalFile?.relativeTo(mount.hostDirectory)?.invariantSeparatorsPath?.let { "/sui-quickrun"+if(it.isEmpty()) "" else "/$it" } ?: mount.guestDirectory
+                val taskBinds=if(mapped) emptyList() else listOf(DistroBind(mount.hostDirectory.path,"/sui-quickrun"))
                 val resourceDirectory="/tmp/sui-package-$token"
                 resourcePath=File(distro.activeRootfsPath(),resourceDirectory.removePrefix("/"))
                 check(File(distro.activeRootfsPath(),"sui-quickrun").let { it.isDirectory || it.mkdirs() }) { "Cannot prepare task mount" }
                 recipe.resources().forEach { (name,bytes) -> check(distro.stageGuestBytes("$resourceDirectory/$name",bytes)) { "Cannot stage authenticated package resource" } }
                 val scriptPath="/tmp/sui-native-task-$token.sh"
                 stagedScript=File(distro.activeRootfsPath(),scriptPath.removePrefix("/"))
-                check(distro.stageGuestFile(scriptPath,recipe.script(mount.guestFile,resourceDirectory,guestProject))) { "Cannot stage native recipe" }
-                val session=terminals.createOwnedSession(distroId=runtime.selectedDistro.id,binds=listOf(DistroBind(mount.hostDirectory.path,"/sui-quickrun")),workdir=guestProject,user=runtime.user,rootfsArch=runtime.selectedDistro.arch,label="$label · ${actual.name}",processOwner="sui-quickrun:$token") ?: error("Cannot create terminal session")
+                check(distro.stageGuestFile(scriptPath,recipe.script(guestSource,resourceDirectory,guestProject))) { "Cannot stage native recipe" }
+                val session=terminals.createOwnedSession(distroId=runtime.selectedDistro.id,binds=taskBinds,workdir=guestProject,user=runtime.user,rootfsArch=runtime.selectedDistro.arch,label="$label · ${actual.name}",processOwner="sui-quickrun:$token") ?: error("Cannot create terminal session")
                 sessionId=session.id
                 payloads[session.id]="sui-quickrun:$token/task"
                 TerminalSessionHost.onSessionStarted(context,session.id,session.label)
@@ -86,17 +95,32 @@ class JavaQuickRunController(private val context: Context,private val distro: Di
         return true
     }
     fun complete(id: String,payload: String) {
-        if(id==sessionId && payload.substringBefore(';')=="quickrun") {
+        if(!stopping && id==sessionId && payload.substringBefore(';')=="quickrun") {
             mutableActive.value=false;gate.finish()
-            payloads.remove(id)?.let { owner -> scope.launch(Dispatchers.IO) { GuestProcessTree.terminateOwnerBlocking(owner) } }
+            payloads.remove(id)?.let { owner -> teardownScope.launch { GuestProcessTree.terminateOwnerBlocking(owner) } }
         }
     }
+    fun sourceMoved(from: String) { if(sourcePath?.let { it==from || it.startsWith(from+"/") }==true) stop() }
     fun stopPackage(id: String) { if(ownerPackage==id) stop() }
     fun stop(): Boolean {
         val wasActive=mutableActive.value
-        generation.incrementAndGet();job?.cancel();sessionId?.let(::close)
-        sessionId=null;ownerPackage=null;mutableActive.value=false;gate.finish()
-        return wasActive
+        if (!wasActive || stopping) return wasActive
+        stopping=true
+        generation.incrementAndGet()
+        val taskJob=job
+        val id=sessionId
+        val payload=id?.let { payloads.remove(it) }
+        teardownScope.launch {
+            try {
+                // Kill only the task subtree. The owning interactive shell and its transcript survive.
+                withContext(Dispatchers.IO) { payload?.let(GuestProcessTree::terminateOwnerBlocking) }
+                taskJob?.cancelAndJoin()
+                OutputLog.append("[Native task] Stopped; terminal output retained.")
+            } finally {
+                ownerPackage=null;mutableActive.value=false;gate.finish();stopping=false
+            }
+        }
+        return true
     }
     private fun close(id: String) {
         payloads.remove(id)

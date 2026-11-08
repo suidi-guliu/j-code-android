@@ -16,6 +16,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -58,6 +59,7 @@ class DistroService(
         appContext,
         RootfsDownloader(tmpDir = File(appContext.filesDir, "tmp")),
     )
+    @Volatile var kitInstallationActive=false
     val nativeEnvironmentManager by lazy { NativeEnvironmentManager(this) }
     val javaEnvironmentManager by lazy { JavaEnvironmentManager(this) }
 
@@ -167,7 +169,7 @@ class DistroService(
             it.id == distroConfig.id || it.installRecipe == distroConfig.id
         }
         val runtime = DistroRuntimeConfig(
-            selectedDistro = if (pinned) {
+            selectedDistro = if (pinned && !kitInstallationActive) {
                 DistroProfile.fromId(distroConfig.id, availableDistros)
             } else {
                 _environmentState.value.runtime.selectedDistro
@@ -188,7 +190,7 @@ class DistroService(
     }
 
     fun setSelectedDistro(profile: DistroProfile) {
-        applySelectedDistro(profile)
+        if(!applySelectedDistro(profile)) return
         scope.launch { persistSelection(profile) }
     }
 
@@ -198,17 +200,22 @@ class DistroService(
      * before that lands, bringing the app back on the environment the user just switched away from.
      */
     suspend fun setSelectedDistroAwaitingPersist(profile: DistroProfile) {
-        applySelectedDistro(profile)
+        if(!applySelectedDistro(profile)) return
         persistSelection(profile)
     }
 
-    private fun applySelectedDistro(profile: DistroProfile) {
+    private fun applySelectedDistro(profile: DistroProfile): Boolean {
+        if(kitInstallationActive) {
+            _environmentState.value=_environmentState.value.copy(errorMessage="An IDE Kit is installing into this Ubuntu environment. Cancel safely or wait before switching images.")
+            return false
+        }
         _environmentState.value = _environmentState.value.copy(
             runtime = _environmentState.value.runtime.copy(selectedDistro = profile),
             completedSteps = _environmentState.value.completedSteps + WizardStepId.DistroSelected,
             errorMessage = null,
         )
         recomputeEnvironments()
+        return true
     }
 
     private suspend fun persistSelection(profile: DistroProfile) {
@@ -327,7 +334,7 @@ class DistroService(
         return removed
     }
 
-    suspend fun refreshSdkCatalog() {
+    suspend fun refreshSdkCatalog() = withContext(Dispatchers.IO) {
         lock.withLock {
             val entries = runCatching { sdkCatalogLoader.load() }
                 .getOrElse { error ->
@@ -340,7 +347,7 @@ class DistroService(
                         selectedDistroId = _environmentState.value.runtime.selectedDistro.id,
                         errorMessage = "Failed to load SDK catalog: ${error.message ?: "Unknown error"}",
                     )
-                    return
+                    return@withContext
                 }
 
             val distroId = _environmentState.value.runtime.selectedDistro.id
@@ -415,6 +422,7 @@ class DistroService(
             // what decides whether the tool is actually there afterwards.
             val verifyResult = execCatalogScript(entry.verifyScript, timeoutMs = 120_000L)
 
+            invalidateCatalogProbes()
             val installedNow = verifyResult.succeeded
             val updatedInstalledEntries = readInstalledCatalogEntries(distroId).toMutableSet().apply {
                 if (installedNow) {
@@ -441,7 +449,7 @@ class DistroService(
             }
 
             val errorMessage = when {
-                !actionResult.succeeded -> actionResult.internalError
+                !actionResult.succeeded && !installedNow -> actionResult.internalError
                     ?: actionResult.stderr.lineSequence().firstOrNull { it.isNotBlank() }
                     ?: actionResult.stdout.lineSequence().firstOrNull { it.isNotBlank() }
                     ?: "${action.label} failed."
@@ -515,7 +523,7 @@ class DistroService(
         }
     }
 
-    suspend fun refreshLspCatalog() {
+    suspend fun refreshLspCatalog() = withContext(Dispatchers.IO) {
         lock.withLock {
             val distroId = _environmentState.value.runtime.selectedDistro.id
             _lspCatalogState.value = _lspCatalogState.value.copy(
@@ -575,6 +583,7 @@ class DistroService(
             // is what decides whether the tool is actually there afterwards.
             val verifyResult = execCatalogScript(entry.verifyCommand, timeoutMs = 120_000L)
 
+            invalidateCatalogProbes()
             val installedNow = verifyResult.succeeded
             val updatedInstalledEntries = readInstalledLspEntries(distroId).toMutableSet().apply {
                 if (installedNow) {
@@ -586,7 +595,7 @@ class DistroService(
             persistInstalledLspEntries(distroId, updatedInstalledEntries)
 
             val errorMessage = when {
-                !actionResult.succeeded -> actionResult.internalError
+                !actionResult.succeeded && !installedNow -> actionResult.internalError
                     ?: actionResult.stderr.lineSequence().firstOrNull { it.isNotBlank() }
                     ?: actionResult.stdout.lineSequence().firstOrNull { it.isNotBlank() }
                     ?: "${action.label} failed."
@@ -623,86 +632,63 @@ class DistroService(
 
     private data class CatalogProbe(val id: String, val verifyScript: String, val updateCheckScript: String)
 
-    /**
-     * Run every entry's verify (and, for verified entries, its update-check) in ONE proot exec
-     * instead of one spawn per script: each probe is wrapped in a subshell that prints a
-     * `JCODE_VERIFY <id> OK|FAIL` / `JCODE_UPDATE <id> YES` marker line, and the markers are parsed
-     * back into per-entry results. The scripts are arbitrary multi-line shell from the catalogs, so
-     * the generated script is written into the rootfs and run with `bash <file>` — no inline
-     * quoting. Runs under the same user/env as the old per-entry path (login shell paid once, not
-     * N times). Falls back to the sequential per-entry pass if the batch produced no markers.
-     * Returns (installed ids, updatable ids).
-     */
-    private fun runCatalogProbes(probes: List<CatalogProbe>): Pair<Set<String>, Set<String>> {
-        val installed = linkedSetOf<String>()
-        val updatable = linkedSetOf<String>()
-        if (probes.isEmpty()) return installed to updatable
-        val startedAt = System.currentTimeMillis()
-        if (probes.any { it.updateCheckScript.contains("apt list") }) refreshAptListsIfStale()
+    /** Cached installed-state checks only. Never refresh package indexes on page navigation. */
+    fun invalidateCatalogProbes() { probeResults.clear() }
+    private val probeResults=java.util.concurrent.ConcurrentHashMap<String,Pair<Long,Pair<Set<String>,Set<String>>>>()
+    private suspend fun runCatalogProbes(probes: List<CatalogProbe>): Pair<Set<String>,Set<String>> = withContext(Dispatchers.IO) {
+        if(probes.isEmpty()) return@withContext emptySet<String>() to emptySet<String>()
+        val runtime=_environmentState.value.runtime
+        val key=runtime.selectedDistro.id+":"+probes.joinToString("\u0000") { it.id+":"+it.verifyScript }
+        val now=android.os.SystemClock.elapsedRealtime()
+        probeResults[key]?.takeIf { now-it.first<60_000L }?.let { return@withContext it.second }
+        android.os.Trace.beginSection("sui.catalog.probes")
+        try {
+            val script=CatalogProbeBatch.script(probes.map { CatalogProbeBatch.Probe(it.id,it.verifyScript) })
+            val result=execOwned(script,workdir=runtime.workdir,owner="sui-kit:core-catalog",timeoutMs=(probes.size*9_000L).coerceAtMost(45_000L))
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            val parsed=CatalogProbeBatch.parse(result.stdout)
+            val previousInstalled=_sdkCatalogState.value.installedEntryIds+_lspCatalogState.value.installedEntryIds+_debugCatalogState.value.installedEntryIds
+            val previousUpdatable=_sdkCatalogState.value.updatableEntryIds+_lspCatalogState.value.updatableEntryIds+_debugCatalogState.value.updatableEntryIds
+            val ids=probes.map { it.id }.toSet()
+            val value=(parsed.installed+(previousInstalled.intersect(ids)-parsed.checked)) to previousUpdatable.intersect(ids)
+            if(parsed.checked.size==probes.size) probeResults[key]=android.os.SystemClock.elapsedRealtime() to value
+            android.util.Log.i("SuiPerformance","catalog=${runtime.selectedDistro.id} count=${probes.size} ms=${android.os.SystemClock.elapsedRealtime()-now} thread=${Thread.currentThread().name} checked=${parsed.checked.size} timedOut=${parsed.timedOut.size}")
+            value
+        } finally { android.os.Trace.endSection() }
+    }
 
-        val distroId = _environmentState.value.runtime.selectedDistro.id
-        val scriptFile = File(rootfsManager.getRootfsPath(distroId), "tmp/.jcode-verify-${System.nanoTime()}.sh")
-        val batch = runCatching {
-            scriptFile.parentFile?.mkdirs()
-            scriptFile.writeText(
-                buildString {
-                    for (p in probes) {
-                        append("if (\n").append(p.verifyScript).append("\n) >/dev/null 2>&1; then\n")
-                        append("echo \"JCODE_VERIFY ${p.id} OK\"\n")
-                        if (p.updateCheckScript.isNotBlank()) {
-                            append("if (\n").append(p.updateCheckScript)
-                                .append("\n) >/dev/null 2>&1; then echo \"JCODE_UPDATE ${p.id} YES\"; fi\n")
-                        }
-                        append("else\necho \"JCODE_VERIFY ${p.id} FAIL\"\nfi\n")
-                    }
-                },
-            )
-            execInDistro("bash /tmp/${scriptFile.name}", timeoutMs = 300_000L)
-        }.getOrNull()
-        runCatching { scriptFile.delete() }
-
-        if (batch != null && batch.stdout.lineSequence().any { it.startsWith("JCODE_VERIFY ") }) {
-            for (line in batch.stdout.lineSequence()) {
-                val parts = line.trim().split(' ')
-                if (parts.size != 3) continue
-                when {
-                    parts[0] == "JCODE_VERIFY" && parts[2] == "OK" -> installed.add(parts[1])
-                    parts[0] == "JCODE_UPDATE" && parts[2] == "YES" -> updatable.add(parts[1])
-                }
+    suspend fun checkAvailableCatalogUpdates() = withContext(Dispatchers.IO) {
+        lock.withLock {
+            check(isRuntimeReady()) { "Complete Ubuntu setup before checking updates" }
+            refreshAptListsIfStale()
+            suspend fun updates(probes: List<CatalogProbe>): Set<String> {
+                val available=probes.filter { it.updateCheckScript.isNotBlank() }
+                if(available.isEmpty()) return emptySet()
+                val result=execOwned(CatalogProbeBatch.script(available.map { CatalogProbeBatch.Probe(it.id,it.updateCheckScript) },seconds=8),"/tmp","sui-kit:catalog-updates",60000)
+                return CatalogProbeBatch.parse(result.stdout).installed
             }
-        } else {
-            android.util.Log.w("DistroService", "runCatalogProbes: batch produced no markers, falling back to per-entry probes")
-            for (p in probes) {
-                if (execInDistro(p.verifyScript, timeoutMs = 120_000L).succeeded) {
-                    installed.add(p.id)
-                    if (p.updateCheckScript.isNotBlank() &&
-                        execInDistro(p.updateCheckScript, timeoutMs = 120_000L).succeeded
-                    ) {
-                        updatable.add(p.id)
-                    }
-                }
-            }
+            val sdk=_sdkCatalogState.value
+            _sdkCatalogState.value=sdk.copy(updatableEntryIds=updates(sdk.entries.filter { it.id in sdk.installedEntryIds }.map { CatalogProbe(it.id,it.verifyScript,it.updateCheckScript) }))
+            val lsp=_lspCatalogState.value
+            _lspCatalogState.value=lsp.copy(updatableEntryIds=updates(lsp.entries.filter { it.id in lsp.installedEntryIds }.map { CatalogProbe(it.id,it.verifyCommand,it.updateCheckCommand) }))
+            val debug=_debugCatalogState.value
+            _debugCatalogState.value=debug.copy(updatableEntryIds=updates(debug.entries.filter { it.id in debug.installedEntryIds }.map { CatalogProbe(it.id,it.verifyCommand,it.updateCheckCommand) }))
+            invalidateCatalogProbes()
         }
-        android.util.Log.d(
-            "DistroService",
-            "runCatalogProbes: ${probes.size} entries in ${System.currentTimeMillis() - startedAt}ms " +
-                "(${installed.size} installed, ${updatable.size} updatable)",
-        )
-        return installed to updatable
     }
 
     /** Re-check installed + update-available status for every SDK entry. Full check, run async; no-op if already running. */
-    suspend fun checkSdkStatuses() {
+    suspend fun checkSdkStatuses() = withContext(Dispatchers.IO) {
         val ready = _environmentState.value.distroInstalled == true && _environmentState.value.jcodeUserReady == true
-        if (!ready) return
-        if (!sdkCheckInProgress.compareAndSet(false, true)) return
+        if (!ready) return@withContext
+        if (!sdkCheckInProgress.compareAndSet(false, true)) return@withContext
         try {
             lock.withLock {
                 val distroId = _environmentState.value.runtime.selectedDistro.id
                 val entries = _sdkCatalogState.value.entries.ifEmpty {
                     runCatching { sdkCatalogLoader.load() }.getOrElse { emptyList() }
                 }
-                if (entries.isEmpty()) return
+                if (entries.isEmpty()) return@withContext
                 _sdkCatalogState.value = _sdkCatalogState.value.copy(
                     entries = entries, checking = true, selectedDistroId = distroId, errorMessage = null,
                 )
@@ -722,10 +708,10 @@ class DistroService(
     }
 
     /** Re-check installed + update-available status for every LSP server. Full check, run async; no-op if already running. */
-    suspend fun checkLspStatuses() {
+    suspend fun checkLspStatuses() = withContext(Dispatchers.IO) {
         val ready = _environmentState.value.distroInstalled == true && _environmentState.value.jcodeUserReady == true
-        if (!ready) return
-        if (!lspCheckInProgress.compareAndSet(false, true)) return
+        if (!ready) return@withContext
+        if (!lspCheckInProgress.compareAndSet(false, true)) return@withContext
         try {
             lock.withLock {
                 val distroId = _environmentState.value.runtime.selectedDistro.id
@@ -748,7 +734,7 @@ class DistroService(
         }
     }
 
-    suspend fun refreshDebugEngineCatalog() {
+    suspend fun refreshDebugEngineCatalog() = withContext(Dispatchers.IO) {
         lock.withLock {
             val distroId = _environmentState.value.runtime.selectedDistro.id
             _debugCatalogState.value = _debugCatalogState.value.copy(
@@ -807,6 +793,7 @@ class DistroService(
             // is what decides whether the tool is actually there afterwards.
             val verifyResult = execCatalogScript(entry.verifyCommand, timeoutMs = 120_000L)
 
+            invalidateCatalogProbes()
             val installedNow = verifyResult.succeeded
             val updatedInstalledEntries = readInstalledDebugEntries(distroId).toMutableSet().apply {
                 if (installedNow) add(entry.id) else remove(entry.id)
@@ -814,7 +801,7 @@ class DistroService(
             persistInstalledDebugEntries(distroId, updatedInstalledEntries)
 
             val errorMessage = when {
-                !actionResult.succeeded -> actionResult.internalError
+                !actionResult.succeeded && !installedNow -> actionResult.internalError
                     ?: actionResult.stderr.lineSequence().firstOrNull { it.isNotBlank() }
                     ?: actionResult.stdout.lineSequence().firstOrNull { it.isNotBlank() }
                     ?: "${action.label} failed."
@@ -850,10 +837,10 @@ class DistroService(
     }
 
     /** Re-check installed + update-available status for every debug engine. Full check, run async; no-op if already running. */
-    suspend fun checkDebugEngineStatuses() {
+    suspend fun checkDebugEngineStatuses() = withContext(Dispatchers.IO) {
         val ready = _environmentState.value.distroInstalled == true && _environmentState.value.jcodeUserReady == true
-        if (!ready) return
-        if (!debugCheckInProgress.compareAndSet(false, true)) return
+        if (!ready) return@withContext
+        if (!debugCheckInProgress.compareAndSet(false, true)) return@withContext
         try {
             lock.withLock {
                 val distroId = _environmentState.value.runtime.selectedDistro.id

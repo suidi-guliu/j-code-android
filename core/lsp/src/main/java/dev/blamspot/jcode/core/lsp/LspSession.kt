@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Closeable
@@ -77,8 +79,8 @@ class LspSession(
         try {
             // --noprofile --norc so a user's shell configuration cannot inject output into the stream.
             val workspaceId = java.security.MessageDigest.getInstance("SHA-256").digest(projectRoot.toByteArray()).joinToString("") { "%02x".format(it) }
-            val command = "exec bash --noprofile --norc -c " + dev.blamspot.jcode.core.distro.shellQuote(descriptor.runCommand.replace("\${workspaceId}", workspaceId))
-            transport = transportFactory(command) ?: throw LspException("runtime is not ready")
+            val command = "exec bash --noprofile --norc -c " + dev.blamspot.jcode.core.distro.shellQuote(descriptor.runCommand.replace("\${workspaceId}", workspaceId).replace("\${workspaceRoot}", dev.blamspot.jcode.core.distro.shellQuote(dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(projectRoot))))
+            transport = withContext(Dispatchers.IO) { transportFactory(command) } ?: throw LspException("runtime is not ready")
             _state.value = LspState.RUNNING
             readJob = scope.launch { readLoop() }
 
@@ -146,8 +148,9 @@ class LspSession(
         closed = true
         val t = transport
         readJob?.cancel()
-        // Graceful stop written straight to the transport: the read loop is already cancelled, and
-        // routing through the suspend writer would need a scope this method is about to cancel.
+        val cleanup=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+        cleanup.launch { delay(500);runCatching { t?.close() };cleanup.cancel() }
+        cleanup.launch {
         runCatching {
             t?.write(frame(JSONObject().apply {
                 put("jsonrpc", "2.0")
@@ -161,7 +164,10 @@ class LspSession(
                 put("params", JSONObject())
             }))
         }
-        runCatching { t?.close() }
+
+            runCatching { t?.close() }
+            cleanup.cancel()
+        }
         transport = null
         if (_state.value != LspState.ERROR) _state.value = LspState.DISCONNECTED
         pending.values.forEach { it.cancel() }
@@ -206,6 +212,9 @@ class LspSession(
             withTimeout(timeoutMs) { deferred.await() }
         } finally {
             pending.remove(id)
+            if (!deferred.isCompleted && !closed) withContext(NonCancellable + Dispatchers.IO) {
+                runCatching { sendNotification("$/cancelRequest", JSONObject().put("id", id)) }
+            }
         }
     }
 
@@ -264,7 +273,7 @@ class LspSession(
 
     suspend fun completion(uri: String, line: Int, character: Int): List<CompletionResult> {
         if (!ready() || !supportsCompletion) return emptyList()
-        val result = sendRequest("textDocument/completion", positionParams(uri, line, character))
+        val result = sendRequest("textDocument/completion", positionParams(uri, line, character).put("context",JSONObject().put("triggerKind",1)))
         return parseCompletions(result)
     }
 
@@ -329,12 +338,13 @@ class LspSession(
 
     /** Host path -> the `file://` URI the server sees through proot's binds. */
     fun hostToDistroUri(hostPath: String): String {
-        val distroPath = dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(hostPath).replace("\\", "/")
-        return "file://$distroPath"
+        val distroPath = dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(hostPath)
+        return dev.blamspot.jcode.core.distro.SourceUris.fileUri(distroPath)
     }
 
     fun distroToHostPath(distroUri: String): String {
-        val path = java.net.URLDecoder.decode(distroUri.removePrefix("file://"), "UTF-8")
+        if(!distroUri.startsWith("file:")) return distroUri
+        val path = dev.blamspot.jcode.core.distro.SourceUris.path(distroUri)
         return dev.blamspot.jcode.core.distro.WorkspaceHostPaths.guestToHost(path)
             .replace("/", java.io.File.separator)
     }
@@ -347,7 +357,7 @@ class LspSession(
         return header + content
     }
 
-    private suspend fun writeMessage(message: JSONObject) {
+    private suspend fun writeMessage(message: JSONObject) = withContext(Dispatchers.IO) {
         val bytes = frame(message)
         writeMutex.withLock { transport?.write(bytes) }
     }
@@ -544,6 +554,7 @@ class LspSession(
                         ?: item.optString("label", ""),
                     insertTextFormat = item.optInt("insertTextFormat", 1),
                     sortText = item.optStringOrNull("sortText"),
+                    filterText = item.optStringOrNull("filterText"),
                 )
             }
         }
@@ -689,6 +700,7 @@ data class CompletionResult(
     /** 1 = plain text, 2 = snippet. */
     val insertTextFormat: Int,
     val sortText: String?,
+    val filterText: String? = null,
 )
 
 /** A resolved location (go-to-definition, references), in HOST path space. */
