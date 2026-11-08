@@ -12,7 +12,7 @@ fi
 [ -n "$TOOL" ] && [ -x "$TOOL" ] || { echo '[QuickRun environment error] Install c through Toolchains; no automatic installation or fallback.' >&2; exit 78; }
 "$TOOL" --version || { echo '[QuickRun environment error] The selected tool cannot run.' >&2; exit 78; }
 cd -- "$(dirname -- "$1")" || exit 66
-BUILD=$(mktemp -d /tmp/sui-quickrun-XXXXXX) || exit 73
+BUILD=$(mktemp -d "${TMPDIR:-/tmp}/sui-quickrun-XXXXXX") || exit 73
 trap 'rm -rf -- "$BUILD"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM

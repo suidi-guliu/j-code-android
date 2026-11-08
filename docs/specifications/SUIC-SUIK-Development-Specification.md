@@ -115,7 +115,7 @@ Loader 不回调包内 `onLoad`/shell hook；“启用”仅表示 host 可以�
 
 实际调用：`CoreSession.request(Request(Operation.SIMPLE_RUN, componentId, arguments)): Reply`。调用时机为 host 取得当前文件、等待保存、解析真实路径和环境后；权限 `process.run` + `file.read`。组件必须登记为 SimpleRun/basicBuild，且用户须授权本摘要。没有 backend 返回 `E_UNAVAILABLE`，而不是接受后静默丢任务。
 
-`CoreBackend.invoke(request: Request): Reply` 是 host 提供的唯一执行端口。所有参数必填。执行 backend 必须验证路径授权、环境身份、进程树归属，返回任务 ID/状态；必须通过同一 host 的停止机制清理子进程。Android 使用共享任务控制器等待保存、映射路径、分配 PTY 会话及进程 owner。Ctrl+F5 仅对激活源码执行；重复按键/忙任务不创建新进程。Core API 成功回复 STARTING 是排队状态，不是编译成功；实际退出码和输出在 Terminal 中。停止和关闭会话按 owner 清理整个子进程树，ProjectRunner 任务使用不同 owner。
+`CoreBackend.invoke(request: Request): Reply` 是 host 提供的唯一执行端口。所有参数必填。执行 backend 必须验证路径授权、环境身份、进程树归属，返回任务 ID/状态；必须通过同一 host 的停止机制清理子进程。Android 使用共享任务控制器等待保存、映射路径、分配 PTY 会话及进程 owner。Ctrl+F5 仅对激活源码执行；重复按键/忙任务不创建新进程。Core API 成功回复 STARTING 是排队状态，不是编译成功；实际退出码和输出在 Terminal 中。停止和关闭会话按 owner 清理整个子进程树，ProjectRunner 任务使用不同 owner。每任务 TMPDIR 位于认证资源目录下，Basic 编译临时目录使用该 TMPDIR；即使硬停止使 shell EXIT trap 没机会运行，host 的 NonCancellable NOFOLLOW 清理也会删除该任务临时文件。
 
 ## 8. 语言注册与文件识别
 

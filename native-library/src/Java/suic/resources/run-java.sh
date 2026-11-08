@@ -10,7 +10,7 @@ unset JAVA_HOME
 "$JAVA_HOME/bin/java" -version || fail_env 'Managed Java cannot run.'
 cd -- "$(dirname -- "$1")" || { echo '[QuickRun file error] Cannot open source directory.' >&2; exit 66; }
 [ -f "$1" ] && [ -r "$1" ] || { echo '[QuickRun file error] Source is not readable.' >&2; exit 66; }
-BUILD=$(mktemp -d /tmp/sui-quickrun-XXXXXX) || exit 73
+BUILD=$(mktemp -d "${TMPDIR:-/tmp}/sui-quickrun-XXXXXX") || exit 73
 trap 'rm -rf -- "$BUILD"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM

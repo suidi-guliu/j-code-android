@@ -34,7 +34,7 @@ open class NativeRecipe internal constructor(
         }
         fun command(value: JsonElement)=value.jsonArray.joinToString(" ") { quote(expand(it.jsonPrimitive.content)) }
         return buildString {
-            append("#!/bin/bash\nset -u\ncd -- ${quote(project)} || exit 66\n")
+            append("#!/bin/bash\nset -u\nexport TMPDIR=${quote(resourceDirectory+"/tmp")}\nmkdir -p -- \"\$TMPDIR\" || exit 73\ncd -- ${quote(project)} || exit 66\n")
             prepare.forEach { append(command(it)+" || { echo '[Native compilation/preparation failed]' >&2; exit 65; }\n") }
             append(command(run)+"\nresult=\$?\nexit \"\$result\"\n")
         }

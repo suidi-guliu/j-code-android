@@ -62,6 +62,8 @@ class NativeProvidersTest {
                 assertTrue(finished,"Timed out: $fileName")
                 assertEquals(0,process.exitValue(),output.readText())
                 assertTrue("SUI_" in output.readText(),output.readText())
+                assertTrue(File(temp,"tmp").isDirectory)
+                assertTrue(File(temp,"tmp").listFiles().orEmpty().isEmpty(),"Basic task build output survived completion")
             }
             assertFalse(File(temp,"中文 空格 ' ; test/Hello.class").exists())
         } finally { temp.deleteRecursively() }
