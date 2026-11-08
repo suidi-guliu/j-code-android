@@ -62,7 +62,12 @@ jobs:
                       for failure in root.iter('failure'):
                           out.write('```text\n'+(failure.text or '')[-4000:]+'\n```\n')
               log=pathlib.Path('native-verification.log')
-              if log.exists():out.write('\n### Gradle tail\n```text\n'+'\n'.join(log.read_text().splitlines()[-100:])+'\n```\n')
+              if log.exists():
+                  tail='\n'.join(log.read_text().splitlines()[-100:])
+                  out.write('\n### Gradle tail\n```text\n'+tail+'\n```\n')
+                  if 'BUILD FAILED' in tail:
+                      encoded=tail[-7000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+                      print('::error title=Native Gradle diagnostics::'+encoded)
       - name: Verify development packages and reject the illegal plugin
         run: |
           set -euo pipefail
