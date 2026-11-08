@@ -10,7 +10,7 @@ plugins {
 // open release train (see docs/specifications/09-platform/02-build-variants-and-release.md), and
 // merges no longer move it. The release scripts parse this line, and `-PjcodeVersionName=…`
 // overrides it to add the pre-release label a Beta build carries (e.g. 1.7.7-beta.1).
-val jcodeVersion = "1.7.7"
+val jcodeVersion = "0.4.0"
 
 val jcodeVersionName: String =
     (project.findProperty("jcodeVersionName") as? String)?.trim()?.takeIf { it.isNotBlank() }
@@ -86,7 +86,7 @@ val jcodeUpdateChannel: String = if (jcodeIdSuffix == ".beta") "beta" else "stab
  */
 val jcodeApplicationId: String =
     (project.findProperty("jcodeApplicationId") as? String)?.trim()?.takeIf { it.isNotBlank() }
-        ?: "dev.blamspot.jcode"
+        ?: "dev.suicode.ide"
 
 android {
     namespace = "dev.blamspot.jcode"
@@ -96,14 +96,14 @@ android {
         applicationId = jcodeApplicationId
         minSdk = 33
         targetSdk = 33
-        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: jcodeVersionCode
+        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: 1070802
         versionName = jcodeVersionName
 
         buildConfigField("String", "UPDATE_CHANNEL", "\"$jcodeUpdateChannel\"")
 
         // Launcher name (AndroidManifest android:label="${appLabel}"). The Beta build overrides this
         // to "JCode.beta" in the release block below.
-        manifestPlaceholders["appLabel"] = "JCode"
+        manifestPlaceholders["appLabel"] = "sui-code"
 
         // Launcher icon (AndroidManifest android:icon/roundIcon). Every build sits on the same
         // tile; Debug and Beta swap in an adaptive icon whose mark is hollow instead (Beta's J,
@@ -129,9 +129,9 @@ android {
             // Dev builds install as a separate app (dev.blamspot.jcode.debug / "JCode (debug)") so an
             // `installDebug` never overwrites an installed release or beta build.
             applicationIdSuffix = ".debug"
-            manifestPlaceholders["appLabel"] = "JCode (debug)"
-            manifestPlaceholders["appIcon"] = "@mipmap/ic_launcher_debug"
-            manifestPlaceholders["appIconRound"] = "@mipmap/ic_launcher_debug_round"
+            manifestPlaceholders["appLabel"] = "sui-code"
+            manifestPlaceholders["appIcon"] = "@mipmap/ic_launcher"
+            manifestPlaceholders["appIconRound"] = "@mipmap/ic_launcher_round"
         }
         release {
             isMinifyEnabled = false
@@ -248,4 +248,10 @@ dependencies {
     androidTestImplementation(libs.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.espresso.core)
+}
+
+// Fixture changes must invalidate tests even when Kotlin classes did not change.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    inputs.dir(rootProject.file("native-library/v1"))
+    inputs.property("suiTestJdk",System.getenv("SUI_QUICKRUN_TEST_JAVA_HOME") ?: "unset")
 }

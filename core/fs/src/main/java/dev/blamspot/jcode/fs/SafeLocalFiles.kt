@@ -7,8 +7,8 @@ import java.nio.file.LinkOption
 import java.nio.file.StandardCopyOption
 
 /** Local mutations never truncate an existing document before its replacement is safely written. */
-internal object SafeLocalFiles {
-    private fun child(parent: File, relative: String, nested: Boolean): File {
+object SafeLocalFiles {
+    internal fun child(parent: File, relative: String, nested: Boolean): File {
         require(relative.isNotBlank() && '\u0000' !in relative && !File(relative).isAbsolute) { "Invalid relative name" }
         val parts = relative.split('/')
         require(parts.all { it.isNotEmpty() && it != "." && it != ".." }) { "Names cannot escape the selected folder" }

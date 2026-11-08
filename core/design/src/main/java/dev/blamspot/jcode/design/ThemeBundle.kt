@@ -27,13 +27,8 @@ data class ThemeBundle(
 }
 
 object ThemeBundleRegistry {
-    val builtIns: List<ThemeBundle> = listOf(
-        catppuccinBundle,
-        pierreDarkBundle,
-        nightOwlBundle,
-    )
-
-    val default: ThemeBundle get() = pierreDarkBundle
+    val builtIns: List<ThemeBundle> = listOf(suiThemeBundle)
+    val default: ThemeBundle get() = suiThemeBundle
 
     fun byId(id: String?): ThemeBundle = builtIns.firstOrNull { it.id == id } ?: default
 }

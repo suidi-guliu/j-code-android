@@ -1260,6 +1260,27 @@ class DistroService(
         )
     }
 
+    /** Cancellable preparation for a reviewed Kit; never used for apt/dpkg installation. */
+    suspend fun execOwned(command: String,workdir: String,owner: String,timeoutMs: Long=300_000L): ExecResult = withContext(Dispatchers.IO) {
+        require(owner.startsWith("sui-kit:"))
+        val process=spawnStdioProcess(command,workdir=workdir,owner=owner) ?: return@withContext ExecResult(internalError="Cannot start Kit preparation",exitCode=1)
+        val stdout=StringBuffer();val stderr=StringBuffer()
+        fun drain(input: java.io.InputStream,target: StringBuffer)=Thread {
+            runCatching { input.bufferedReader().useLines { lines -> lines.forEach { line -> synchronized(target) { if(target.length<2*1024*1024) target.append(line).append('\n') } } } }
+        }.apply { isDaemon=true;start() }
+        val out=drain(process.inputStream,stdout);val err=drain(process.errorStream,stderr)
+        try {
+            val completed=kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { while(process.isAlive) kotlinx.coroutines.delay(50);true } ?: false
+            if(completed) { out.join(1000);err.join(1000) }
+            ExecResult(stdout=stdout.toString(),stderr=stderr.toString(),exitCode=if(completed) process.exitValue() else 124,internalError=if(completed) null else "Kit preparation timed out")
+        } finally {
+            withContext(kotlinx.coroutines.NonCancellable+Dispatchers.IO) {
+                GuestProcessTree.destroyBlocking(process)
+                runCatching { process.inputStream.close() };runCatching { process.errorStream.close() };runCatching { process.outputStream.close() }
+            }
+        }
+    }
+
     /** Whether the runtime is installed and the jcode user is ready (scaffold readiness gate). */
     fun isRuntimeReady(): Boolean {
         val state = _environmentState.value
@@ -1600,12 +1621,22 @@ class DistroService(
      * (the Android SDK one is ~9 KB) and the tail was lost. The rootfs is app-private storage, so
      * the host can just write the file.
      */
-    fun stageGuestFile(guestPath: String, content: String): Boolean = runCatching {
-        val distroId = _environmentState.value.runtime.selectedDistro.id
-        if (!rootfsManager.isDistroInstalled(distroId)) return false
-        val target = File(rootfsManager.getRootfsPath(distroId), guestPath.trimStart('/'))
-        target.parentFile?.mkdirs()
-        target.writeText(content)
+    fun stageGuestFile(guestPath: String, content: String): Boolean = stageGuestBytes(guestPath,content.toByteArray(Charsets.UTF_8))
+
+    fun stageGuestBytes(guestPath: String,content: ByteArray): Boolean = runCatching {
+        val distroId=_environmentState.value.runtime.selectedDistro.id
+        if(!rootfsManager.isDistroInstalled(distroId) || '\u0000' in guestPath) return false
+        val root=rootfsManager.getRootfsPath(distroId).canonicalFile
+        val target=File(root,guestPath.trimStart('/')).canonicalFile
+        check(target.toPath().startsWith(root.toPath()) && target!=root) { "Invalid guest staging path" }
+        val parent=target.parentFile ?: error("Missing staging parent")
+        check(parent.isDirectory || parent.mkdirs())
+        val temp=java.nio.file.Files.createTempFile(parent.toPath(),".sui-stage-",".tmp")
+        try {
+            java.io.FileOutputStream(temp.toFile()).use { it.write(content);it.fd.sync() }
+            temp.toFile().setReadable(true,false)
+            java.nio.file.Files.move(temp,target.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE,java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        } finally { java.nio.file.Files.deleteIfExists(temp) }
         true
     }.getOrDefault(false)
 

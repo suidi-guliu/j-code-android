@@ -34,3 +34,9 @@ dependencies {
     ksp(libs.hilt.compiler)
     testImplementation(kotlin("test"))
 }
+
+// Fixture changes must invalidate tests even when Kotlin classes did not change.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    inputs.dir(rootProject.file("native-library/src"))
+    inputs.property("suiTestJdk",System.getenv("SUI_QUICKRUN_TEST_JAVA_HOME") ?: "unset")
+}

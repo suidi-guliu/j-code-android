@@ -2,6 +2,7 @@ package dev.blamspot.jcode
 
 import dev.blamspot.jcode.core.distro.*
 import dev.blamspot.jcode.fs.*
+import dev.suicode.packages.*
 import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
@@ -27,11 +28,21 @@ class InternalFilesQuickRunIntegrationTest {
                 val jdk = System.getenv("SUI_QUICKRUN_TEST_JAVA_HOME") ?: System.getProperty("java.home")
                 writeText("export JAVA_HOME='${jdk.replace("'", "'\\''")}'\n")
             }
+            val registry=NativeProviders()
+            val library=File("../native-library/v1")
+            for(language in listOf("Java","C_CPP","Python")) {
+                val pack=PackageVerifier().verify(File(library,"$language.suic").readBytes(),"suic")
+                registry.register(pack,PluginLoader().activate(pack,Consent(pack.digest,pack.permissions,true),emptyMap()))
+            }
+            val resourceDir=Files.createTempDirectory("sui-package-").toFile()
             for ((name, text) in cases) {
                 val document = File(folder,name).apply { writeText("stale content must not run") }
                 val path = prepareQuickRun({ PosixFs().write(FsPath.Local(document),text.toByteArray()); true }) { document.canonicalPath }
-                val adapter = QuickRunLanguages.forFile(name) ?: error("Missing adapter")
-                val command = adapter.command(path).replace("MANAGED_ENV=/opt/sui-code/java.env", "MANAGED_ENV='${javaEnv.path}'")
+                val adapter = registry.resolve(name) ?: error("Missing adapter")
+                adapter.resources().forEach { (entry,data) ->
+                    File(resourceDir,entry).apply { parentFile.mkdirs();writeText(data.toString(Charsets.UTF_8).replace("MANAGED_ENV=/opt/sui-code/java.env","MANAGED_ENV='${javaEnv.path}'")) }
+                }
+                val command = adapter.script(path,resourceDir.path)
                 val script = File(files,"runner.sh").apply { writeText(command) }
                 val output = File(files,"output.txt")
                 val process = ProcessBuilder("bash",script.path).redirectErrorStream(true).redirectOutput(output).start()
@@ -41,6 +52,7 @@ class InternalFilesQuickRunIntegrationTest {
                 assertTrue(output.readText().contains("-SAVED"))
                 assertEquals(text,document.readText())
             }
+            resourceDir.deleteRecursively()
             assertEquals("preserve me",preserved.readText())
             assertFalse(root.walk().any { it.extension in setOf("class","o","pyc") || it.name=="program" })
             assertEquals(root.canonicalPath,InternalFiles.root(File(files.path)).canonicalPath)

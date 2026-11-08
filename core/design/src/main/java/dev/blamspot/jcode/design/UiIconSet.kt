@@ -156,9 +156,10 @@ class UiIconSet(
 
 /** Built-in Material icon set, unified to the Rounded family for consistency. Always complete. */
 val defaultUiIconSet = UiIconSet.ofVectors(
-    id = "material",
-    name = "Material Rounded",
-    description = "The built-in Material rounded icon set.",
+    id = "sui-native",
+    name = "sui-code Symbols",
+    author = "sui-code / Material Design (Apache-2.0)",
+    description = "Fixed semantic symbols for the native design system.",
     overrides = mapOf(
         JCodeIcon.Run to Icons.Rounded.PlayArrow,
         JCodeIcon.Stop to Icons.Rounded.Stop,
@@ -251,7 +252,7 @@ val defaultUiIconSet = UiIconSet.ofVectors(
 
 object UiIconSetRegistry {
     // Hand-drawn vector packs are appended here (see JCodeLineIconSet.kt).
-    val builtIns: List<UiIconSet> = listOf(defaultUiIconSet) + customUiIconSets
+    val builtIns: List<UiIconSet> = listOf(defaultUiIconSet)
 
     val default: UiIconSet get() = defaultUiIconSet
 

@@ -57,7 +57,7 @@ class LspSession(
     var onNotification: ((String, JSONObject) -> Unit)? = null
 
     /** Handles a server-initiated `workspace/applyEdit`; returns whether the edit was applied. */
-    var onApplyEdit: ((JSONObject) -> Boolean)? = null
+    var onApplyEdit: (suspend (JSONObject) -> Boolean)? = null
 
     /** Human-readable reason the session failed, when [state] is [LspState.ERROR]. */
     @Volatile var errorMessage: String? = null
@@ -76,7 +76,8 @@ class LspSession(
         _state.value = LspState.STARTING
         try {
             // --noprofile --norc so a user's shell configuration cannot inject output into the stream.
-            val command = "exec bash --noprofile --norc -c '${descriptor.runCommand}'"
+            val workspaceId = java.security.MessageDigest.getInstance("SHA-256").digest(projectRoot.toByteArray()).joinToString("") { "%02x".format(it) }
+            val command = "exec bash --noprofile --norc -c " + dev.blamspot.jcode.core.distro.shellQuote(descriptor.runCommand.replace("\${workspaceId}", workspaceId))
             transport = transportFactory(command) ?: throw LspException("runtime is not ready")
             _state.value = LspState.RUNNING
             readJob = scope.launch { readLoop() }
@@ -95,6 +96,7 @@ class LspSession(
     private fun initializeParams(rootUri: String): JSONObject = JSONObject().apply {
         put("processId", android.os.Process.myPid())
         put("rootUri", rootUri)
+        put("initializationOptions", JSONObject(descriptor.initializationOptions))
         put("workspaceFolders", JSONArray().put(workspaceFolder(rootUri)))
         put("capabilities", JSONObject().apply {
             put("textDocument", JSONObject().apply {
@@ -462,8 +464,10 @@ class LspSession(
             "workspace/workspaceFolders" ->
                 respond(id, JSONArray().put(workspaceFolder(hostToDistroUri(projectRoot))))
             "workspace/applyEdit" -> {
-                val applied = onApplyEdit?.invoke(params.optJSONObject("edit") ?: JSONObject()) ?: false
-                respond(id, JSONObject().apply { put("applied", applied) })
+                scope.launch {
+                    val applied = runCatching { onApplyEdit?.invoke(params.optJSONObject("edit") ?: JSONObject()) ?: false }.getOrDefault(false)
+                    respond(id, JSONObject().apply { put("applied", applied) })
+                }
             }
             "client/registerCapability", "client/unregisterCapability",
             "window/workDoneProgress/create", "window/showMessageRequest",

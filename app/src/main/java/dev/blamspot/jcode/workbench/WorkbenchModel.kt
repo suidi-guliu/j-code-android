@@ -231,9 +231,11 @@ internal enum class WorkbenchTool(
     Search("Search", JCodeIcon.Search, "Find"),
     Scm("SCM", JCodeIcon.Scm, "SCM"),
     RunDebug("Run", JCodeIcon.Run, "Run"),
-    Extensions("Extensions", JCodeIcon.Extensions, "Ext"),
+    Extensions("Plugin Center", JCodeIcon.Extensions, "Plugins"),
+    IdeKits("IDE Kit Center", JCodeIcon.Code, "IDE Kits"),
+    Packages("Package Manager", JCodeIcon.Destinations, "Packages"),
     /** SDKs + language servers + debug engines, merged into one searchable/filterable catalog. */
-    ToolchainManager("Toolchains", JCodeIcon.Sdk, "Tools"),
+    ToolchainManager("Language Center", JCodeIcon.Sdk, "Languages"),
     DbManager("DB Managers", JCodeIcon.Database, "DB"),
     VmManager("VM Manager", JCodeIcon.Vm, "VM"),
     Settings("Settings", JCodeIcon.Settings, "Settings"),
@@ -299,3 +301,5 @@ internal sealed interface RightPanelSelection {
         }
     }
 }
+
+internal val LocalNativeNavigation = compositionLocalOf<(Int)->Unit> { {} }

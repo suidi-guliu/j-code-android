@@ -39,7 +39,8 @@ class DebugSession(
     private val transportFactory: (command: String) -> DapTransport?,
 ) : Closeable {
 
-    private var transport: DapTransport? = null
+    private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var transport: DapTransport? = null
     private var readJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val seq = AtomicInteger(0)
@@ -83,12 +84,13 @@ class DebugSession(
         configuration: JSONObject,
         breakpoints: Map<String, List<Int>> = emptyMap(),
     ) {
-        if (_state.value != DebugState.DISCONNECTED) return
+        if (closed.get() || _state.value != DebugState.DISCONNECTED) return
         _state.value = DebugState.STARTING
         try {
             val escaped = adapterCommand.replace("'", "'\\''")
             transport = transportFactory("exec bash --noprofile --norc -c '$escaped'")
                 ?: throw DebugException("Could not start debug adapter")
+            if (closed.get()) { transport?.close(); transport=null; return }
             readJob = scope.launch { readLoop() }
             _state.value = DebugState.INITIALIZING
 
@@ -99,8 +101,8 @@ class DebugSession(
             }
 
             capabilities = sendRequest("initialize", JSONObject().apply {
-                put("clientID", "jcode")
-                put("clientName", "JCode")
+                put("clientID", "sui-code")
+                put("clientName", "sui-code")
                 put("adapterID", debugType)
                 put("locale", "en")
                 put("linesStartAt1", true)
@@ -359,6 +361,7 @@ class DebugSession(
         dev.blamspot.jcode.core.distro.WorkspaceHostPaths.guestToHost(distroPath).replace("/", java.io.File.separator)
 
     override fun close() {
+        if(!closed.compareAndSet(false,true)) return
         scope.launch { runCatching { sendRequest("disconnect", JSONObject().put("terminateDebuggee", true)) } }
         readJob?.cancel()
         transport?.close(); transport = null

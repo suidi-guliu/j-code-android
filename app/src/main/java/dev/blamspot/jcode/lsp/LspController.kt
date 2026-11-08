@@ -32,6 +32,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -116,7 +117,7 @@ class LspController(
     val missingServer: SharedFlow<LspCatalogEntry> = _missingServer.asSharedFlow()
 
     /** Applied when a server pushes a `workspace/applyEdit`; returns whether the edit was applied. */
-    var onApplyEdit: ((WorkspaceEditResult) -> Boolean)? = null
+    var onApplyEdit: (suspend (WorkspaceEditResult) -> Boolean)? = null
 
     init {
         // Installing a server from the prompt has to affect the file that triggered the prompt, which
@@ -211,6 +212,9 @@ class LspController(
     }
 
     // ---- language features ----------------------------------------------------------------------
+
+    suspend fun executeCommand(hostPath: String,command: String,arguments: org.json.JSONArray = org.json.JSONArray()): Any? =
+        withReadySession(hostPath,null) { session,_ -> session.sendRequest("workspace/executeCommand",JSONObject().put("command",command).put("arguments",arguments),180_000L) }
 
     suspend fun completions(hostPath: String, line: Int, character: Int): List<CompletionResult> =
         withReadySession(hostPath, emptyList()) { session, uri -> session.completion(uri, line, character) }
@@ -354,7 +358,9 @@ class LspController(
         block: suspend (LspSession, String) -> T,
     ): T {
         val (managed, document) = readySession(hostPath) ?: return fallback
-        return runCatching { block(managed.session, document.uri) }.getOrDefault(fallback)
+        return try { block(managed.session, document.uri) }
+        catch(e: kotlinx.coroutines.CancellationException) { throw e }
+        catch(_: Exception) { fallback }
     }
 
     private fun readySession(hostPath: String): Pair<Managed, OpenDocument>? {
@@ -405,6 +411,7 @@ class LspController(
         val session = LspSession(descriptor, key.root) { command ->
             distroService.spawnStdioProcess(
                 command = command,
+                owner="sui-kit:${descriptor.ownerPackage}/lsp:${key.hashCode()}",
                 workdir = WorkspaceHostPaths.hostToGuest(key.root),
             )?.let { process ->
                 ProcessLspTransport(process) { line -> sessions[key]?.recordStderr(line) }

@@ -13,6 +13,7 @@ import dev.blamspot.jcode.core.distro.DistroService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +44,10 @@ class DebugController(
     // Keep the caller's lifecycle (cancellation still cascades) but do the work off the main thread.
     private val scope = CoroutineScope(parentScope.coroutineContext + Dispatchers.IO)
 
+    var resolveKitPlan: (suspend (DebugEngineEntry,String,String)->dev.suicode.packages.ResolvedDebugPlan)? = null
+    private var preparation: kotlinx.coroutines.Job? = null
+    private val generation = java.util.concurrent.atomic.AtomicLong()
+    @Volatile private var ownerPackage: String? = null
     private var session: DebugSession? = null
     /** The session that owns the current stopped thread (root, or a js-debug child) — step/continue target. */
     private var activeSession: DebugSession? = null
@@ -97,7 +102,7 @@ class DebugController(
      * .NET works fine, so point there instead of leaving a bare adapter error on screen.
      */
     /** Start debugging [hostPath] (its language picks the engine) with the current [bps] breakpoints. */
-    fun startDebug(hostPath: String, projectDir: String, bps: Map<String, Set<Int>>) {
+    @Synchronized fun startDebug(hostPath: String, projectDir: String, bps: Map<String, Set<Int>>) {
         stop()
         currentBps = bps
         ended = false
@@ -108,31 +113,21 @@ class DebugController(
             _state.value = DebugState.ERROR
             return
         }
-        // The JVM entry is a JDWP placeholder with no DAP adapter — launching it would just hang on
-        // the `initialize` request until it times out. Fail fast with an actionable message instead.
-        if (!engine.dapAdapter) {
-            pushOutput(
-                "Debugging ${hostPath.substringAfterLast('/')} isn't available yet: JCode has no " +
-                    "built-in ${engine.name} adapter.\nRun the program with " +
-                    "`-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005` in a terminal " +
-                    "and attach an external debugger.\n",
-            )
-            _state.value = DebugState.ERROR
-            return
-        }
-        // STARTING covers the prepare phase (a .NET build can take a while) so the UI shows progress
-        // before any adapter process exists.
         _state.value = DebugState.STARTING
         pushOutput("Preparing ${engine.name}…\n")
-        scope.launch {
-            val plan = runCatching { prepareLaunch(engine, hostPath, projectDir) }
-                .onFailure { pushOutput("Debug setup failed: ${it.message}\n") }
-                .getOrNull()
+        ownerPackage = engine.ownerPackage
+        val ticket = generation.get()
+        preparation = scope.launch {
+            val plan = try { prepareLaunch(engine, hostPath, projectDir) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { if (generation.get()==ticket) pushOutput("Debug setup failed: ${e.message}\n"); null }
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (generation.get()!=ticket) return@launch
             if (plan == null) {
                 _state.value = DebugState.ERROR
                 return@launch
             }
-            beginSession(engine, plan, hostPath)
+            synchronized(this@DebugController) { if (generation.get()==ticket) beginSession(engine, plan, hostPath) }
         }
     }
 
@@ -142,8 +137,11 @@ class DebugController(
                 "JCodeDAP-adapter",
                 "spawn user=${plan.user ?: "<default>"} cwd=${plan.distroCwd} cmd=$command",
             )
+            if (engine.transport=="lsp" && plan.tcpPort!=null) {
+                SocketTransport.connect("127.0.0.1",plan.tcpPort,12_000L)
+            } else {
             val proc = distroService.spawnStdioProcess(
-                command, workdir = plan.distroCwd, userOverride = plan.user, extraPath = plan.adapterPath,
+                command, workdir = plan.distroCwd, userOverride = plan.user, extraPath = plan.adapterPath,owner="sui-kit:${engine.ownerPackage}/dap",
             )
             when {
                 proc == null -> null
@@ -151,26 +149,28 @@ class DebugController(
                 plan.tcpPort != null -> TcpTransport.connect("127.0.0.1", plan.tcpPort, proc, 12_000L)
                 else -> ProcessTransport(proc)
             }
+            }
         }
         sessionCwd = plan.distroCwd
         rootTcpPort = plan.tcpPort
         val s = DebugSession(engine.debugType, plan.distroCwd, transportFactory)
         session = s
         activeSession = s
-        s.onOutput = { _, text -> pushOutput(text) }
-        s.onTerminated = { endSession() }
+        s.onOutput = { _, text -> if (session===s) pushOutput(text) }
+        s.onTerminated = { if (session===s) endSession() }
         // js-debug (multi-session): the root adapter asks us — via a `startDebugging` reverse request —
         // to open the CHILD session where the debuggee runs and breakpoints bind. Single-session adapters
         // (python/coreclr/lldb) never fire this, so this is inert for them.
         s.onStartDebugging = { request, config -> spawnChild(request, config) }
         // While preparing we hold STARTING; ignore the fresh session's initial DISCONNECTED so the
         // panel doesn't flicker back to the launch row between build and adapter start.
-        scope.launch { s.state.collect { if (!(it == DebugState.DISCONNECTED && _state.value == DebugState.STARTING)) _state.value = it } }
+        scope.launch { s.state.collect { if (session===s && !(it == DebugState.DISCONNECTED && _state.value == DebugState.STARTING)) _state.value = it } }
         scope.launch { s.stopped.collect { st -> if (st != null) onStopped(s, st) else clearStoppedView() } }
 
         val distroBreakpoints = distroBps() // DAP lines are 1-based; applied on `initialized`
         pushOutput("Starting ${engine.name} on ${hostPath.substringAfterLast('/')}…\n")
         scope.launch {
+            if(session!==s) return@launch
             runCatching { s.start(plan.adapterCommand, plan.request, plan.config, distroBreakpoints) }
                 .onFailure { pushOutput("Debug failed: ${it.message}\n"); _state.value = DebugState.ERROR }
             // start() swallows a failed adapter launch (bad transport / handshake) into DISCONNECTED
@@ -187,347 +187,11 @@ class DebugController(
         }
     }
 
-    /**
-     * The `site-packages` of the virtualenv a Run config built for this project, or null when there
-     * is none yet.
-     *
-     * A project's dependencies are almost never importable from the system interpreter: `/workspace`
-     * is a noexec FUSE mount, so a venv cannot live beside the source and every run recipe stages to
-     * `$HOME/.jcode-run/<name>…` on ext4 and builds the venv *there* (see `ProjectRunner`). Debugging
-     * against the bare system interpreter therefore ran the right file in the wrong environment and
-     * died on the first third-party import — `ModuleNotFoundError: No module named 'flask'` on a
-     * project whose Run worked seconds earlier.
-     *
-     * This returns the package directory rather than the venv's `bin/python` because the venv is
-     * built without system site-packages and so has no `debugpy` of its own; handing debugpy that
-     * interpreter makes the debuggee die with "No module named debugpy" and the session times out
-     * waiting for it. Keeping the system interpreter (which has debugpy) and putting these packages
-     * on `PYTHONPATH` gives both halves. The venv is created by that same `python3`, so the ABI
-     * matches. The glob covers the per-terminal suffixes recipes append (`-web`, `-server`, …).
-     */
-    private suspend fun stagedVenvSitePackages(distroProjectDir: String): String? {
-        val name = distroProjectDir.trimEnd('/').substringAfterLast('/')
-        if (name.isBlank()) return null
-        val result = runCatching {
-            distroService.exec(
-                // Both homes explicitly, as root: `exec` defaults to the `jcode` user but run
-                // terminals are root, so a venv a Run built sits in /root/.jcode-run — which is
-                // mode 700 and unreadable as `jcode`. This only ever lists paths.
-                command = "ls -d /root/.jcode-run/$name*/.venv/lib/python*/site-packages " +
-                    "/home/*/.jcode-run/$name*/.venv/lib/python*/site-packages 2>/dev/null | head -1",
-                workdir = distroProjectDir,
-                timeoutMs = 10_000L,
-                user = "root",
-            )
-        }.getOrNull() ?: return null
-        return result.stdout.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
-    }
-
-    /** Per-language launch preparation: interpreted langs run the source directly; compiled/served
-     *  langs need a build or a TCP adapter. Runs off the main thread (a .NET build blocks). */
     private suspend fun prepareLaunch(engine: DebugEngineEntry, hostPath: String, projectDir: String): LaunchPlan {
-        val distroCwd = hostToDistro(projectDir)
-        return when (engine.debugType) {
-            "python" -> {
-                // Debug the project against the dependencies Run installed for it, or every
-                // third-party import fails here. See [stagedVenvSitePackages].
-                val venvPackages = stagedVenvSitePackages(distroCwd)
-                LaunchPlan(
-                    distroCwd = distroCwd,
-                    config = baseConfig("python", distroCwd).apply {
-                        put("program", hostToDistro(hostPath)); put("justMyCode", false); put("redirectOutput", true)
-                        venvPackages?.let { put("env", JSONObject().put("PYTHONPATH", it)) }
-                    },
-                    adapterCommand = engine.adapterCommand,
-                    tcpPort = null,
-                    // Those packages sit in the run user's home, which is mode 700, so the debuggee
-                    // has to be that user to read them at all. Run already executes the app as root,
-                    // so this is parity with Run rather than a new privilege.
-                    user = if (venvPackages != null) "root" else null,
-                )
-            }
-            "coreclr" -> prepareDotnet(engine, hostPath, projectDir)
-            "java" -> prepareJvm(engine, hostPath, projectDir)
-            "lldb" -> prepareNative(engine, hostPath, projectDir)
-            "pwa-node" -> {
-                val port = randomDebugPort()
-                LaunchPlan(
-                    distroCwd = distroCwd,
-                    config = baseConfig("pwa-node", distroCwd).apply { put("program", hostToDistro(hostPath)) },
-                    adapterCommand = engine.adapterCommand.replace("{{port}}", port.toString()),
-                    tcpPort = port,
-                )
-            }
-            "pwa-chrome" -> {
-                val port = randomDebugPort()
-                LaunchPlan(
-                    distroCwd = distroCwd,
-                    config = baseConfig("pwa-chrome", distroCwd).apply {
-                        put("url", "http://127.0.0.1:5173"); put("webRoot", distroCwd)
-                    },
-                    adapterCommand = engine.adapterCommand.replace("{{port}}", port.toString()),
-                    tcpPort = port,
-                )
-            }
-            else -> LaunchPlan(
-                distroCwd = distroCwd,
-                config = baseConfig(engine.debugType, distroCwd).apply {
-                    put("program", hostToDistro(hostPath)); put("args", JSONArray())
-                },
-                adapterCommand = engine.adapterCommand,
-                tcpPort = null,
-            )
-        }
+        val result=resolveKitPlan?.invoke(engine,hostPath,projectDir)
+            ?: throw dev.blamspot.jcode.core.debug.DebugException("No enabled native IDE Kit provides this launch workflow")
+        return LaunchPlan(result.cwd,JSONObject(result.launch.toString()),engine.adapterCommand,tcpPort=result.port)
     }
-
-    /**
-     * Compile the source and point lldb at the binary it produced.
-     *
-     * lldb debugs a *program*; handing it a `.c` gets "doesn't contain any 'objfile'", which is what
-     * every C/C++/Rust session did before this — the generic launch path passed the source through as
-     * `program`, an assumption that only holds for Python, where the source really is the program.
-     * Java and .NET already build first ([prepareJava], [prepareDotnet]); this is the same step for
-     * native code.
-     *
-     * `-g` is the point: without DWARF there is nothing to map a breakpoint back to a line with. `-O0`
-     * keeps the mapping honest, since optimised code reorders and folds away the statements you set
-     * breakpoints on.
-     */
-    private suspend fun prepareNative(engine: DebugEngineEntry, hostPath: String, projectDir: String): LaunchPlan {
-        val srcFile = java.io.File(hostPath)
-        val srcDistro = hostToDistro(hostPath)
-        val outDir = "/tmp/jcode-native"
-        val outBin = "$outDir/${srcFile.nameWithoutExtension}"
-        // A header is not a translation unit; compiling one produces no program to run. Say so rather
-        // than letting the compiler emit something obscure about precompiled headers.
-        val compile = when (val ext = srcFile.extension.lowercase()) {
-            "c" -> "cc -g -O0 -o '$outBin' '$srcDistro'"
-            "cpp", "cc", "cxx" -> "c++ -g -O0 -o '$outBin' '$srcDistro'"
-            "rs" -> "rustc -g -o '$outBin' '$srcDistro'"
-            else -> throw dev.blamspot.jcode.core.debug.DebugException(
-                "Can't debug a .$ext on its own — open the .c/.cpp/.rs that defines main().",
-            )
-        }
-        pushOutput("Compiling ${srcFile.name}…\n")
-        val build = distroService.exec(
-            command = "mkdir -p '$outDir' && rm -f '$outBin' && $compile",
-            workdir = hostToDistro(projectDir),
-            timeoutMs = 300_000L,
-            onLine = { pushOutput(it + "\n") },
-        )
-        if (!build.succeeded) {
-            // The compiler's own diagnostics are already in the console via onLine; this is the summary.
-            throw dev.blamspot.jcode.core.debug.DebugException(
-                build.stderr.lineSequence().firstOrNull { it.isNotBlank() }
-                    ?: "Compile failed (exit ${build.exitCode ?: build.internalError}).",
-            )
-        }
-        pushOutput("Launching ${srcFile.nameWithoutExtension} under ${engine.name}…\n")
-        val distroCwd = hostToDistro(projectDir)
-        return LaunchPlan(
-            distroCwd = distroCwd,
-            config = baseConfig(engine.debugType, distroCwd).apply {
-                put("program", outBin)
-                put("args", JSONArray())
-                // lldb resolves breakpoints back to the source through DWARF, which records the path
-                // the compiler saw — the guest path, which is what the editor's breakpoints use too.
-                put("stopOnEntry", false)
-            },
-            adapterCommand = engine.adapterCommand,
-            tcpPort = null,
-            // lldb-dap must run as root. It debugs through ptrace, and proot only grants that to its
-            // fake-root (-0) user: spawned as the unprivileged runtime user, lldb-server starts but
-            // never attaches to the inferior, so `launch` never answers and the session times out
-            // after 30s with no output at all from the adapter.
-            user = "root",
-        )
-    }
-
-    /** Build the enclosing .csproj and point netcoredbg at the produced DLL (source alone won't launch). */
-    private suspend fun prepareDotnet(engine: DebugEngineEntry, hostPath: String, projectDir: String): LaunchPlan {
-        val csproj = findCsproj(hostPath, projectDir)
-            ?: throw dev.blamspot.jcode.core.debug.DebugException("No .csproj found near ${hostPath.substringAfterLast('/')}.")
-        val csprojDir = csproj.parentFile ?: throw dev.blamspot.jcode.core.debug.DebugException("Bad project path.")
-        val distroDir = hostToDistro(csprojDir.path)
-        // .NET lives under /root/.dotnet (installed as root); build with that HOME/PATH.
-        val dotnetPath = "/root/.dotnet:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        // Under proot the .NET GC otherwise tries to reserve 256 GiB of address space and CoreCLR fails
-        // to start (0x8007000E) — for the Roslyn compiler AND the debuggee. Cap the heap to 1 GiB.
-        val gcHeapLimit = "0x40000000"
-        val env = mapOf(
-            "HOME" to "/root", "DOTNET_ROOT" to "/root/.dotnet", "DOTNET_CLI_TELEMETRY_OPTOUT" to "1",
-            "DOTNET_GCHeapHardLimit" to gcHeapLimit, "PATH" to dotnetPath,
-        )
-        pushOutput("Building ${csproj.name} (dotnet build)…\n")
-        val build = distroService.exec(
-            command = "cd '$distroDir' && dotnet build -c Debug -v m",
-            workdir = distroDir,
-            env = env,
-            timeoutMs = 600_000L,
-            onLine = { pushOutput(it + "\n") },
-            user = "root",
-        )
-        if (!build.succeeded) {
-            throw dev.blamspot.jcode.core.debug.DebugException("dotnet build failed (exit ${build.exitCode ?: build.internalError}).")
-        }
-        val builtDll = findBuiltDll(csprojDir, build.stdout)
-            ?: throw dev.blamspot.jcode.core.debug.DebugException("Build succeeded but no output DLL was found.")
-        // Stage the build output onto ext4 before debugging. /workspace is a noexec FUSE mount and
-        // netcoredbg cannot debug a program launched from it — the identical binary, project and
-        // breakpoints hit from ext4 and fail from /workspace. The PDB still records the original
-        // /workspace source path, so breakpoints keep binding against the files the editor shows.
-        // Same reasoning, and the same destination filesystem, as ProjectRunner's run staging.
-        val stageDir = "/root/.jcode-debug/" + csprojDir.name.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        val outDir = builtDll.substringBeforeLast('/')
-        val dll = stageDir + "/" + builtDll.substringAfterLast('/')
-        val staged = distroService.exec(
-            command = "rm -rf '$stageDir' && mkdir -p '$stageDir' && cp -r '$outDir'/. '$stageDir'/",
-            workdir = distroDir,
-            env = env,
-            timeoutMs = 120_000L,
-            user = "root",
-        )
-        if (!staged.succeeded) {
-            throw dev.blamspot.jcode.core.debug.DebugException(
-                "Couldn't stage the build output for debugging (exit ${staged.exitCode ?: staged.internalError}).",
-            )
-        }
-        pushOutput("Launching $dll under netcoredbg…\n")
-        val config = baseConfig("coreclr", stageDir).apply {
-            put("program", dll)
-            put("stopAtEntry", false)
-            put("justMyCode", false)
-            put("env", JSONObject()
-                .put("DOTNET_ROOT", "/root/.dotnet")
-                .put("DOTNET_GCHeapHardLimit", gcHeapLimit)
-                .put("ASPNETCORE_ENVIRONMENT", "Development")
-                .put("PATH", dotnetPath))
-        }
-        // netcoredbg must run as root (where /root/.dotnet lives) with DOTNET_ROOT set, or CoreCLR
-        // hosting of the debuggee fails. It also needs the GC cap for ITSELF, not just for the build
-        // and the debuggee: netcoredbg hosts its own CoreCLR (to run ManagedPart.dll), so without the
-        // cap it hits the same 256 GiB reservation under proot and dies — leaving no adapter process
-        // at all, no debuggee, and a session stuck on "Running" with nothing in the console.
-        val adapterCommand = "export DOTNET_ROOT=/root/.dotnet DOTNET_GCHeapHardLimit=$gcHeapLimit; " +
-            "exec ${engine.adapterCommand}"
-        // netcoredbg itself also runs from the staged directory, not the project: the adapter
-        // inherits its working directory and the debuggee is launched relative to it, and the
-        // whole session only works when that side sits on ext4 too.
-        return LaunchPlan(stageDir, config, adapterCommand, tcpPort = null, user = "root", adapterPath = "/root/.dotnet")
-    }
-
-    /** Walk up from the source file to [projectDir] for a .csproj, else search a few levels down. */
-    private fun findCsproj(hostPath: String, projectDir: String): java.io.File? {
-        val root = java.io.File(projectDir)
-        var dir = java.io.File(hostPath).parentFile
-        while (dir != null && dir.path.length >= root.path.length) {
-            dir.listFiles { f -> f.extension == "csproj" }?.firstOrNull()?.let { return it }
-            dir = dir.parentFile
-        }
-        return root.walkTopDown().maxDepth(4).firstOrNull { it.extension == "csproj" }
-    }
-
-    /** The main output DLL: prefer dotnet's "Name -> /path/Name.dll" log line, else glob bin/Debug. */
-    private fun findBuiltDll(csprojDir: java.io.File, buildStdout: String): String? {
-        Regex("""->\s+(\S+\.dll)""").findAll(buildStdout).map { it.groupValues[1] }.lastOrNull()?.let { return it }
-        val name = csprojDir.listFiles { f -> f.extension == "csproj" }?.firstOrNull()?.nameWithoutExtension
-        val dll = java.io.File(csprojDir, "bin/Debug").walkTopDown()
-            .firstOrNull { it.extension == "dll" && (name == null || it.nameWithoutExtension == name) }
-        return dll?.let { hostToDistro(it.path) }
-    }
-
-    /** JVM sources take one of two shapes: an Android app (already built, installed and running on a
-     *  device — the debugger attaches to its ART process) or a plain source tree javac can compile and
-     *  launch here in the distro. */
-    private suspend fun prepareJvm(engine: DebugEngineEntry, hostPath: String, projectDir: String): LaunchPlan {
-        val module = withContext(Dispatchers.IO) { AndroidAppProject.appModuleFor(hostPath, projectDir) }
-        return if (module != null) prepareAndroidAttach(engine, projectDir, module)
-        else prepareJava(engine, hostPath, projectDir)
-    }
-
-    /**
-     * Attach to the Android app built from [module], running on the device behind the ADB bridge.
-     *
-     * There is nothing to launch: an APK's process is started by the system, and ART exposes JDWP only
-     * through adb's `jdwp:<pid>` service. [AndroidDebugAttach] marks the app debuggable-on-launch,
-     * resolves its pid and forwards that channel to a local TCP port; the adapter — which runs inside
-     * proot, sharing the app's network namespace — then attaches to 127.0.0.1:port like any socket JVM.
-     */
-    private suspend fun prepareAndroidAttach(
-        engine: DebugEngineEntry,
-        projectDir: String,
-        module: java.io.File,
-    ): LaunchPlan {
-        pushOutput("Android app module: ${module.name}\n")
-        val attach = AndroidDebugAttach(distroService, ::hostToDistro, ::pushOutput)
-        androidAttach = attach
-        val port = attach.attach(module)
-
-        val distroCwd = hostToDistro(projectDir)
-        val sourcePaths = AndroidAppProject.sourceRoots(module).map { hostToDistro(it.path) }
-        val config = baseConfig("java", distroCwd, request = "attach").apply {
-            put("hostName", "127.0.0.1")
-            put("port", port)
-            put("projectName", module.name)
-            put("sourcePaths", JSONArray().apply { sourcePaths.forEach { put(it) } })
-        }
-        // The adapter also takes source roots on its command line, which it parses itself — so
-        // stack-frame -> file resolution works even if the attach arguments don't carry sourcePaths.
-        val adapterCommand = engine.adapterCommand + sourcePaths.joinToString("") { " --source-path '$it'" }
-        return LaunchPlan(distroCwd, config, adapterCommand, tcpPort = null, request = "attach")
-    }
-
-    /** Compile the enclosing Java sources with javac and launch the main class under the java-debug
-     *  adapter (source alone won't run). The adapter speaks DAP over stdio, so there's no TCP leg. */
-    private suspend fun prepareJava(engine: DebugEngineEntry, hostPath: String, projectDir: String): LaunchPlan {
-        val srcFile = java.io.File(hostPath)
-        val text = runCatching { srcFile.readText() }.getOrDefault("")
-        if (!Regex("""static\s+void\s+main\s*\(\s*String""").containsMatchIn(text)) {
-            throw dev.blamspot.jcode.core.debug.DebugException(
-                "No `public static void main(String[])` in ${srcFile.name} — open the file with main().",
-            )
-        }
-        // Java requires the public type to match the file name, so that's the main class.
-        val pkg = Regex("""(?m)^\s*package\s+([\w.]+)\s*;""").find(text)?.groupValues?.get(1)
-        val mainFqn = (pkg?.let { "$it." } ?: "") + srcFile.nameWithoutExtension
-        // Source root = the directory above the package path (default package → the file's own dir).
-        var root = srcFile.parentFile ?: srcFile
-        pkg?.split('.')?.forEach { root = root.parentFile ?: root }
-        val srcRootDistro = hostToDistro(root.path)
-        val classesDir = "/tmp/jcode-java-classes"
-        pushOutput("Compiling ${srcFile.name} (javac)…\n")
-        val build = distroService.exec(
-            command = "rm -rf '$classesDir' && mkdir -p '$classesDir' && cd '$srcRootDistro' && " +
-                "javac -g -encoding UTF-8 -d '$classesDir' \$(find . -name '*.java')",
-            workdir = srcRootDistro,
-            timeoutMs = 300_000L,
-            onLine = { pushOutput(it + "\n") },
-        )
-        if (!build.succeeded) {
-            throw dev.blamspot.jcode.core.debug.DebugException("javac failed (exit ${build.exitCode ?: build.internalError}).")
-        }
-        pushOutput("Launching $mainFqn under ${engine.name}…\n")
-        val distroCwd = hostToDistro(projectDir)
-        val config = baseConfig("java", distroCwd).apply {
-            put("mainClass", mainFqn)
-            put("classPaths", JSONArray().put(classesDir))
-            put("sourcePaths", JSONArray().put(srcRootDistro))
-            put("vmArgs", "-Djava.net.preferIPv4Stack=true")
-            put("args", "")
-        }
-        return LaunchPlan(distroCwd, config, engine.adapterCommand, tcpPort = null)
-    }
-
-    private fun baseConfig(type: String, cwd: String, request: String = "launch"): JSONObject = JSONObject().apply {
-        put("type", type)
-        put("request", request)
-        put("name", "JCode Debug")
-        put("cwd", cwd)
-        put("console", "internalConsole")
-        put("stopOnEntry", false)
-    }
-
-    private fun randomDebugPort(): Int = 41000 + kotlin.random.Random.nextInt(4000)
 
     /** Current breakpoints as distro-path -> 1-based lines (DAP convention). */
     private fun distroBps(): Map<String, List<Int>> =
@@ -675,7 +339,14 @@ class DebugController(
         }
     }
 
-    fun stop() {
+    fun ownedBy(id: String): Boolean = ownerPackage==id
+
+    fun stopPackage(id: String) { if (ownerPackage==id) stop() }
+
+    @Synchronized fun stop() {
+        generation.incrementAndGet()
+        preparation?.cancel(); preparation=null
+        ownerPackage=null
         ended = true // a late `terminated` event must not resurrect the session as TERMINATED
         releaseAndroidAttachment()
         children.forEach { runCatching { it.close() } }
@@ -688,7 +359,7 @@ class DebugController(
     }
 
     /** A debuggee-driven end (root or last child terminated): tear everything down, exactly once. */
-    private fun endSession() {
+    @Synchronized private fun endSession() {
         if (ended) return
         ended = true
         _location.value = null
@@ -723,12 +394,6 @@ class DebugController(
     private fun engineForFile(hostPath: String, projectDir: String? = null): DebugEngineEntry? {
         val ext = "." + hostPath.substringAfterLast('.', "")
         DebugEngineCatalog.all.firstOrNull { ext in it.extensions }?.let { return it }
-        // Kotlin ships no engine of its own. In an Android app it compiles to JVM bytecode that the
-        // java-debug adapter debugs over ART's JDWP, so .kt resolves there — and only there, since
-        // outside an Android project nothing would be running to attach to.
-        if (ext == KOTLIN_EXT && AndroidAppProject.appModuleFor(hostPath, projectDir) != null) {
-            return DebugEngineCatalog.findById(JAVA_ENGINE_ID)
-        }
         return null
     }
 
@@ -780,7 +445,7 @@ private class ProcessTransport(private val process: Process) : DapTransport {
         }
     }
     override fun close() {
-        runCatching { process.destroy() }
+        dev.blamspot.jcode.core.distro.GuestProcessTree.destroy(process)
     }
 
     // Linux reports a signal-killed child as 128 + signal, which is how a segfaulting adapter
@@ -821,7 +486,7 @@ private class TcpTransport private constructor(
     }
     override fun close() {
         runCatching { socket.close() }
-        runCatching { process.destroy() }
+        dev.blamspot.jcode.core.distro.GuestProcessTree.destroy(process)
     }
 
     companion object {
@@ -874,7 +539,7 @@ private class TcpTransport private constructor(
             // connected to (js-debug) can't be told to `disconnect`, and destroy() doesn't reliably
             // trip proot's --kill-on-exit here, so the node/proot tree may linger until the app is
             // restarted. This only happens on the js-debug transport failure (see JCodeDAP-adapter log).
-            runCatching { process.destroy() }
+            dev.blamspot.jcode.core.distro.GuestProcessTree.destroy(process)
             return null
         }
     }

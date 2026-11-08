@@ -11,6 +11,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -164,9 +165,10 @@ internal fun SidebarToolButton(
     tool: WorkbenchTool,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier
+        modifier = modifier.heightIn(min=48.dp)
             .clip(RoundedCornerShape(Radius.xl))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(Radius.xl),

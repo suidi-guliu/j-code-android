@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,8 @@ internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: 
     val manager = remember(context) { DistroServiceLocator.distroService(context).javaEnvironmentManager }
     val state by manager.state.collectAsState()
     var confirmation by remember { mutableStateOf<JavaRelease?>(null) }
+    var management by remember { mutableStateOf<Pair<String,Boolean>?>(null) }
+    LaunchedEffect(environment.runtime.selectedDistro.id) { manager.refreshInstalled() }
     val supported = environment.runtime.selectedDistro.arch == Arch.ARM64
     val ready = environment.distroInstalled == true && environment.jcodeUserReady == true && supported
     Column(
@@ -64,10 +67,24 @@ internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: 
             }
         }
         if (state.busy) TextButton(onClick = manager::cancel) { Text("Cancel") }
+        Text("Installed JDKs",style=MaterialTheme.typography.titleMedium)
+        TextButton(onClick=manager::refreshInstalled,enabled=ready && !state.busy) { Text("Refresh installed JDKs") }
+        state.installations.forEach { item ->
+            Text("${if(item.active) "Active · " else ""}${item.version}\n${item.home}")
+            if(!item.active) {
+                TextButton(onClick={ management=item.home to false },enabled=!state.busy) { Text("Verify and select") }
+                TextButton(onClick={ management=item.home to true },enabled=!state.busy) { Text("Remove inactive JDK") }
+            }
+        }
         Text("QuickRun: open a .java file in the editor and press Ctrl+F5. The current file is saved before running in Ubuntu.")
-        Text("Language plugin: not enabled here. The official JCode marketplace lists Java Dev Pack (jcode.lang.java); device compatibility is unverified. Review it in Extensions. No third-party fallback is used.")
+        Text("Install Java Basic Plugin from the sui-code Plugin Library for single-file running. Java IDE Kit adds language services and debugging. No JCode plugin market is used.")
         state.logPath?.let { Text("Install log in Ubuntu: $it") }
         if (state.log.isNotBlank()) SelectionContainer { Text(state.log, style = MaterialTheme.typography.bodySmall) }
+    }
+    management?.let { (home,remove) ->
+        AlertDialog(onDismissRequest={ management=null },title={ Text(if(remove) "Remove inactive JDK?" else "Change managed JDK?") },
+            text={ Text("$home\n${if(remove) "Only this inactive managed installation will be deleted. Active or in-use JDKs are protected." else "java, javac and jshell will be verified before updating java.env. Existing terminals and language services need a restart."}") },
+            confirmButton={ TextButton(onClick={ management=null;manager.manage(home,remove) }) { Text("Confirm") } },dismissButton={ TextButton(onClick={ management=null }) { Text("Cancel") } })
     }
     confirmation?.let { release ->
         AlertDialog(

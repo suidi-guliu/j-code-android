@@ -46,6 +46,6 @@ class ProcessLspTransport(
     }
 
     override fun close() {
-        runCatching { process.destroy() }
+        dev.blamspot.jcode.core.distro.GuestProcessTree.destroy(process)
     }
 }

@@ -9,17 +9,17 @@ import androidx.compose.ui.unit.dp
  */
 object ControlSize {
     /** Minimum height of a compact button — the app's standard action size. */
-    val compactHeight = 32.dp
+    val compactHeight = 48.dp
 
     /** Inside a compact button, around its label. */
     val compactPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
 
     /** Icon-only button in a dense strip (tab bars, list rows). */
-    val iconButtonSm = 28.dp
+    val iconButtonSm = 48.dp
 
     /** Icon-only button in a panel header. */
-    val iconButton = 36.dp
+    val iconButton = 48.dp
 
     /** Material's minimum comfortable touch target. */
-    val touchTarget = 40.dp
+    val touchTarget = 48.dp
 }

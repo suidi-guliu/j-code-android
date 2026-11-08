@@ -1,121 +1,33 @@
-> sui-code 独立开发分支：公开的 [扩展与 IDE Kit 开发规范](docs/specifications/SUIC-SUIK-Development-Specification.md)、[UI 设计与扩展规范](docs/specifications/SuiCode-UI-Design-Specification.md)及[规范索引与实现状态](docs/specifications/README.md)。
+# sui-code
 
-<p align="center">
-  <img src="media/jcode-app-icon.svg" width="96" alt="JCode icon" />
-</p>
+Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开发。保留原项目版权、MIT 许可证和第三方许可证。独立应用身份 `dev.suicode.ide.debug`，升级不得清除已有 Ubuntu、JDK、工具链或用户文件。
 
-<h1 align="center">JCode</h1>
+- 常驻 Internal Files：无需 Workspace/Project 创建、编辑和保存文件；保留 Project 与导出。
+- 独立 `.suic` Basic Plugin：Java、合并 C/C++、Python，统一 Ctrl+F5 单文件运行与 PTY 交互/停止。
+- 独立 `.suik` IDE Kit：真实 LSP/DAP、工程模板、Build/Test/Run 和受控原生面板。
+- 自有签名扩展库、本地导入、权限审阅、启停/更新/回滚；无 JCode 或 VS Code 市场替代入口。
+- sui-code 原生 Light/Dark 设计系统及尺寸驱动的文件栏、编辑器、底部 Terminal。
 
-<p align="center">
-  A native Android IDE with an embedded Linux runtime — build, run, and edit real
-  projects entirely on-device.
-</p>
+## 公开开发规范与源码
 
----
+- [Native Extension & IDE Kit Development Specification](docs/specifications/SUIC-SUIK-Development-Specification.md)
+- [UI Extension & Design Specification](docs/specifications/SuiCode-UI-Design-Specification.md)
+- [规范索引、完整 Schema、SDK 与示例](docs/specifications/README.md)
+- [官方六个签名包与可审阅源码](native-library/)
+- [最终原生架构说明和数据保护](docs/sui-code-native-architecture.md)
+- [原 JCode README 与项目来源](docs/upstream-README.md) · [LICENSE](LICENSE)
 
-JCode is an Android IDE written in **Kotlin + Jetpack Compose**, with **C++/NDK**
-for the performance-critical subsystems (editor buffer, VT terminal, parsers). It
-embeds a self-contained **Linux environment** via bundled `proot` — runtimes,
-SDKs, compilers, and language servers live in an app-managed Ubuntu 24.04 / 26.04
-LTS rootfs in app-private storage. No Termux dependency, no root.
+源码分支 `sui-code/final-product`，不修改 main、不发布正式 Release。最终 Debug APK、源码包、SDK、SHA-256 和测试报告通过该分支的 GitHub Actions 交付。云端 Linux x64 测试与 Android ARM64 平板验收严格分开；具体构建和验证结果以交付报告为准。
 
-## Features
+## 开发验证
 
-- **Editor** — an in-house `Canvas` + IME code editor with a native piece-tree
-  buffer, syntax colouring, LSP + Dev Pack completions, snippets, multi-tab
-  editing, selection handles, word wrap, Save (`Ctrl+S` / button / dirty
-  indicator), and auto-reload of unmodified files changed on disk.
-- **Language intelligence** — language servers run inside the selected distro and
-  provide diagnostics, completions, Go to Definition, Find References, Rename
-  Symbol, and document formatting. Missing servers can be installed from the
-  editor; their lifecycle follows the open project and documents.
-- **Terminals** — real PTY sessions through `proot` that survive app backgrounding,
-  with full xterm/VT support (mouse reporting, SGR, alt-screen), in-place progress
-  redraw, and a `code`/`jcode` command to open files in the editor.
-- **Build & Run** — per-project `.jcode/run.yaml`; multi-terminal dev setups (e.g.
-  an ASP.NET Core API + a Vite dev server side by side); a read-only **Output** log
-  teed from the run terminals; and ready-port polling into a web preview.
-- **Debugging** — a Debug Adapter Protocol (DAP) client with gutter breakpoints,
-  stepping, call stack, variables, and a debug console. Python (debugpy) and Java
-  are device-verified under `proot`.
-- **Android app sandbox** — build an APK and run it inside an editor tab, with a
-  device-side ADB bridge and JDWP debugging against the same device.
-- **Source Control** — an extension-hosted Git panel (status, stage, commit,
-  branch, diffs) in the left drawer, plus live VCS status decorations in the
-  Explorer. Git itself runs inside the distro.
-- **Search** — project-wide find (ripgrep-backed) with Content / File-name /
-  Current-document scopes and a Kotlin fallback when the native search library is
-  unavailable.
-- **Problems** — an Issues panel and status-bar count fed by a shared diagnostics
-  bus (language servers, config-file errors, and syntax checks), with in-gutter
-  squiggles.
-- **Extensions** — a marketplace of Ed25519-verified `.jext` packages (Dev Packs,
-  project templates, and manager UIs), plus `.vsix` import for the supported
-  WebView slice of the VS Code API.
-- **Toolchains** — a unified manager for installing and updating SDKs, language
-  servers, debug engines, database clients, and developer tools per distro.
-- **Embedded Linux** — bundled arm64-v8a `proot` binaries with downloaded ARM64
-  Ubuntu 24.04 / 26.04 LTS profiles; `apt`-managed toolchains; project
-  directories bind-mounted into the distro.
+使用 JDK21、Android SDK36 和仓库 Gradle wrapper。运行语言集成测试时，另将 `SUI_QUICKRUN_TEST_JAVA_HOME` 指向经过验证的 JDK27。
 
-## Build
-
-Requirements: **JDK 21**, the Android SDK (`compileSdk 36`), **NDK r27c**
-(`27.2.12479018`), and **CMake 3.28.3**. `minSdk`/`targetSdk` 33
-(Android 13+). The repository currently uses AGP 8.13.0, Kotlin 2.2.20, and the
-Gradle 8.14.3 wrapper.
-
-```bash
-git clone https://github.com/blamspotdev/j-code-android.git
-cd j-code-android
-./gradlew :app:assembleDebug      # → app/build/outputs/apk/debug/app-debug.apk
+```sh
+python3 -m pip install -r tools/sui_packages/requirements-dev.txt
+python3 tools/sui_packages/check_specifications.py
+bash gradlew :core:native-packages:testDebugUnitTest :core:distro:testDebugUnitTest :core:fs:testDebugUnitTest :core:design:testDebugUnitTest :app:testDebugUnitTest
+bash gradlew :app:assembleDebug
 ```
 
-> **Windows note:** build from a short path (e.g. `X:\jc`). Deep checkout paths can
-> exceed the Win32 `MAX_PATH` limit during the native (tree-sitter) build.
-
-The first native build needs network access because CMake fetches pinned upstream
-dependencies. Release builds and signing are documented in the
-[build and release specification](docs/specifications/09-platform/02-build-variants-and-release.md).
-
-## Architecture
-
-A multi-module Gradle project:
-
-```
-:app            integration layer + the JCode shell
-:core:*         editor, buffer, term, distro, lsp, debug, search, config, diagnostics,
-                design, fs, treesitter, resource, and compatibility stubs
-:feature:*      explorer, editor-pane, terminal-pane, scm, debug, problems, search,
-                settings, sdk-manager, lsp-manager, marketplace, onboarding
-:native:*       proot, vt (terminal), pty, tree-sitter, buffer (piece tree),
-                libgit2, ripgrep-ffi, wasmtime-ffi, editor-render, …
-```
-
-Module rule: **`:core:*` never depends on `:feature:*`; `:feature:*` depends only on
-`:core:*`; `:app` depends on everything.** All buffer writes flow through
-`EditorState.applyEdit` on a single-threaded dispatcher; JNI/native handles are
-wrapped as `AutoCloseable` + `Cleaner`.
-
-## Documentation
-
-Full as-built engineering specifications live in
-[`docs/specifications/`](docs/specifications/README.md) — architecture, module
-contracts, wire protocols, on-disk formats, and build/release details. Each document
-closes with a "Known gaps" section recording what is stubbed, unwired or limited in
-that subsystem, so the caveat sits beside the thing it qualifies.
-
-## Extensions
-
-Dev Packs, templates, and (later) theme / icon sets install from the
-[**JCode marketplace**](https://github.com/blamspotdev/j-code-marketplace) as
-verified `.jext` packages. To build your own, see the marketplace's
-[`CREATING-EXTENSIONS.md`](https://github.com/blamspotdev/j-code-marketplace/blob/main/CREATING-EXTENSIONS.md)
-and the [`j-code-make-tools`](https://github.com/blamspotdev/j-code-make-tools) CLI.
-
-## License
-
-Licensed under the [MIT License](LICENSE). © 2026 blamspotdev (Janrick Samorin).
-You're free to use, modify, and redistribute it under the MIT terms. Contributions
-are covered by [`CONTRIBUTING.md`](CONTRIBUTING.md); third-party components and their
-licenses are listed in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070802；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。

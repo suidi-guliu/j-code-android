@@ -1,5 +1,7 @@
 package dev.blamspot.jcode
 
+import kotlinx.serialization.json.jsonPrimitive
+
 import android.app.Application
 import android.content.Context
 import android.net.Uri
@@ -286,6 +288,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val scaffoldState = templateScaffolder.state
 
     /** Shared "Setup" terminal in the right drawer that runs toolchain installs and scaffolds. */
+    private var nativeSourceId: String? = null
+    private fun nativeSourceTab(): EditorTab? = _editorGroup.value.activeTab?.takeIf { !it.isPage }
+        ?: _editorGroup.value.tabs.firstOrNull { it.id==nativeSourceId && !it.isPage }
+    val nativePackages = dev.suicode.nativehost.NativePackageHost.get(appContext)
     val javaQuickRun = JavaQuickRunController(appContext, distroService, viewModelScope, ::emitMessage)
 
     fun quickRunActiveFile(repeatCount: Int): Boolean {
@@ -304,6 +310,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val runTerminalCompletions: SharedFlow<Pair<String, Int>> = _runTerminalCompletions.asSharedFlow()
 
     init {
+        nativePackages.onDeactivated = { id -> viewModelScope.launch(Dispatchers.Main.immediate) { javaQuickRun.stopPackage(id); debugController.stopPackage(id) } }
         TerminalSessionHost.manager(appContext).onTaskComplete = { sessionId, payload ->
             setupTerminalRunner.handleTaskComplete(sessionId, payload)
             javaQuickRun.complete(sessionId, payload)
@@ -340,7 +347,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Extensions currently installed under the app's install root (templates + language packs). */
     private val _installedExtensions = MutableStateFlow<List<InstalledExtension>>(emptyList())
     val installedExtensions: StateFlow<List<InstalledExtension>> = _installedExtensions
-        .onEach(::publishContributedDebugEngines)
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyList())
 
     /** Extensions available in the remote marketplace index (populated on demand). The public,
@@ -365,28 +371,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Re-scan installed extensions and refresh the available templates. */
     fun refreshInstalledExtensions() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val installed = runCatching { extensionInstaller.installed() }.getOrDefault(emptyList())
-            _installedExtensions.value = installed
-            // Keep the open detail tab's record current while its extension is installed — including
-            // one installed FROM that page — so it has something to fall back to when removed.
-            openExtensionDetailId()?.let { id ->
-                installed.firstOrNull { it.id == id }?.let { _detailExtensionSnapshot.value = it }
-            }
-            // Gate the Extension Dev log to dev (unsigned sideloaded) extensions only.
-            dev.blamspot.jcode.workbench.ExtensionDevLog.devIds = installed.filter { it.dev }.map { it.id }.toSet()
-            // Any extension may contribute templates (a language/dev pack can bundle them too).
-            // Always offer an "Empty Project" first — a blank folder that needs no extension.
-            // Stamped with its extension on the way through: a template that hands its configure
-            // step to a view needs to say whose view it is, and only the list knows that here.
-            val fromExtensions = installed.flatMap { ext ->
-                ext.templates.map { it.copy(extensionId = ext.id) }
-            }
-            val emptyOption = fromExtensions.filter { it.id == "empty" }.ifEmpty {
-                listOf(ProjectTemplate(id = "empty", name = "Empty Project", description = "A blank project folder — no scaffolding."))
-            }
-            _templates.value = emptyOption + fromExtensions.filter { it.id != "empty" }
-        }
+        // Keep legacy data on disk for recovery, but never discover or activate its code.
+        _installedExtensions.value = emptyList()
+        _templates.value = listOf(ProjectTemplate(id = "empty", name = "Empty Project", description = "A blank project folder.")) +
+            nativePackages.templates().map { ProjectTemplate(id=it.id,name=it.title,description=it.description) }
     }
 
     // Extensions updated this session that are waiting for a reload — shown as a compact banner at
@@ -477,90 +465,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * *debugging* an unsigned extension, not about permission to have one.
      */
     fun importExtension(uri: android.net.Uri) {
-        viewModelScope.launch {
-            val installedBefore = _installedExtensions.value.map { it.id }.toSet()
-            // A .vsix that bundles its own runtime runs to hundreds of megabytes, and unpacking one
-            // takes long enough that a silent wait reads as a hang. Say it started before doing it.
-            emitMessage("Importing extension… a large package takes a while.")
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val tmp = File.createTempFile("import", ".pkg", appContext.cacheDir)
-                    try {
-                        appContext.contentResolver.openInputStream(uri)?.use { input ->
-                            tmp.outputStream().use { input.copyTo(it) }
-                        } ?: error("cannot open the selected file")
-                        extensionInstaller.installLocalPackage(tmp, BuildConfig.VERSION_NAME).getOrThrow()
-                    } finally {
-                        tmp.delete()
-                    }
-                }
-            }
-            result
-                .onSuccess { outcome ->
-                    refreshInstalledExtensions()
-                    emitMessage(
-                        when (outcome) {
-                            is ExtensionInstaller.SideloadOutcome.Jext ->
-                                if (outcome.signed) "Installed '${outcome.extension.name}' (signed — not debuggable)."
-                                // Named as the warning it is: nothing verified this package, and what
-                                // it runs, it runs in the Linux runtime.
-                                else "Imported '${outcome.extension.name}' — unsigned and unverified; " +
-                                    "it runs with your runtime's access."
-                            // Lead with what will not work: a VS Code extension can install cleanly and
-                            // still be missing the part the user wanted.
-                            is ExtensionInstaller.SideloadOutcome.Vsix ->
-                                outcome.compatibility.warnings.firstOrNull()
-                                    ?.let { "Imported '${outcome.extension.name}' (.vsix) — $it" }
-                                    ?: "Imported '${outcome.extension.name}' (.vsix)."
-                        },
-                    )
-                    if (outcome.extension.id in installedBefore) {
-                        markPendingReload(outcome.extension.id, outcome.extension.name)
-                    }
-                }
-                .onFailure { emitMessage("Import failed: ${it.message ?: "unrecognised package"}") }
-        }
+        openNativePackagesPage(2)
+        viewModelScope.launch { emitMessage("Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior.") }
     }
 
     /** Fetch the remote marketplace index (extensions available to install). */
     fun refreshMarketplace() {
-        viewModelScope.launch {
-            _marketplaceBusy.value = true
-            extensionInstaller.fetchIndex()
-                .onSuccess { _marketplaceEntries.value = it.entries }
-                .onFailure { _messages.tryEmit("Marketplace: ${it.message ?: "failed to load"}") }
-            _marketplaceBusy.value = false
-        }
-        // Custom sources refresh alongside so their update badges stay current with the built-in index.
-        refreshExtensionSources()
+        viewModelScope.launch { runCatching { nativePackages.refreshLibrary() }.onFailure { emitMessage("Native library: ${it.message}") } }
     }
-
     fun installExtension(entry: MarketplaceEntry) {
-        // A custom-source entry (synthesized from a provider's release) installs from its `.vsix` asset
-        // URL, not the marketplace `.jext` path — route it through the single source-install flow.
-        // A first install has no attribution yet, so the owning source is found by the asset it offers.
-        if (entry.vsixAssetUrl != null) {
-            val sourceUrl = extensionSourceOfId.value[entry.id]
-                ?: _sourceReleases.value.entries
-                    .firstOrNull { it.value.vsixAssetUrl == entry.vsixAssetUrl }?.key
-            if (sourceUrl != null) { installFromSource(sourceUrl); return }
-        }
-        viewModelScope.launch {
-            val wasInstalled = _installedExtensions.value.any { it.id == entry.id }
-            _marketplaceBusy.value = true
-            try {
-                installExtensionResolvingDeps(entry, visiting = mutableSetOf())
-            } finally {
-                _marketplaceBusy.value = false
-                _extensionInstallPhases.value = emptyMap()
-            }
-            refreshInstalledExtensions()
-            // An update replaced an extension that may be running an old copy in an open tab/panel;
-            // surface a reload banner (a fresh install has nothing live to reload).
-            if (wasInstalled && _installedExtensions.value.any { it.id == entry.id }) {
-                markPendingReload(entry.id, entry.name)
-            }
-        }
+        openNativePackagesPage(0)
+        viewModelScope.launch { emitMessage("Legacy JCode/VSIX packages are not supported by the native ecosystem.") }
     }
 
     /**
@@ -2521,21 +2436,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Add a custom source (a GitHub repo URL whose releases publish `.vsix` files) and fetch it. */
     fun addExtensionSource(url: String) {
-        val normalized = url.trim()
-        if (normalized.isBlank()) return
-        if (ProviderReleaseFetcher.parseRepo(normalized) == null) {
-            _messages.tryEmit("Not a recognizable GitHub repo URL")
-            return
-        }
-        viewModelScope.launch {
-            uiPreferences.edit { prefs ->
-                val current = parseStringList(prefs[extensionSourcesKey])
-                if (current.none { it.equals(normalized, ignoreCase = true) }) {
-                    prefs[extensionSourcesKey] = org.json.JSONArray(current + normalized).toString()
-                }
-            }
-            fetchSourceRelease(normalized)
-        }
+        openNativePackagesPage(0)
+        viewModelScope.launch { emitMessage("The native official library is maintained by sui-code. Third-party packages can be imported locally after review.") }
     }
 
     /** Remove a custom source. Any extension installed from it stays installed; its attribution is
@@ -2552,80 +2454,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Re-resolve the newest `.vsix` release for every configured source. */
-    fun refreshExtensionSources() {
-        viewModelScope.launch {
-            val urls = extensionSources.value
-            if (urls.isEmpty()) { _sourceReleases.value = emptyMap(); return@launch }
-            _sourcesRefreshing.value = true
-            try {
-                val resolved = urls.associateWith { runCatching { ProviderReleaseFetcher.latest(it) }.getOrNull() }
-                _sourceReleases.value = buildMap { resolved.forEach { (u, r) -> if (r != null) put(u, r) } }
-            } finally {
-                _sourcesRefreshing.value = false
-            }
-        }
-    }
+    fun refreshExtensionSources() = refreshMarketplace()
+    fun installFromSource(url: String) = openNativePackagesPage(0)
 
-    private suspend fun fetchSourceRelease(url: String) {
-        _sourcesRefreshing.value = true
-        try {
-            runCatching { ProviderReleaseFetcher.latest(url) }.getOrNull()?.let {
-                _sourceReleases.value = _sourceReleases.value + (url to it)
-            }
-        } finally {
-            _sourcesRefreshing.value = false
-        }
-    }
-
-    /**
-     * Install (or update to) the newest `.vsix` release from [sourceUrl]. Records which source the
-     * resulting extension came from, so its update badge tracks the right repo afterward. Handles both
-     * a fresh install and an update, since a `.vsix` install swaps in place by id.
-     */
-    fun installFromSource(sourceUrl: String) {
-        viewModelScope.launch {
-            val release = _sourceReleases.value[sourceUrl]
-                ?: runCatching { ProviderReleaseFetcher.latest(sourceUrl) }.getOrNull()
-            if (release == null) { _messages.tryEmit("No .vsix release found for this source"); return@launch }
-            _marketplaceBusy.value = true
-            try {
-                extensionInstaller.installVsixFromUrl(release.vsixAssetUrl)
-                    .onSuccess { result ->
-                        recordExtensionSource(result.extension.id, sourceUrl)
-                        _messages.tryEmit("Installed ${result.extension.name} ${result.manifest.version}")
-                        markPendingReload(result.extension.id, result.extension.name)
-                    }
-                    .onFailure { _messages.tryEmit("Install failed: ${it.message ?: "error"}") }
-            } finally {
-                _marketplaceBusy.value = false
-            }
-            refreshInstalledExtensions()
-        }
-    }
-
-    private fun recordExtensionSource(extId: String, sourceUrl: String) {
-        viewModelScope.launch {
-            uiPreferences.edit { prefs ->
-                val obj = runCatching { JSONObject(prefs[extensionSourceOfIdKey] ?: "{}") }.getOrDefault(JSONObject())
-                obj.put(extId, sourceUrl)
-                prefs[extensionSourceOfIdKey] = obj.toString()
-            }
-        }
-    }
-
-    /** Open (or focus) the Extension Sources page and refresh each source's latest release. */
-    fun openExtensionSourcesPage() {
+    fun openNativePackagesPage(section: Int) {
+        require(section in 0..3)
         _bringEditorToFront.tryEmit(Unit)
-        val existing = _editorGroup.value.tabs.firstOrNull { it.pageKind == EditorPageKind.ExtensionSources }
-        if (existing != null) {
-            _editorGroup.value = _editorGroup.value.withActiveTabChanged(existing.id)
-        } else {
-            _editorGroup.value = _editorGroup.value.withTabAdded(
-                EditorTab.page(EXT_SOURCES_TAB_ID, "Extension Sources", EditorPageKind.ExtensionSources),
-            )
+        openDetailPage("sui-native-packages:$section",EditorPageKind.ExtensionSources) {
+            listOf("Plugin Center","IDE Kit Center","Package Manager","Language Center")[section]
         }
-        refreshExtensionSources()
+        if(section==3) viewModelScope.launch { distroService.checkSdkStatuses();distroService.checkLspStatuses();distroService.checkDebugEngineStatuses() }
     }
+    fun openExtensionSourcesPage() = openNativePackagesPage(0)
 
     val workspaceConfig = configService.workspaceConfig
     val projectConfig = configService.projectConfig
@@ -2684,19 +2524,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // awaited — stepping through a file the editor has already moved past is worse than a pause
         // before the session starts. startDebugForConfig routes through here too, so every way of
         // starting a debug session saves. A buffer that cannot be written reports that itself; the
-        // session still starts, because one unsavable scratch file must not block debugging.
+        // save failure cancels debugging so it cannot run stale source.
         viewModelScope.launch {
-            saveAllDirtyAwait()
+            if (!saveAllDirtyAwait()) { emitMessage("Debug cancelled: files could not be saved"); return@launch }
             debugController.startDebug(hostPath, deriveProjectDir(hostPath), _breakpoints.value)
         }
     }
 
     private fun deriveProjectDir(hostPath: String): String {
-        val marker = "/JCode/projects/"
-        val i = hostPath.indexOf(marker)
-        if (i < 0) return java.io.File(hostPath).parent ?: hostPath
-        val name = hostPath.substring(i + marker.length).substringBefore('/')
-        return hostPath.substring(0, i + marker.length) + name
+        val source=File(hostPath).canonicalFile
+        val selected=(selectedProject.value?.fsPath as? FsPath.Local)?.file?.canonicalFile
+        if(selected!=null && source.toPath().startsWith(selected.toPath())) return selected.path
+        val markers=dev.suicode.nativehost.NativeLanguageServices.entries(nativePackages.rows.value) { }.flatMap { it.rootDetectors }.filter { it.matches(Regex("[A-Za-z0-9_.-]+")) }
+        val internal=dev.blamspot.jcode.fs.InternalFiles.root(appContext.filesDir).canonicalFile.toPath()
+        val projects=File(dev.blamspot.jcode.core.distro.WorkspaceHostPaths.projectsRoot).canonicalFile.toPath()
+        val boundary=when { source.toPath().startsWith(internal) -> internal;source.toPath().startsWith(projects) -> projects;else -> source.parentFile?.toPath() ?: source.toPath() }
+        var folder=source.parentFile
+        while(folder!=null && folder.toPath().startsWith(boundary)) {
+            if(markers.any { File(folder,it).exists() }) return folder.path
+            folder=folder.parentFile
+        }
+        return source.parent ?: source.path
     }
 
     fun debugContinue() = debugController.resume()
@@ -2742,10 +2590,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * catalog match on the file extension alone is not enough to start a server.
      */
     private fun isLanguageServerPaired(serverId: String, fileName: String): Boolean =
-        installedExtensions.value.any { extension ->
-            serverId in extension.requires.lsps ||
-                serverId in extension.suggests.lsps ||
-                extension.languageFor(fileName) != null
+        nativePackages.rows.value.any { row ->
+            row.record.enabled && row.pack.kind == dev.suicode.packages.PackKind.KIT &&
+                dev.suicode.packages.Capability.LSP in row.record.grants &&
+                row.pack.declarations().any { component ->
+                    component.type == "lsp" &&
+                        component.descriptor["arguments"]?.let { args ->
+                            val data = args as? kotlinx.serialization.json.JsonObject
+                            (data?.get("serverId") as? kotlinx.serialization.json.JsonPrimitive)?.content == serverId
+                        } == true
+                } && row.pack.manifest["dependencies"]?.let { deps ->
+                    (deps as? kotlinx.serialization.json.JsonArray)?.any { dep ->
+                        val id = (((dep as? kotlinx.serialization.json.JsonObject)?.get("id")) as? kotlinx.serialization.json.JsonPrimitive)?.content
+                        nativePackages.rows.value.any { basic ->
+                            basic.record.id == id && basic.record.enabled && basic.pack.declarations().any { declaration ->
+                                declaration.type == "language" &&
+                                    (declaration.descriptor["extensions"] as? kotlinx.serialization.json.JsonArray)?.any { extension ->
+                                        (extension as? kotlinx.serialization.json.JsonPrimitive)?.content == fileName.substringAfterLast('.', "")
+                                    } == true
+                            }
+                        }
+                    } == true
+                } == true
         }
 
     /** Running language servers, surfaced in the status bar. */
@@ -2947,7 +2813,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // Unpaired: the server may well be installed, but no extension claims this
                     // language, so pointing at Toolchains would send the user to the wrong place.
                     !isLanguageServerPaired(descriptor.id, name) ->
-                        "$actionLabel needs a Dev Pack for $name; install one from Extensions"
+                        "$actionLabel needs an enabled IDE Kit for $name; install one from Native Packages"
                     descriptor.id !in lspCatalogState.value.installedEntryIds ->
                         "$actionLabel needs ${entry?.name ?: descriptor.id}; install it from Toolchains"
                     else -> "$actionLabel needs the Linux environment to be ready"
@@ -3012,7 +2878,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             resolved.forEach { (start, end, text) ->
                 latest = buffer.applyEdit(EditTx.replace(start, end, text))
             }
-            file.writeText(latest.readRangeAsUtf16(0, latest.byteLength))
+            dev.blamspot.jcode.fs.SafeLocalFiles.write(file,latest.readRangeAsUtf16(0, latest.byteLength).toByteArray(Charsets.UTF_8))
         }
     }
 
@@ -3029,19 +2895,133 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .sortedByDescending { it.first }
 
     init {
+        viewModelScope.launch {
+            _editorGroup.collect { group ->
+                val tab=group.activeTab?.takeIf { !it.isPage }
+                if(tab!=null) { nativeSourceId=tab.id;nativePackages.setSource(tab.filePath.path) }
+                else if(group.tabs.none { it.id==nativeSourceId }) { nativeSourceId=null;nativePackages.setSource(null) }
+            }
+        }
+        fun runProjectTask(request: dev.suicode.packages.Request): dev.suicode.packages.Reply {
+                val tab=nativeSourceTab()
+                val project=(selectedProject.value?.fsPath as? FsPath.Local)?.file ?: tab?.filePath?.path?.let { File(deriveProjectDir(it)) }
+                return if(project==null) dev.suicode.packages.Reply(false,"E_CONTEXT")
+                else {
+                    val source=tab?.filePath?.takeIf { it.canonicalFile.toPath().startsWith(project.canonicalFile.toPath()) } ?: project
+                    val recipe=nativePackages.recipe(request.packageId,request.component,request.arguments.filterKeys { it.startsWith("input.") }.mapKeys { it.key.removePrefix("input.") })
+                    val accepted=javaQuickRun.startTool(source,project,recipe) { saveAllDirtyAwait() }
+                    dev.suicode.packages.Reply(accepted,if(accepted) "STARTING" else "E_BUSY")
+                }
+        }
+        listOf(dev.suicode.packages.Operation.BUILD,dev.suicode.packages.Operation.TEST).forEach { operation ->
+            nativePackages.bind(operation,dev.suicode.packages.CoreBackend(::runProjectTask))
+        }
+        nativePackages.bind(dev.suicode.packages.Operation.PROJECT_READ,dev.suicode.packages.CoreBackend { request ->
+            val project=selectedProject.value
+            val root=(project?.fsPath as? FsPath.Local)?.file ?: dev.blamspot.jcode.fs.InternalFiles.root(appContext.filesDir)
+            var count=0L;var bytes=0L
+            if(request.arguments["action"]=="statistics") java.nio.file.Files.walkFileTree(root.toPath(),object: java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+                override fun visitFile(path: java.nio.file.Path,attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult {
+                    if(attrs.isRegularFile) { count++;bytes+=attrs.size() }
+                    return java.nio.file.FileVisitResult.CONTINUE
+                }
+            })
+            dev.suicode.packages.Reply(true,"READ",mapOf("name" to (project?.name ?: "Internal Files"),"root" to root.path)+if(request.arguments["action"]=="statistics") mapOf("files" to count.toString(),"bytes" to bytes.toString()) else emptyMap())
+        })
+        nativePackages.bind(dev.suicode.packages.Operation.SIMPLE_RUN, dev.suicode.packages.CoreBackend { request ->
+            val component=nativePackages.rows.value.firstOrNull { it.record.id==request.packageId }?.pack?.declarations()?.firstOrNull { it.id==request.component }
+            if(component?.type=="command" || component?.type=="workflow") return@CoreBackend runProjectTask(request)
+            val tab=nativeSourceTab()
+            val provider=tab?.takeIf { !it.isPage }?.let { nativePackages.resolve(it.filePath.name) }
+            if(provider==null || provider.pack.id!=request.packageId || provider.pack.digest!=request.digest || component?.descriptor?.get("languageId")?.jsonPrimitive?.content!=provider.languageId) dev.suicode.packages.Reply(false,"E_CONTEXT")
+            else {
+                val recipe=nativePackages.recipe(request.packageId,request.component)
+                val accepted=javaQuickRun.startTool(tab!!.filePath,tab.filePath.parentFile!!,recipe) { saveTabAwait(tab) }
+                dev.suicode.packages.Reply(accepted,if(accepted) "STARTING" else "E_BUSY")
+            }
+        })
+        nativePackages.bind(dev.suicode.packages.Operation.LSP_START, dev.suicode.packages.CoreBackend {
+            val tab = nativeSourceTab()
+            if (tab == null || tab.isPage || !distroService.isRuntimeReady()) dev.suicode.packages.Reply(false,"E_CONTEXT")
+            else {
+                viewModelScope.launch { lspController.documentOpened(tab.filePath.path) }
+                dev.suicode.packages.Reply(true,"STARTING")
+            }
+        })
+        nativePackages.bind(dev.suicode.packages.Operation.FORMAT, dev.suicode.packages.CoreBackend {
+            val tab = nativeSourceTab()
+            if (tab == null || tab.isPage || !lspController.supports(tab.filePath.path,LspFeature.Formatting)) dev.suicode.packages.Reply(false,"E_UNAVAILABLE")
+            else {
+                viewModelScope.launch {
+                    if (formatWithLanguageServer(tab)) emitMessage("Formatted ${tab.title}")
+                    else emitMessage("Language server returned no formatting edits")
+                }
+                dev.suicode.packages.Reply(true,"REQUESTED")
+            }
+        })
+        nativePackages.bind(dev.suicode.packages.Operation.LINT, dev.suicode.packages.CoreBackend {
+            val tab = nativeSourceTab()
+            if (tab == null || tab.isPage) dev.suicode.packages.Reply(false,"E_CONTEXT")
+            else {
+                viewModelScope.launch { lspController.documentOpened(tab.filePath.path); lspController.documentChanged(tab.filePath.path) }
+                dev.suicode.packages.Reply(true,"REQUESTED")
+            }
+        })
+        nativePackages.bind(dev.suicode.packages.Operation.DAP_START, dev.suicode.packages.CoreBackend { request ->
+            val action=request.arguments["action"] ?: "start"
+            if(action=="state") dev.suicode.packages.Reply(true,"READ",mapOf("state" to if(debugController.ownedBy(request.packageId)) debugController.state.value.name else "INACTIVE"))
+            else if(action!="start") {
+                if(!debugController.ownedBy(request.packageId)) dev.suicode.packages.Reply(false,"E_CONTEXT")
+                else if(action !in setOf("continue","pause","next","stepIn","stepOut","stop")) dev.suicode.packages.Reply(false,"E_COMPONENT")
+                else {
+                    viewModelScope.launch(Dispatchers.Main.immediate) {
+                        when(action) { "continue" -> debugController.resume();"pause" -> debugController.pause();"next" -> debugController.stepOver();"stepIn" -> debugController.stepInto();"stepOut" -> debugController.stepOut();"stop" -> debugController.stop() }
+                    }
+                    dev.suicode.packages.Reply(true,"REQUESTED")
+                }
+            } else {
+                val tab=nativeSourceTab()
+                val engine=tab?.let { debugController.debugEngineIdFor(it.filePath.path) }?.let { dev.blamspot.jcode.core.distro.DebugEngineCatalog.findById(it) }
+                if(tab==null || engine?.ownerPackage!=request.packageId) dev.suicode.packages.Reply(false,"E_CONTEXT")
+                else { startDebug(tab.filePath.path);dev.suicode.packages.Reply(true,"STARTING") }
+            }
+        })
+        debugController.resolveKitPlan = { engine,source,project ->
+            dev.suicode.nativehost.NativeDebugPlans.resolve(nativePackages,distroService,engine,source,project) { path,command,arguments -> lspController.executeCommand(path,command,arguments) }
+        }
         // Code actions and some servers' rename flows push edits instead of returning them.
         lspController.onApplyEdit = { edit ->
-            viewModelScope.launch { applyWorkspaceEdit(edit) }
-            true
+            withContext(Dispatchers.Main) {
+                val allowed=edit.editsByPath.keys.all { path ->
+                    nativePackages.rows.value.any { row ->
+                        row.record.enabled && dev.suicode.packages.Capability.FILE_WRITE in row.record.grants &&
+                            row.pack.declarations().any { component ->
+                                component.type=="lsp" && component.descriptor["arguments"]?.let { args ->
+                                    val id=(((args as? kotlinx.serialization.json.JsonObject)?.get("serverId")) as? kotlinx.serialization.json.JsonPrimitive)?.content
+                                    id!=null && isLanguageServerPaired(id,File(path).name)
+                                }==true
+                            }
+                    }
+                }
+                if(allowed) applyWorkspaceEdit(edit) else { emitMessage("IDE Kit edit rejected: file.write permission or language scope is missing");false }
+            }
         }
         // Installing (or removing) a Dev Pack changes which servers are paired, so the files already
         // open have to be re-evaluated rather than waiting for the user to reopen them.
         viewModelScope.launch {
-            installedExtensions
-                .map { extensions -> extensions.map { it.id }.toSet() }
+            nativePackages.rows
+                .onEach { rows ->
+                    refreshInstalledExtensions()
+                    val entries = dev.suicode.nativehost.NativeLanguageServices.entries(rows) { error -> _messages.tryEmit(error) }
+                    dev.blamspot.jcode.core.distro.DebugEngineCatalog.setContributed(dev.suicode.nativehost.NativeLanguageServices.engines(rows) { error -> _messages.tryEmit(error) })
+                    dev.blamspot.jcode.core.distro.LspServerCatalog.registerNative(entries)
+                    distroService.refreshLspCatalog()
+                    distroService.refreshDebugEngineCatalog()
+                }
+                .map { rows -> rows.map { it.record } }
                 .distinctUntilChanged()
                 .drop(1)
-                .collect { lspController.retryOpenDocuments() }
+                .collect { lspController.shutdownAll(); lspController.retryOpenDocuments() }
         }
         // .jcode YAML config parse errors are real project issues; mirror them onto the bus.
         viewModelScope.launch {
@@ -3138,15 +3118,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Query GitHub for the latest release and update [updateInfo]. Runs once on startup and on
      *  demand from Settings; a failed/offline check leaves the previous result untouched. */
     fun checkForUpdate() {
-        if (_updateChecking.value) return
-        viewModelScope.launch {
-            _updateChecking.value = true
-            try {
-                UpdateChecker.check()?.let { _updateInfo.value = it }
-            } finally {
-                _updateChecking.value = false
-            }
-        }
+        viewModelScope.launch { emitMessage("sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled.") }
     }
 
     /** In-app updater state (download progress + install result), driven by [AppUpdateInstaller]. */
@@ -3197,6 +3169,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val bringEditorToFront = _bringEditorToFront.asSharedFlow()
 
     init {
+        viewModelScope.launch { runCatching { nativePackages.restore() }.onFailure { emitMessage(it.message ?: "Native package restore failed") } }
         viewModelScope.launch { refreshInstalledExtensions() }
 
         viewModelScope.launch {
@@ -3533,69 +3506,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createNewItem(request: NewItemRequest) {
         viewModelScope.launch {
-            val fallback = if (request.isWorkspace) "untitled-workspace" else "untitled-project"
-            val name = request.name.trim().ifBlank { fallback }
-            val nodeType = if (request.isWorkspace) WorkspaceNodeType.Workspace else WorkspaceNodeType.Project
-            val template = if (request.isWorkspace) null else request.templateId?.let(templateCatalog::template)
-
-            if (request.isWorkspace) {
-                // Open the new workspace (enter it) so its (empty) project list shows.
+            if(!saveAllDirtyAwait()) { emitMessage("Creation cancelled: existing files could not be saved");return@launch }
+            val name=request.name.trim().ifBlank { if(request.isWorkspace) "untitled-workspace" else "untitled-project" }
+            val nativeTemplate=if(request.isWorkspace) null else nativePackages.templates().firstOrNull { it.id==request.templateId }
+            if(!request.isWorkspace && request.templateId!=null && request.templateId!="empty" && nativeTemplate==null) {
+                emitMessage("Enable the native IDE Kit and grant project.read/file.write to use this template");return@launch
+            }
+            if(request.isWorkspace) {
                 clearEditorTabs()
-                val workspaceNode = workspaceManager.createNode(name, nodeType, null)
-                workspaceManager.enterWorkspaceFolder(workspaceNode)
-                _showNewItemDialog.value = false
-                emitMessage("Workspace '${workspaceNode.name}' created.")
-                return@launch
+                val node=workspaceManager.createNode(name,WorkspaceNodeType.Workspace,null)
+                workspaceManager.enterWorkspaceFolder(node);_showNewItemDialog.value=false
+                emitMessage("Workspace '${node.name}' created");return@launch
             }
-
-            // Single-slot Default: clear the currently open project before creating the new one.
             resetDefaultWorkspaceProject()
-            val project = workspaceManager.createNode(name, nodeType, template?.id)
-            _selectedProjectId.value = project.id
-
-            if (template == null || template.isEmpty) {
-                _showNewItemDialog.value = false
-                emitMessage("Project '${project.name}' created.")
-                return@launch
-            }
-
-            // The scaffold runs in the background Setup terminal (right drawer) — close the dialog
-            // now instead of blocking on a modal. Hold a JOB session so Android does not kill the
-            // long-running npm/dotnet steps while the app is backgrounded.
-            _showNewItemDialog.value = false
-            emitMessage("Setting up '${project.name}' in the Setup terminal…")
-            SessionRegistry.registerSession(
-                appContext,
-                BackendSessionKind.JOB,
-                "scaffold:${template.id}:${project.name}",
-            ).use {
-                // Missing template requirements (SDK-catalog ids, e.g. android-sdk) install first —
-                // the Setup terminal's mutex serializes install → scaffold as one visible flow, so
-                // an Android project's SDK is present before its first build instead of failing later.
-                val missing = template.requires.filterNot { it in distroService.sdkCatalogState.value.installedEntryIds }
-                if (missing.isNotEmpty()) {
-                    emitMessage("Installing ${missing.size} required toolchain(s) for '${project.name}'…")
-                    if (!installRequiredSdks(template.requires, project.name)) {
-                        emitMessage("Project '${project.name}' scaffold cancelled: required toolchains missing.")
-                        templateScaffolder.reset()
-                        return@use
-                    }
-                }
-                val ok = templateScaffolder.scaffold(
-                    TemplateScaffolder.Request(
-                        template = template,
-                        projectName = project.name,
-                        projectDir = project.distroBindTarget,
-                        inputs = request.inputs,
-                    ),
-                )
-                emitMessage(
-                    if (ok) "Project '${project.name}' ready."
-                    else "Project '${project.name}' scaffold failed: " +
-                        (scaffoldState.value.errorMessage ?: "see the Setup terminal."),
-                )
-                templateScaffolder.reset()
-            }
+            val project=workspaceManager.createNode(name,WorkspaceNodeType.Project,nativeTemplate?.id)
+            _selectedProjectId.value=project.id;_showNewItemDialog.value=false
+            try {
+                if(nativeTemplate!=null) nativePackages.applyTemplate(nativeTemplate,(project.fsPath as? FsPath.Local)?.file ?: error("Native templates require local storage"))
+                notifyWorkspaceFilesChanged()
+                emitMessage("Project '${project.name}' created"+(nativeTemplate?.let { " from ${it.title}" } ?: ""))
+            } catch(e: Exception) { emitMessage("Project retained; template failed safely: ${e.message}") }
         }
     }
 
@@ -5503,6 +5433,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        javaQuickRun.stop()
+        nativePackages.detach()
         stopAllRuntimeServices()
         lspController.shutdownAll()
         // shutdown(), where this used to merely close the session: the ViewModel going away means the
@@ -6190,8 +6122,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val path = tab.filePath.path
         if (path.isBlank() || !lspController.supports(path, LspFeature.Formatting)) return false
         val editor = effectiveConfig.value.editor
+        val before=state.snapshot.value
         val edits = lspController.formatting(path, editor.tabSize, editor.insertSpaces)
         if (edits.isEmpty()) return false
+        if(state.snapshot.value !== before) { emitMessage("Formatting reply discarded because the file changed");return false }
         applyEditsToBuffer(state, edits)
         return true
     }

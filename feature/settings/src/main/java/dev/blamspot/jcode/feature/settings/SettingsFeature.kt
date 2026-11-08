@@ -501,20 +501,14 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Right drawer",
-                description = "The panel holding the terminal, output, issues and extension views.",
-                keywords = "right drawer panel sidebar persistent dock split half width landscape terminal inspector",
+                title = "Terminal panel",
+                description = "Terminal, output, issues and debugging share the bottom panel.",
+                keywords = "terminal panel height split resize bottom output debug",
             ) {
-                val rightDrawerSetting = LocalRightDrawerSetting.current
-                ToggleRow(
-                    label = "Dock in landscape",
-                    supporting = "In landscape, split the screen with the right drawer instead of " +
-                        "sliding it over the editor, so both stay usable. Portrait is unaffected.",
-                    checked = rightDrawerSetting.enabled,
-                    onCheckedChange = rightDrawerSetting.onSetEnabled,
-                    modified = rightDrawerSetting.enabled != SettingsDefaults.RIGHT_DRAWER_PERSISTENT,
-                    onReset = { rightDrawerSetting.onSetEnabled(SettingsDefaults.RIGHT_DRAWER_PERSISTENT) },
-                )
+                val setting=LocalRightDrawerSetting.current
+                Text("Panel height: ${(setting.widthFraction.coerceIn(0.20f,0.55f)*100).toInt()}% of the available area")
+                androidx.compose.material3.Slider(value=setting.widthFraction.coerceIn(0.20f,0.55f),onValueChange=setting.onSetWidthFraction,valueRange=0.20f..0.55f,steps=6)
+                Text("Drag the divider or use this keyboard-accessible slider. The panel always leaves room for the editor.")
             }
 
             SettingsCard(

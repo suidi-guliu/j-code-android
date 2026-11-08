@@ -26,6 +26,7 @@ data class JavaEnvironmentState(
     val message: String = "Query the latest GA JDK to review its source, file and installation steps.",
     val log: String = "",
     val logPath: String? = null,
+    val installations: List<JavaInstallation> = emptyList(),
 )
 
 class JavaEnvironmentManager(private val distro: DistroService) {
@@ -34,10 +35,67 @@ class JavaEnvironmentManager(private val distro: DistroService) {
     val state = mutableState.asStateFlow()
     private var job: Job? = null
 
+    /** Listing never executes unknown binaries and never follows an installation symlink. */
+    @Synchronized fun refreshInstalled() {
+        if(job?.isActive==true) return
+        job=scope.launch { runCatching { inventory() }.onFailure { e -> mutableState.update { it.copy(message=e.message ?: "Cannot read installed JDKs") } } }
+    }
+    private fun inventory() {
+        val root=distro.activeRootfsPath()
+        val env=File(root,"opt/sui-code/java.env").takeIf { it.isFile }?.readText().orEmpty()
+        val installations=JavaInstallationScript.managedDirectory(root).listFiles().orEmpty().filter {
+            it.isDirectory && !java.nio.file.Files.isSymbolicLink(it.toPath()) && it.name.matches(Regex("temurin-[A-Za-z0-9.+_-]+-(aarch64|x64)"))
+        }.map { file ->
+            val home="/opt/sui-code/jdks/${file.name}"
+            JavaInstallation(home,Regex("(?m)^export JAVA_HOME=['\"]?"+Regex.escape(home)+"['\"]?$").containsMatchIn(env),
+                File(file,"release").takeIf { it.isFile }?.useLines { lines -> lines.firstOrNull { it.startsWith("JAVA_VERSION=") }?.substringAfter('=')?.trim('\"') }.orEmpty())
+        }.sortedByDescending { it.active }
+        mutableState.update { it.copy(installations=installations) }
+    }
+    @Synchronized fun manage(home: String,remove: Boolean) {
+        if(job?.isActive==true) return
+        JavaInstallationScript.checkedHome(home)
+        val runtime=distro.environmentState.value.runtime
+        job=scope.launch {
+            mutableState.update { it.copy(busy=true) }
+            try {
+                check(distro.isRuntimeReady() && distro.environmentState.value.runtime.selectedDistro.id==runtime.selectedDistro.id) { "Ubuntu changed; refresh the installed JDK list" }
+                inventory()
+                val item=mutableState.value.installations.single { it.home==home }
+                val root=distro.activeRootfsPath()
+                val actual=File(root,home.removePrefix("/")).canonicalFile
+                check(actual.parentFile==JavaInstallationScript.managedDirectory(root).canonicalFile) { "Invalid managed JDK path" }
+                val inUse=File("/proc").listFiles().orEmpty().any { proc ->
+                    proc.name.toIntOrNull()!=null && runCatching {
+                        val executable=File(proc,"exe").canonicalPath
+                        executable.startsWith(actual.path+"/") || File(proc,"cmdline").readText().split('\u0000').any { it.startsWith(home+"/bin/") || it.startsWith(actual.path+"/bin/") }
+                    }.getOrDefault(false)
+                }
+                check(!inUse) { "This JDK is in use. Stop its tasks and language services before changing it." }
+                if(remove) {
+                    check(!item.active) { "The active JDK cannot be removed. Select another verified JDK first." }
+                    check(!java.nio.file.Files.isSymbolicLink(File(root,home.removePrefix("/")).toPath())) { "Refusing a symlink installation" }
+                    // NOFOLLOW walk: a user-created link inside the JDK cannot delete its target.
+                    java.nio.file.Files.walkFileTree(actual.toPath(),object: java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+                        override fun visitFile(path: java.nio.file.Path,attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult { java.nio.file.Files.delete(path);return java.nio.file.FileVisitResult.CONTINUE }
+                        override fun postVisitDirectory(path: java.nio.file.Path,error: java.io.IOException?): java.nio.file.FileVisitResult { if(error!=null) throw error;java.nio.file.Files.delete(path);return java.nio.file.FileVisitResult.CONTINUE }
+                    })
+                    mutableState.update { it.copy(message="Removed inactive JDK; Ubuntu and all other installations retained.") }
+                } else {
+                    val result=distro.interactiveJavaRunner?.invoke("Select Java",JavaInstallationScript.select(home),120_000L,runtime.selectedDistro.id)
+                    check(result?.succeeded==true) { "JDK verification or activation failed; inspect the Setup terminal" }
+                    mutableState.update { it.copy(message="Selected verified JDK. Restart existing terminal and Java language services to load the new selection.") }
+                }
+            } catch(e: CancellationException) { throw e }
+            catch(e: Exception) { mutableState.update { it.copy(message=e.message ?: "JDK management failed") } }
+            finally { runCatching { inventory() };mutableState.update { it.copy(busy=false) } }
+        }
+    }
+
     @Synchronized
     fun query() {
         if (job?.isActive == true) return
-        mutableState.value = JavaEnvironmentState(busy = true, message = "Querying Eclipse Adoptium GA releases…")
+        mutableState.update { it.copy(busy = true, message = "Querying Eclipse Adoptium GA releases…") }
         val runtime = distro.environmentState.value.runtime
         job = scope.launch {
             try {
@@ -97,6 +155,7 @@ class JavaEnvironmentManager(private val distro: DistroService) {
                     installLog?.takeIf { it.isFile }?.let { file ->
                         mutableState.update { it.copy(log = readLog(file)) }
                     }
+                    runCatching { inventory() }
                     mutableState.update { it.copy(busy = false, installing = false) }
                 }
             }

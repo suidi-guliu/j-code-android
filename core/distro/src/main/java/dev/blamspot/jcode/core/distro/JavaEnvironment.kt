@@ -97,21 +97,4 @@ object JavaReleaseProvider {
     }
 }
 
-/** Contract shared with the future native QuickRun dispatcher; no extension marketplace needed. */
-interface NativeLanguageAdapter {
-    val id: String
-    val extensions: Set<String>
-    fun command(guestFile: String): String
-}
-
-object JavaLanguageAdapter : NativeLanguageAdapter {
-    override val id = "java"
-    override val extensions = setOf("java")
-    override fun command(guestFile: String): String {
-        require(guestFile.startsWith('/') && guestFile.endsWith(".java") && '\u0000' !in guestFile)
-        // Source-file launch handles packages and keeps generated classes off shared storage.
-        return JavaQuickRunScript.build(guestFile)
-    }
-}
-
-internal fun shellQuote(value: String) = "'" + value.replace("'", "'\\''") + "'"
+fun shellQuote(value: String) = "'" + value.replace("'", "'\\''") + "'"

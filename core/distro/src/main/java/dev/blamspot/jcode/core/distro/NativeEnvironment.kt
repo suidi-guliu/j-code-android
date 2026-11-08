@@ -3,7 +3,7 @@ package dev.blamspot.jcode.core.distro
 /** Fixed Ubuntu packages, never marketplace extensions or arbitrary shell entered by a user. */
 enum class NativeEnvironment(val key: String, val title: String, val packages: List<String>, val tool: String, val variable: String) {
     C("c", "C (GCC)", listOf("gcc", "libc6-dev"), "gcc", "SUI_C"),
-    Cpp("cpp", "C++ (G++)", listOf("g++", "libc6-dev"), "g++", "SUI_CPP"),
+    Cpp("cpp", "C/C++ (GCC, G++, GDB, CMake, Ninja)", listOf("gcc", "g++", "libc6-dev", "gdb", "cmake", "ninja-build"), "g++", "SUI_CPP"),
     Python("python", "Python 3", listOf("python3", "python3-venv", "python3-pip"), "python3", "SUI_PYTHON");
 
     val catalogId get() = "sui-$key"
@@ -42,16 +42,17 @@ data class NativePackage(val name: String, val installed: String?, val candidate
     val selected get() = installed ?: candidate
 }
 
-data class NativeInstallPlan(val language: NativeEnvironment, val packages: List<NativePackage>, val distroId: String, val architecture: String) {
+data class NativeInstallPlan(val language: NativeEnvironment, val packages: List<NativePackage>, val distroId: String, val architecture: String, val upgrade: Boolean = false) {
     init {
         require(architecture in setOf("arm64", "amd64"))
         require(packages.map { it.name } == language.packages)
     }
-    val specifications get() = packages.joinToString(" ") { shellQuote("${it.name}=${it.selected}") }
+    val specifications get() = packages.joinToString(" ") { shellQuote("${it.name}=${if(upgrade) it.candidate else it.selected}") }
 
     fun script(cancelFile: String): String {
         require(cancelFile.matches(Regex("/tmp/sui-env-cancel-[a-zA-Z0-9-]+")))
         val lang = language
+        val completeToolchain = if(lang == NativeEnvironment.Cpp) "test -x /usr/bin/gcc && test -x /usr/bin/gdb && test -x /usr/bin/cmake && test -x /usr/bin/ninja" else "true"
         val existingSmoke = lang.smoke("/usr/bin/${lang.tool}").replace(shellQuote("/usr/bin/${lang.tool}"), "\"\$SELECTED\"")
         return """
             set -eu
@@ -63,29 +64,38 @@ data class NativeInstallPlan(val language: NativeEnvironment, val packages: List
             TMP=${'$'}(mktemp -d /opt/sui-code/.${lang.key}-install-XXXXXX)
             trap 'rm -rf -- "${'$'}TMP"' EXIT
             check_cancel
+            PRESERVED_TOOL=''
             if [ -r "${'$'}ENV_FILE" ]; then
                 . "${'$'}ENV_FILE"
                 SELECTED="${'$'}{${lang.variable}:-}"
                 if [ -n "${'$'}SELECTED" ] && [ -x "${'$'}SELECTED" ] && "${'$'}SELECTED" --version; then
                     $existingSmoke
                     check_cancel
-                    echo 'Existing managed ${lang.title} is usable and preserved. No packages or environment files changed.'
-                    exit 0
+                    if ${if(upgrade) "false" else "true"} && $completeToolchain; then
+                        echo 'Existing managed ${lang.title} is usable and preserved. No packages or environment files changed.'
+                        exit 0
+                    fi
+                    PRESERVED_TOOL="${'$'}SELECTED"
                 fi
             fi
             echo '1/4 Repairing only pending package configuration, if any'
             sudo -n dpkg --configure -a
             check_cancel
             echo '2/4 Downloading reviewed Ubuntu packages; apt verifies signed metadata and package hashes'
-            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false -o Acquire::AllowInsecureRepositories=false -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 --download-only --no-upgrade install $specifications
+            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false -o Acquire::AllowInsecureRepositories=false -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 --download-only ${if(upgrade) "" else "--no-upgrade"} install $specifications
             check_cancel
             echo '3/4 Installing downloaded packages; cancellation waits for dpkg to finish safely'
-            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false --no-download --no-upgrade install $specifications
+            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false --no-download ${if(upgrade) "" else "--no-upgrade"} install $specifications
             check_cancel
             echo '4/4 Verifying tool and compiling/running a smoke program before activation'
             /usr/bin/${lang.tool} --version
             ${lang.smoke("/usr/bin/${lang.tool}")}
+            ${if(lang==NativeEnvironment.Cpp) "/usr/bin/gcc --version; /usr/bin/gdb --version; /usr/bin/cmake --version; /usr/bin/ninja --version" else "true"}
             check_cancel
+            if [ -n "${'$'}PRESERVED_TOOL" ]; then
+                echo 'Existing compiler selection retained; missing toolchain components were added.'
+                exit 0
+            fi
             printf '%s\n' 'export ${lang.variable}=/usr/bin/${lang.tool}' > "${'$'}TMP/environment"
             chmod 644 "${'$'}TMP/environment"
             mv -f "${'$'}TMP/environment" "${'$'}ENV_FILE"

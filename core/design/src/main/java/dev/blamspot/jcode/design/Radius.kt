@@ -9,13 +9,13 @@ object Radius {
 
     val xs = 2.dp
     val sm = 4.dp
-    val md = 6.dp
+    val md = 8.dp
     val lg = 8.dp
-    val xl = 10.dp
-    val xxl = 12.dp
-    val xxxl = 16.dp
-    val sheet = 20.dp
+    val xl = 8.dp
+    val xxl = 8.dp
+    val xxxl = 8.dp
+    val sheet = 8.dp
 
-    /** Fully round: larger than any control this app draws, so the corners meet in the middle. */
-    val pill = 999.dp
+    /** Legacy slot retained for source compatibility; native controls use the medium radius. */
+    val pill = 8.dp
 }

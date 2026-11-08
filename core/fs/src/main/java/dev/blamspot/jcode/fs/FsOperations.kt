@@ -248,30 +248,18 @@ suspend fun copyLocalTreeToDocumentTree(context: Context, source: File, treeUri:
             require(dest != src && !dest.startsWith("$src/")) { "The destination is inside '${source.name}'" }
         }
         val root = DocumentFile.fromTreeUri(context, treeUri) ?: error("Cannot open the destination folder")
-        val destRoot = root.createDirectory(dirName) ?: error("Cannot create '$dirName' in the destination")
-        val dirDocs = hashMapOf("" to destRoot)
-        var files = 0
-        // walkTopDown yields parents before children, so each entry's parent doc is already mapped.
-        // The source root itself is exempt from the prune so exporting a folder named node_modules
-        // still copies its content.
-        source.walkTopDown()
-            .onEnter { it == source || it.name != "node_modules" }
-            .forEach { entry ->
-                if (entry == source) return@forEach
-                val rel = entry.relativeTo(source).path
-                val parent = dirDocs.getValue(rel.substringBeforeLast(File.separatorChar, ""))
-                if (entry.isDirectory) {
-                    dirDocs[rel] = parent.createDirectory(entry.name) ?: error("Cannot create '${entry.name}'")
-                } else {
-                    val doc = parent.createFile("application/octet-stream", entry.name)
-                        ?: error("Cannot create '${entry.name}'")
-                    context.contentResolver.openOutputStream(doc.uri, "wt")?.use { out ->
-                        entry.inputStream().use { it.copyTo(out) }
-                    } ?: error("Cannot write '${entry.name}'")
-                    files++
-                }
-            }
-        files
+        val uniqueName="$dirName-${java.util.UUID.randomUUID().toString().take(8)}"
+        check(root.findFile(uniqueName)==null) { "Export destination already exists" }
+        val destRoot=root.createDirectory(uniqueName) ?: error("Cannot create export folder")
+        val dirDocs=hashMapOf("" to destRoot)
+        ExportTree.walk(source,onDirectory={ rel ->
+            val parent=dirDocs.getValue(rel.substringBeforeLast(File.separatorChar,""))
+            dirDocs[rel]=parent.createDirectory(rel.substringAfterLast(File.separatorChar)) ?: error("Cannot create '$rel'")
+        },onFile={ rel,input ->
+            val parent=dirDocs.getValue(rel.substringBeforeLast(File.separatorChar,""))
+            val doc=parent.createFile("application/octet-stream",rel.substringAfterLast(File.separatorChar)) ?: error("Cannot create '$rel'")
+            context.contentResolver.openOutputStream(doc.uri,"wt")?.use { out -> input.copyTo(out) } ?: error("Cannot export '$rel'")
+        })
     }
 
 /** Best-effort local backing dir of a picked SAF tree: the app's own DocumentsProvider uses absolute

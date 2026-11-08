@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,6 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -115,7 +117,7 @@ internal fun WorkspaceHeader(
                         horizontalArrangement = Arrangement.spacedBy(Space.xxs),
                     ) {
                         Text(
-                            text = workspace?.name ?: "Default Workspace",
+                            text = "sui-code",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             maxLines = 1,
@@ -131,7 +133,7 @@ internal fun WorkspaceHeader(
                         }
                     }
                     Text(
-                        text = selectedProject?.distroBindTarget ?: "No bind target yet",
+                        text = selectedProject?.name ?: "Internal Files",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -177,27 +179,16 @@ internal fun WorkspaceHeader(
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(Space.s),
-        ) {
-            // "DB Managers", "SCM" and "VM" only show once a matching client extension is installed.
-            WorkbenchTool.entries
-                .filter {
-                    it.available &&
-                        (it != WorkbenchTool.DbManager || dbManagerAvailable) &&
-                        (it != WorkbenchTool.Scm || scmAvailable) &&
-                        (it != WorkbenchTool.VmManager || vmManagerAvailable)
+        val tools=WorkbenchTool.entries.filter {
+            it.available && (it!=WorkbenchTool.DbManager || dbManagerAvailable) && (it!=WorkbenchTool.Scm || scmAvailable) && (it!=WorkbenchTool.VmManager || vmManagerAvailable)
+        }
+        Column(verticalArrangement=Arrangement.spacedBy(Space.xs)) {
+            tools.chunked(2).forEach { pair ->
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(Space.xs)) {
+                    pair.forEach { tool -> SidebarToolButton(tool,selectedTool==tool,{ onSelectTool(tool) },Modifier.weight(1f)) }
+                    if(pair.size==1) Spacer(Modifier.weight(1f))
                 }
-                .forEach { tool ->
-                    SidebarToolButton(
-                        tool = tool,
-                        selected = selectedTool == tool,
-                        onClick = { onSelectTool(tool) },
-                    )
-                }
+            }
         }
     }
 }
@@ -250,7 +241,7 @@ internal fun WorkbenchTopBar(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(Space.hairline),
             ) {
-                val heading = activeTab?.title ?: selectedProject?.name ?: "JCode"
+                val heading = activeTab?.title ?: selectedProject?.name ?: "sui-code"
                 Text(
                     text = heading,
                     maxLines = 1,
@@ -308,8 +299,10 @@ internal fun WorkbenchTopBar(
             // run configs to launch, plus the debug/session controls.
             // A running single-file QuickRun also needs the existing Stop control without a project.
             val nativeRun = dev.blamspot.jcode.design.LocalEditorSaveActions.current
-            val nativeFile = activeTab?.takeIf { !it.isPage }?.filePath?.name?.let {
-                dev.blamspot.jcode.core.distro.QuickRunLanguages.forFile(it) != null
+            val nativeHost = dev.suicode.nativehost.NativePackageHost.get(androidx.compose.ui.platform.LocalContext.current)
+            val nativeRecords = nativeHost.rows.collectAsState().value
+            val nativeFile = nativeRecords.isNotEmpty() && activeTab?.takeIf { !it.isPage }?.filePath?.name?.let {
+                runCatching { nativeHost.resolve(it) }.getOrNull() != null
             } == true
             if (selectedProject != null || isRunning || nativeFile) {
                 var runMenuOpen by remember { mutableStateOf(false) }

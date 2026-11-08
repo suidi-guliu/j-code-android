@@ -10,12 +10,38 @@ import kotlinx.coroutines.flow.update
 /** Shares the existing Setup PTY. Cancellation is cooperative across apt/dpkg safe boundaries. */
 class NativeEnvironmentManager(private val distro: DistroService) {
     data class State(val busy: Boolean = false, val installing: Boolean = false, val plan: NativeInstallPlan? = null,
-        val message: String = "Query Ubuntu packages, review the versions, then confirm installation.", val log: String = "", val logPath: String? = null)
+        val latestPython: String? = null, val message: String = "Query Ubuntu packages, review the versions, then confirm installation.", val log: String = "", val logPath: String? = null)
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
     @Volatile private var cancellationFile: File? = null
+
+    @Synchronized fun queryLatestPython() {
+        if(job?.isActive==true) return
+        mutable.update { it.copy(busy=true,message="Querying the official CPython stable tag feed…") }
+        job=scope.launch {
+            try { val version=PythonReleaseProvider.latest();mutable.update { it.copy(latestPython=version,message="Official upstream Python $version. Ubuntu's signed, supported package version is shown separately; no interpreter is changed by this query.") } }
+            catch(e: CancellationException) { throw e }
+            catch(e: Exception) { mutable.update { it.copy(message=e.message ?: "Python release query failed") } }
+            finally { mutable.update { it.copy(busy=false) } }
+        }
+    }
+    @Synchronized fun verify(language: NativeEnvironment) {
+        if(job?.isActive==true) return
+        mutable.update { it.copy(busy=true,message="Verifying the selected native environment…") }
+        job=scope.launch {
+            try {
+                val command="set -eu; TMP=\$(mktemp -d); trap 'rm -rf -- \"\$TMP\"' EXIT; "+
+                    "TOOL=/usr/bin/${language.tool}; if [ -r /opt/sui-code/${language.key}.env ]; then . /opt/sui-code/${language.key}.env; TOOL=\"\${${language.variable}:-}\"; fi; [ -n \"\$TOOL\" ] && [ -x \"\$TOOL\" ]; \"\$TOOL\" --version; "+
+                    language.smoke("/usr/bin/${language.tool}").replace(shellQuote("/usr/bin/${language.tool}"),"\"\$TOOL\"")
+                val result=distro.exec(command,timeoutMs=120_000L)
+                mutable.update { it.copy(message=if(result.succeeded) "${language.title} verification passed" else "Environment verification failed",log=(result.stdout+result.stderr+result.internalError.orEmpty()).takeLast(65536)) }
+            } catch(e: CancellationException) { throw e }
+            catch(e: Exception) { mutable.update { it.copy(message=e.message ?: "Verification failed") } }
+            finally { mutable.update { it.copy(busy=false) } }
+        }
+    }
 
     @Synchronized fun query(language: NativeEnvironment) {
         if (job?.isActive == true) return
@@ -37,7 +63,7 @@ class NativeEnvironmentManager(private val distro: DistroService) {
     }
 
     @Synchronized fun install(plan: NativeInstallPlan) {
-        if (job?.isActive == true || plan != mutable.value.plan) return
+        if (job?.isActive == true || (plan != mutable.value.plan && plan != mutable.value.plan?.copy(upgrade=true))) return
         job = scope.launch {
             var poller: Job? = null
             var logFile: File? = null

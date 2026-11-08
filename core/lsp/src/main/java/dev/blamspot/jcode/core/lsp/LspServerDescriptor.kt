@@ -22,6 +22,8 @@ data class LspServerDescriptor(
     val extensions: List<String> = emptyList(),
     /** Root file detectors (e.g., ".git", "package.json") */
     val rootDetectors: List<String> = emptyList(),
+    val initializationOptions: String = "{}",
+    val ownerPackage: String = "",
 ) {
     /**
      * The LSP `languageId` to announce for a file with this extension.
@@ -32,23 +34,15 @@ data class LspServerDescriptor(
      * `c` and `cpp`) fall back to the C-family split, then to the primary language id.
      */
     fun languageIdFor(extension: String): String {
-        val ext = extension.lowercase()
-        if (extensions.size == languageIds.size) {
-            val index = extensions.indexOfFirst { it.equals(ext, ignoreCase = true) }
-            if (index >= 0) return languageIds[index]
-        }
-        if (languageIds.size > 1 && ext in C_EXTENSIONS) {
-            val id = if (ext == ".c" || ext == ".h") "c" else "cpp"
-            if (id in languageIds) return id
-        }
-        return languageIds.firstOrNull() ?: "plaintext"
+        val exact=extensions.indexOf(extension)
+        val index=if(exact>=0) exact else extensions.indexOfFirst { it.equals(extension,ignoreCase=true) }
+        return languageIds.getOrNull(index) ?: languageIds.firstOrNull() ?: "plaintext"
     }
 
     companion object {
-        private val C_EXTENSIONS = setOf(".c", ".h", ".cpp", ".hpp", ".cc", ".cxx")
 
         /** Built-in LSP descriptors, derived from the shared `:core:distro` catalog. */
-        val BUILT_IN: List<LspServerDescriptor> = LspServerCatalog.BUILT_IN.map { entry ->
+        val BUILT_IN: List<LspServerDescriptor> get() = LspServerCatalog.BUILT_IN.map { entry ->
             LspServerDescriptor(
                 id = entry.id,
                 languageIds = entry.languageIds,
@@ -57,6 +51,8 @@ data class LspServerDescriptor(
                 runCommand = entry.runCommand,
                 extensions = entry.extensions,
                 rootDetectors = entry.rootDetectors,
+                initializationOptions = entry.initializationOptions,
+                ownerPackage=entry.ownerPackage,
             )
         }
 

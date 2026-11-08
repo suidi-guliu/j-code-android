@@ -33,7 +33,7 @@ internal class SdkCatalogLoader(
             verifyScript = "test -f /opt/sui-code/java.env && . /opt/sui-code/java.env && test -x \"\$JAVA_HOME/bin/javac\"",
             uninstallScript = "echo 'Managed JDK removal is not available in v0.1.'; exit 1",
             supportedArches = listOf("arm64"),
-        )) + NativeEnvironment.entries.map { language -> SdkCatalogEntry(
+        )) + NativeEnvironment.entries.filter { it != NativeEnvironment.C }.map { language -> SdkCatalogEntry(
             id = language.catalogId, category = SdkCatalogCategory.Languages,
             name = "${language.title} · Native QuickRun",
             description = "Reviewed Ubuntu packages, verified runtime, safe cancellation and persistent installation logs.",

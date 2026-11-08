@@ -9,13 +9,16 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 
 private val JCodeTypography = Typography(
+    titleMedium=TextStyle(fontSize=18.sp,lineHeight=27.sp),
+    bodyLarge=TextStyle(fontSize=14.sp,lineHeight=21.sp),
+    labelLarge=TextStyle(fontSize=14.sp,lineHeight=21.sp),
     bodyMedium = TextStyle(
-        fontSize = 13.sp,
-        lineHeight = 16.9.sp,
+        fontSize = 14.sp,
+        lineHeight = 21.sp,
     ),
     labelMedium = TextStyle(
         fontSize = 12.sp,
-        lineHeight = 15.sp,
+        lineHeight = 18.sp,
     ),
     bodySmall = TextStyle(
         fontSize = 12.sp,
@@ -46,6 +49,12 @@ fun M3Theme(
         MaterialTheme(
             colorScheme = themeBundle.colorScheme(darkTheme),
             typography = JCodeTypography,
+            shapes = androidx.compose.material3.Shapes(
+                extraSmall=androidx.compose.foundation.shape.RoundedCornerShape(Radius.sm),
+                small=androidx.compose.foundation.shape.RoundedCornerShape(Radius.sm),
+                medium=androidx.compose.foundation.shape.RoundedCornerShape(Radius.lg),
+                large=androidx.compose.foundation.shape.RoundedCornerShape(Radius.lg),
+                extraLarge=androidx.compose.foundation.shape.RoundedCornerShape(Radius.lg)),
             content = content,
         )
     }

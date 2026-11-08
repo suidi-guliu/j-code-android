@@ -89,7 +89,7 @@ internal fun WorkspaceEmptyState(workspace: Workspace?) {
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = workspace?.name ?: "JCode",
+                text = workspace?.name ?: "sui-code",
                 fontWeight = FontWeight.SemiBold,
             )
             Text(

@@ -1698,6 +1698,7 @@ fun JCodeApp(
         LocalCatalogProgress provides catalogProgress,
         LocalSdkInstallRequestedId provides sdkInstallRequestedId,
         LocalExtensionInstallPhases provides extensionInstallPhases,
+        dev.blamspot.jcode.workbench.LocalNativeNavigation provides viewModel::openNativePackagesPage,
         LocalExtensionSources provides ExtensionSourcesState(
             sources = extensionSources,
             releases = extensionSourceReleases,
@@ -2179,7 +2180,7 @@ private fun JCodeShell(
     // landscape is tall too. Key off height, not width, so phones keep the modal drawers they use in
     // portrait instead of switching to the cramped persistent side panels a tablet would want.
     val isMobileLandscapeMode = isLandscape && windowInfo.heightClass == JCodeWindowHeightClass.Compact
-    val usesModalWorkspace = !isLandscape || isMobileLandscapeMode
+    val usesModalWorkspace = windowInfo.widthClass == JCodeWindowWidthClass.Compact || windowInfo.heightClass == JCodeWindowHeightClass.Compact
     val isPortraitMobileMode = usesModalWorkspace && windowInfo.widthClass == JCodeWindowWidthClass.Compact
     val canShowRightSidebar = true
     val leftSidebarWidth = if (windowInfo.widthClass == JCodeWindowWidthClass.Expanded) 284.dp else 236.dp
@@ -2187,8 +2188,8 @@ private fun JCodeShell(
     // usesModalWorkspace: that also drives the LEFT ModalNavigationDrawer, and docking the left
     // drawer on a phone would leave no editor at all. Only the right side changes.
     val rightDrawerSplit = LocalRightDrawerSetting.current
-    val persistentRightDrawer = rightDrawerSplit.enabled && isLandscape
-    val rightSidebarDocked = isLandscape && (!usesModalWorkspace || persistentRightDrawer)
+    val persistentRightDrawer = true
+    val rightSidebarDocked = true
     // Only the opt-in split is dragged; the large-screen sidebar keeps the fixed width it has always
     // had, so turning the setting on is the only thing that changes how the workspace is divided.
     val rightSidebarWidth = (configuration.screenWidthDp * 0.75f).dp
@@ -2278,8 +2279,16 @@ private fun JCodeShell(
         }
     }
     // Settings opens as an in-editor page; every other tool drives the side panel.
+    val nativeNavigation=dev.blamspot.jcode.workbench.LocalNativeNavigation.current
     val onSelectWorkbenchTool: (WorkbenchTool) -> Unit = { tool ->
-        if (tool == WorkbenchTool.Settings) onOpenSettingsPage() else selectedTool = tool
+        when(tool) {
+            WorkbenchTool.Settings -> onOpenSettingsPage()
+            WorkbenchTool.Extensions,WorkbenchTool.IdeKits,WorkbenchTool.Packages,WorkbenchTool.ToolchainManager -> {
+                nativeNavigation(when(tool) { WorkbenchTool.Extensions -> 0;WorkbenchTool.IdeKits -> 1;WorkbenchTool.Packages -> 2;else -> 3 })
+                scope.launch { compactDrawerState.close() }
+            }
+            else -> selectedTool=tool
+        }
     }
     // Refresh installed/update-available status when the merged manager comes into view (async, guarded).
     LaunchedEffect(selectedTool) {
@@ -2289,8 +2298,8 @@ private fun JCodeShell(
             managerActions.onCheckDebugStatuses()
         }
     }
-    var leftSidebarExpanded by rememberSaveable(isLandscape, windowInfo.widthClass) {
-        mutableStateOf(isLandscape && windowInfo.widthClass != JCodeWindowWidthClass.Compact)
+    var leftSidebarExpanded by rememberSaveable(windowInfo.widthClass) {
+        mutableStateOf(!usesModalWorkspace)
     }
     val isPersistentLeftSidebarVisible = !usesModalWorkspace && leftSidebarExpanded
     // Source Control shows a live working tree, but the app only ever hinted at disk changes it made
@@ -3587,8 +3596,8 @@ private fun JCodeShell(
             // rather than against the screen. Seeded from the screen so the first frame is already
             // right, then corrected to the measured width (insets and a cutout make them differ).
             val splitDensity = LocalDensity.current
-            var splitWidthPx by remember(configuration.screenWidthDp) {
-                mutableIntStateOf(with(splitDensity) { configuration.screenWidthDp.dp.roundToPx() })
+            var splitWidthPx by remember(configuration.screenHeightDp) {
+                mutableIntStateOf(with(splitDensity) { configuration.screenHeightDp.dp.roundToPx() })
             }
             val dragSplit = rightSidebarDocked && rightSidebarVisible && persistentRightDrawer
             // The drag runs on local state and is saved once on release. Reading the stored value back
@@ -3599,23 +3608,18 @@ private fun JCodeShell(
                 liveDrawerFraction = rightDrawerSplit.widthFraction
             }
             // What the panes share, once the divider has taken its own width.
-            val splitContentWidth = with(splitDensity) { splitWidthPx.toDp() } - SPLIT_HANDLE_WIDTH
-            val drawerWidth = splitContentWidth * liveDrawerFraction
-            Row(
+            val splitContentWidth = with(splitDensity) { splitWidthPx.toDp() } - 24.dp
+            val drawerWidth = dev.suicode.packages.DesignSystem.terminalHeight(splitContentWidth.value.toInt().coerceAtLeast(1),(splitContentWidth.value*liveDrawerFraction).toInt()).dp
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .onSizeChanged { splitWidthPx = it.width },
+                    .onSizeChanged { splitWidthPx = it.height },
             ) {
                 Box(
                     modifier = Modifier
-                        .then(
-                            // The editor takes the remainder as an explicit width, so the two always
-                            // add up to the split exactly whatever the fraction rounds to.
-                            if (dragSplit) Modifier.width(splitContentWidth - drawerWidth)
-                            else Modifier.weight(1f),
-                        )
-                        .fillMaxHeight(),
+                        .weight(1f)
+                        .fillMaxWidth(),
                 ) {
                     CompositionLocalProvider(
                         LocalChromeControls provides remember(chromeHidden) {
@@ -3646,7 +3650,7 @@ private fun JCodeShell(
                         canShowRightSidebar = canShowRightSidebar,
                         rightSidebarVisible = rightSidebarVisible,
                         rightSidebarDocked = rightSidebarDocked,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().padding(start=if(isPersistentLeftSidebarVisible) leftSidebarWidth else 0.dp),
                         onToggleLeftSidebar = {
                             if (usesModalWorkspace) {
                                 scope.launch { compactDrawerState.open() }
@@ -3867,16 +3871,28 @@ private fun JCodeShell(
                                     onOpenConfig = managerActions.onOpenExtensionConfig,
                                     modifier = Modifier.fillMaxSize(),
                                 )
-                                EditorPageKind.ExtensionSources -> ExtensionSourcesPage(
-                                    state = LocalExtensionSources.current,
-                                    installed = installedExtensions,
-                                    busy = marketplaceBusy,
-                                    onAdd = managerActions.onAddExtensionSource,
-                                    onRemove = managerActions.onRemoveExtensionSource,
-                                    onRefresh = managerActions.onRefreshExtensionSources,
-                                    onInstall = managerActions.onInstallFromSource,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
+                                EditorPageKind.ExtensionSources -> {
+                                    val section=tab.id.substringAfterLast(':').toIntOrNull() ?: 0
+                                    if(section==3) ToolchainManagerPanel(
+                        sdkState = sdkCatalogState,
+                        lspState = lspCatalogState,
+                        debugState = LocalDebugCatalogState.current,
+                        environmentState = environmentState,
+                        onRefreshAll = {
+                            panelActions.onCheckSdkStatuses()
+                            panelActions.onCheckLspStatuses()
+                            panelActions.onCheckDebugStatuses()
+                        },
+                        onOpenSdkDetail = panelActions.onOpenSdkDetail,
+                        onOpenLspDetail = panelActions.onOpenLspDetail,
+                        onOpenDebugDetail = panelActions.onOpenDebugEngineDetail,
+                        modifier = Modifier.fillMaxSize(),
+                        progress = LocalCatalogProgress.current,
+                        onShowIssues = panelActions.onShowIssues,
+                        managers = panelActions.toolchainManagers,
+                        onOpenManager = panelActions.onOpenToolchainManager,
+                    ) else dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),section)
+                                }
                                 EditorPageKind.AndroidDevice -> AndroidDevicePage(
                                     adbInstalled = ADB_CATALOG_ID in sdkCatalogState.installedEntryIds,
                                     onOpenAdbToolchain = { managerActions.onOpenSdkDetail(ADB_CATALOG_ID) },
@@ -4099,8 +4115,8 @@ private fun JCodeShell(
                             if (span > 0f) {
                                 // Dragging left grows the drawer, so the movement is subtracted.
                                 liveDrawerFraction = (liveDrawerFraction - deltaPx / span).coerceIn(
-                                    SettingsDefaults.RIGHT_DRAWER_MIN_FRACTION,
-                                    SettingsDefaults.RIGHT_DRAWER_MAX_FRACTION,
+                                    0.20f,
+                                    0.55f,
                                 )
                             }
                         },
@@ -4123,8 +4139,8 @@ private fun JCodeShell(
                         onSetTerminalPinned = ::setTerminalPinned,
                         onOpenEnvironmentWizard = onOpenEnvironmentWizard,
                         modifier = Modifier
-                            .fillMaxHeight()
-                            .width(if (dragSplit) drawerWidth else rightSidebarWidth),
+                            .fillMaxWidth()
+                            .height(drawerWidth),
                         onSelected = { selectRightPanel(it) },
                         onSelectTerminalSession = ::selectTerminalSession,
                         onAddTerminalSession = ::createTerminalSession,
@@ -4341,7 +4357,7 @@ private fun WorkspacePanel(
 ) {
     val context = LocalContext.current
     val protectedProjectRoots by workspaceManager.registeredLocalRoots.collectAsStateWithLifecycle()
-    var browseInternalFiles by rememberSaveable { mutableStateOf(false) }
+    var browseInternalFiles by rememberSaveable { mutableStateOf(true) }
     val internalRoot = remember(context) {
         dev.blamspot.jcode.fs.InternalFiles.root(context.filesDir)
     }
@@ -4497,23 +4513,7 @@ private fun WorkspacePanel(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                    WorkbenchTool.Extensions -> {
-                        val pendingReload = LocalPendingReload.current
-                        ExtensionsPanel(
-                            installed = installedExtensions,
-                            available = marketplaceEntries,
-                            busy = marketplaceBusy,
-                            installPhases = LocalExtensionInstallPhases.current,
-                            onRefreshMarketplace = managerActions.onRefreshMarketplace,
-                            onOpenDetail = managerActions.onOpenExtensionDetail,
-                            onOpenPermissions = managerActions.onOpenExtensionPermissions,
-                            onImportExtension = managerActions.onImportExtension,
-                            onOpenSources = managerActions.onOpenExtensionSources,
-                            pendingReloadNames = pendingReload.names,
-                            onReloadPending = pendingReload.onReload,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
+                    WorkbenchTool.Extensions,WorkbenchTool.IdeKits,WorkbenchTool.Packages -> dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),when(tool) { WorkbenchTool.IdeKits -> 1;WorkbenchTool.Packages -> 2;else -> 0 })
 
                     WorkbenchTool.ToolchainManager -> ToolchainManagerPanel(
                         sdkState = sdkCatalogState,
@@ -5199,11 +5199,11 @@ private fun WorkspaceSplitHandle(onDrag: (Float) -> Unit, onDragStopped: () -> U
     val onDragState = rememberUpdatedState(onDrag)
     Box(
         modifier = Modifier
-            .fillMaxHeight()
-            .width(SPLIT_HANDLE_WIDTH)
+            .fillMaxWidth()
+            .height(24.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
             .draggable(
-                orientation = Orientation.Horizontal,
+                orientation = Orientation.Vertical,
                 state = rememberDraggableState { delta -> onDragState.value(delta) },
                 onDragStopped = { onDragStopped() },
             )
@@ -5213,7 +5213,7 @@ private fun WorkspaceSplitHandle(onDrag: (Float) -> Unit, onDragStopped: () -> U
         // A short bar at the midpoint, so the strip reads as something to grab rather than a border.
         Box(
             modifier = Modifier
-                .size(width = 4.dp, height = 40.dp)
+                .size(width = 48.dp, height = 4.dp)
                 .clip(RoundedCornerShape(Radius.xs))
                 .background(MaterialTheme.colorScheme.outline),
         )

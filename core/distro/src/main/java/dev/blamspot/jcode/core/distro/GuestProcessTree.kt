@@ -102,7 +102,9 @@ object GuestProcessTree {
     }
 
     /** Every app-owned process still running on [owner]'s behalf, whatever it is parented to now. */
-    fun pidsOwnedBy(owner: String): List<Int> = pidsCarrying(OWNER_ENV, owner)
+    fun pidsOwnedBy(owner: String): List<Int> = AppProcesses.ownPids().filter { pid ->
+        runCatching { environOf(pid).any { NativeOwnerScope.contains(owner,it.removePrefix("$OWNER_ENV=")) && it.startsWith("$OWNER_ENV=") } }.getOrDefault(false)
+    }
 
     /**
      * How many processes each extension is running, from a single walk of `/proc`.
@@ -143,4 +145,8 @@ object GuestProcessTree {
     }.toMap()
 
     private const val GRACE_MS = 1_500L
+}
+
+internal object NativeOwnerScope {
+    fun contains(parent: String,value: String): Boolean = value==parent || value.startsWith("$parent/")
 }
