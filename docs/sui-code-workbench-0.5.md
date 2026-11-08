@@ -85,9 +85,9 @@ Java环境文件在工程流程前后逐字节一致。日志/XML/脚本随交�
 d8c968ff33288a50d1ebdbb4b85ce7da5d2d4ce2e5cf48bc8979b864d9d1be8a
 ```
 
-[整合交付工作流及Artifact入口](https://github.com/suidi-guliu/j-code-android/actions/workflows/deliver-sui-code-v0.5.yml)；选择成功运行，在Artifacts下载`sui-code-v0.5-integrated`。工作流校验预构建APK、不重新签名，上传后下载回验全部字节和SHA；运行页Summary提供该次Artifact直达入口。GitHub Artifact需要登录，保留30天；并非永久Release。最终完成状态及具体运行/Artifact地址以本报告末尾的公开交付回执及最终消息为准。
+[整合交付工作流及Artifact入口](https://github.com/suidi-guliu/j-code-android/actions/workflows/deliver-sui-code-v0.5.yml)；选择成功运行，在Artifacts下载`sui-code-v0.5-integrated`。工作流校验预构建APK、不重新签名，上传后下载回验全部字节和SHA；运行页Summary提供该次Artifact直达入口。GitHub Artifact需要登录，保留30天；并非永久Release。公开交付回执及具体运行/Artifact地址见文末；Artifact内报告是构建时冻结的版本，APK字节保持一致。
 
-[独立云端回归运行](https://github.com/suidi-guliu/j-code-android/actions/runs/42486471448)。完整包同时包含源码、SDK、6个签名官方包、两个规范、补丁、文件清单、测试证据和构建日志。
+[独立云端回归运行](https://github.com/suidi-guliu/j-code-android/actions/runs/42486471448)已成功（5分12秒），测试结果可从该运行的Artifacts下载。完整包同时包含源码、SDK、6个签名官方包、两个规范、补丁、文件清单、测试证据和构建日志。
 
 - [扩展开发规范](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-workbench-reliability/docs/specifications/SUIC-SUIK-Development-Specification.md)
 - [UI设计规范](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-workbench-reliability/docs/specifications/SuiCode-UI-Design-Specification.md)
@@ -111,3 +111,14 @@ d8c968ff33288a50d1ebdbb4b85ce7da5d2d4ce2e5cf48bc8979b864d9d1be8a
 6. 三语言Project完整Build/Test/Run；Java System.out.pr与项目/JDK定义；Java Maven及C++可执行行真实断点/单步/继续/终止；C++math.hpp/add及真实compile_commands；Python方向键不自动弹窗并测冷/热延迟。
 7. Run/Debug/Overview相邻且区分文件/工程上下文；Packages单入口、Languages分层、底部终端调高、横竖屏/鼠标/键盘；旧.jcode/run.yaml在Advanced tasks仍能运行/编辑。
 8. 关闭会话/应用后检查子进程；取消安装、网络重试、错误日志及恢复入口；最后复查原数据与工具，设备结果单独记录。
+
+## 公开交付回执
+
+- [交付工作流运行：Success](https://github.com/suidi-guliu/j-code-android/actions/runs/42486796937)，提交`460f2c5`。全套预构建文件上传并下载回验成功，未重新构建或签名APK。
+- [下载完整Artifact：sui-code-v0.5-integrated](https://github.com/suidi-guliu/j-code-android/actions/runs/42486796937/artifacts/13620305237)。需登录GitHub，保留30天；包含一个APK及全部源码、SDK、正式包、规范和证据。
+- [Gradle完整构建日志](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-workbench-reliability/.delivery/sui-code-v0.5/build.log)。[实际APK元数据](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-workbench-reliability/.delivery/sui-code-v0.5/apk-metadata.json)。
+- APK构建源码`5806a993f7047c493094310585ad1056f9e0fe29`；源码归档`1c30272d010c5dbd7bd5fe8c76c62e4219aec1a0`，后者只增加交付工作流及报告。交付后的本公开报告追加真实链接，未更改APK。
+- 六个1.1.0官方包的真实公开URL均返回HTTP200，大小/SHA-256一致；远程目录签名以原固定官方公钥核验通过。
+- v0.4原交付全部SHA256SUMS仍通过；本分支没有修改其文件、main或官方上游，没有创建Release。
+
+满足相同applicationId、相同证书及更高versionCode的覆盖安装条件；不需要卸载或重装JDK。Ctrl+F5已连接保存→路径映射→运行Provider→PTY的真实链路，交互输入与Stop已实现。真实平板升级、Languages无ANR、硬件键、屏幕交互及PRoot端LSP/DAP验收仍需按第9节确认，不能用x64结果替代。

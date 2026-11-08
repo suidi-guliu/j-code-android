@@ -15,6 +15,7 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开�
 - [规范索引、完整 Schema、SDK 与示例](docs/specifications/README.md)
 - [官方六个签名包与可审阅源码](native-library/)
 - [v0.5 工作台整合测试与升级报告](docs/sui-code-workbench-0.5.md)
+- [v0.5 整合 APK、源码、SDK 和测试证据下载](https://github.com/suidi-guliu/j-code-android/actions/runs/42486796937/artifacts/13620305237)（需登录，Artifact保留30天）
 - [最终原生架构说明和数据保护](docs/sui-code-native-architecture.md)
 - [原 JCode README 与项目来源](docs/upstream-README.md) · [LICENSE](LICENSE)
 
