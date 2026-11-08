@@ -1884,7 +1884,8 @@ fun JCodeApp(
                 viewModel.openExtensionViewPage(extId, if (name.isBlank()) view else "$view:$name")
             },
             resolveDynamicOptions = viewModel::runTemplateOptionsCommand,
-            allowWorkspaceType = breadcrumb.size <= 1,
+            // sui-code uses Internal Files as its permanent root; new user Workspaces are no longer offered.
+            allowWorkspaceType = false,
         )
     }
 
