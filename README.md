@@ -10,7 +10,7 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开�
 
 ## v0.5.1 UI polish
 
-本轮保留原v0.5图标，提供自适应可调侧栏、Project-only创建入口、Files/Find搜索分工和API4 `.suik` 本地化基础设施。完整中文翻译包另行交付。[本轮报告](docs/sui-code-ui-polish-0.5.1.md)。
+本轮保留原v0.5图标，提供自适应可调侧栏、Project-only创建入口、Files/Find搜索分工和API4 `.suik` 本地化基础设施。完整中文翻译包另行交付。[本轮报告](docs/sui-code-ui-polish-0.5.1.md) · [下载整合APK、源码、SDK及测试证据](https://github.com/suidi-guliu/j-code-android/actions/runs/42496587688/artifacts/13623357817)（登录GitHub，Artifact保留30天）。
 
 ## 公开开发规范与源码
 
@@ -32,7 +32,7 @@ v0.5 开发分支 `sui-code/v0.5-workbench-reliability`（基于已验证 v0.4 �
 ```sh
 python3 -m pip install -r tools/sui_packages/requirements-dev.txt
 python3 tools/sui_packages/check_specifications.py
-bash gradlew :core:native-packages:testDebugUnitTest :core:distro:testDebugUnitTest :core:fs:testDebugUnitTest :core:design:testDebugUnitTest :app:testDebugUnitTest
+bash gradlew :core:native-packages:testDebugUnitTest :core:distro:testDebugUnitTest :core:fs:testDebugUnitTest :core:design:testDebugUnitTest :core:search:testDebugUnitTest :app:testDebugUnitTest
 bash gradlew :app:assembleDebug
 ```
 

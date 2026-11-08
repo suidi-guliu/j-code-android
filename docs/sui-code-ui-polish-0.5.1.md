@@ -55,7 +55,7 @@ badging、签名与15项编译图标比对日志随交付。功能提交`cda9bdc
 
 ## 6. 下载及公共规范
 
-[整合交付工作流及Artifact入口](https://github.com/suidi-guliu/j-code-android/actions/workflows/deliver-ui-polish-v0.5.yml)：在成功运行的Artifacts下载`sui-code-v0.5-ui-polish-integrated`，具体运行与直达入口在最终公开回执中补充。工作流不重构/重新签名APK，上传后下载并逐字节核验全部交付文件。包含一个整合APK、report.md、changes.patch、modified-files.txt、source.zip、native-sdk.zip、部分中文示例包、构建日志、校验值及测试证据。Artifact需登录GitHub，保留30天。六个官方语言包及官方目录保持v0.5原字节，不重新封装运行环境；新本地化开发样例单独提供。
+[整合交付工作流及Artifact入口](https://github.com/suidi-guliu/j-code-android/actions/workflows/deliver-ui-polish-v0.5.yml)：在成功运行的Artifacts下载`sui-code-v0.5-ui-polish-integrated`，实际成功运行与直达入口见文末公开回执；Artifact内报告是构建时冻结版本。工作流不重构/重新签名APK，上传后下载并逐字节核验全部交付文件。包含一个整合APK、report.md、changes.patch、modified-files.txt、source.zip、native-sdk.zip、部分中文示例包、构建日志、校验值及测试证据。Artifact需登录GitHub，保留30天。六个官方语言包及官方目录保持v0.5原字节，不重新封装运行环境；新本地化开发样例单独提供。
 
 - [Native Extension Development Specification](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/docs/specifications/SUIC-SUIK-Development-Specification.md)
 - [UI Extension Design Specification](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/docs/specifications/SuiCode-UI-Design-Specification.md)
@@ -73,3 +73,11 @@ badging、签名与15项编译图标比对日志随交付。功能提交`cda9bdc
 5. Files只筛选当前可见名称；Find名称搜索包含深层目录并能打开，内容搜索能跳行，正则错误可恢复，切换范围/快速输入不显示过期结果。
 6. 导入部分中文示例.suik，审阅未验证来源/权限；确认不会要求安装JDK/Python/Ubuntu。选择中文后检查接入键和英文回退；禁用/卸载即时英文，重启与重新启用恢复。
 7. Languages冷开/反复进入保持迅速；确认Run file/Debug/Overview与终端入口仍在。三语言完整实机功能回归留下一阶段统一进行。
+
+## 8. 公开交付回执
+
+- [交付运行：Success](https://github.com/suidi-guliu/j-code-android/actions/runs/42496587688)，交付提交`3063629`。上传、下载及全部字节/SHA256回验成功；实际包身份、ARM64、旧签名、旧交付校验和15项Launcher资源比较通过。
+- [下载完整Artifact：sui-code-v0.5-ui-polish-integrated](https://github.com/suidi-guliu/j-code-android/actions/runs/42496587688/artifacts/13623357817)。登录GitHub后下载，保留30天；只有一个最终APK。
+- [Gradle完整构建日志](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/.delivery/sui-code-v0.5-ui-polish/build.log)；[实际APK元数据](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/.delivery/sui-code-v0.5-ui-polish/apk-metadata.json)；[SHA256SUMS](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/.delivery/sui-code-v0.5-ui-polish/SHA256SUMS)。
+- 功能提交`cda9bdc`；版本/实际构建提交`2470902a12e5d1d192febb1b21069ca503ffc78c`；冻结源码归档提交`6535aef1216478ca7612b5319bd68f0c9df52782`。之后本公开报告只追加真实交付回执，未改变APK。
+- 完成了生产源码、相关测试、ARM64构建、签名/图标/历史产物核验及真实下载入口；第7节的Android平板实机项仍待验证，不用云端结果替代。
