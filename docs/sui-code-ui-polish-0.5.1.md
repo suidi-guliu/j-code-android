@@ -6,7 +6,7 @@
 
 |任务|实际修改及边界|
 |---|---|
-|恢复图标|常规、Debug、Beta前景恢复原v0.5；全9个Launcher源资源逐字节校验。没有生成新图标或调整渐变/比例。历史建议文档已停用。最终APK还比较编译后的图标资源。|
+|恢复图标|常规、Debug、Beta前景恢复原v0.5；全9个Launcher源资源逐字节校验。没有生成新图标或调整渐变/比例。历史建议文档已停用。最终APK内15个编译后的Launcher资源也与原v0.5逐字节相同。|
 |第二栏|修复原284/236dp总宽度包含68dp导航轨导致内容仅216/168dp的根因；独立计算内容宽度，按实测可用宽度、字号和编辑区下限夹取。持久化用户宽度；拖动、方向键16dp步进、无障碍调节/重置；窄窗口用抽屉。底部终端位置/高度调节独立保留。|
 |响应式操作|Files工具栏保留新文件/目录/刷新，其他动作及批量动作进入可达溢出菜单；行操作48dp，深树缩进有界，Properties能看完整名称和路径。Find模式下拉与选项分行，输入区可滚动。Languages/Packages按钮改为FlowRow，界面语言选择用弹窗避免挤占列表。|
 |Workspace入口|NewItemDialog移除类型参数/控件；OpenFolderTypeDialog只添加可选Project上下文；VM拒绝过期Workspace创建请求。命令面板分类改为Files，新建Project语义明确；设置中的旧共享配置标作Files/高级共享YAML。旧容器可作为saved project group打开/关闭，数据库、.jcode、用户目录与PRoot /workspace映射保留。|
@@ -35,21 +35,27 @@ Files各项既有复制/剪切/移动/粘贴、创建、搜索、排序、多选
 
 ## 4. 自动化及基础集成测试
 
-云端JVM回归已通过 **248例，0失败**：fs26、distro66、native-packages61、design61、editor3、term4、lsp1、debug1、search3、app22。完整Debug构建及最终包身份稍后统一核验。范围包括：窗口/字号/旋转夹取模型、真实文件与目录名称搜索/大小写/正则/取消/链接边界、真实PackageStore安装启停卸载与英文回退、无环境依赖、占位符/保护键/未知来源冲突、认证资源缺失/校验失败/API权限边界；以及既有三语言QuickRun、文件安全、包管理、保存、终端、LSP/DAP生命周期的JVM回归。
+云端JVM回归已通过 **248例，0失败**：fs26、distro66、native-packages61、design61、editor3、term4、lsp1、debug1、search3、app22。[GitHub独立回归也已成功](https://github.com/suidi-guliu/j-code-android/actions/runs/42495679946)（7分13秒）。最终`:app:assembleDebug :app:testDebugUnitTest`也已成功（2分52秒，703项任务）；签名、包身份与图标均已实际核验。范围包括：窗口/字号/旋转夹取模型、真实文件与目录名称搜索/大小写/正则/取消/链接边界、真实PackageStore安装启停卸载与英文回退、无环境依赖、占位符/保护键/未知来源冲突、认证资源缺失/校验失败/API权限边界；以及既有三语言QuickRun、文件安全、包管理、保存、终端、LSP/DAP生命周期的JVM回归。
 
-Schema/示例检查89个有效声明，非法插件仍被拒绝。Launcher基线校验9个资源。Standalone SDK从13个生产API源文件精确导出，将独立构建及核验示例。
+Schema/示例检查89个有效声明，非法插件仍被拒绝。Launcher基线校验9个资源。Standalone SDK已独立构建（34秒）；13个生产API源文件逐字节相同，生产验证器检查18个包：17个合法包通过，非法插件E_BOUNDARY拒绝。
 
 本轮**不重复宣称**上轮Ubuntu x64三语言LSP/DAP协议测试为新增实机验证；本轮未改变LSP/DAP运行器核心。用户已反馈v0.5文件/项目/插件/扩展保留、Languages迅速打开且暂未重现ANR，这只记录为用户已观察结果，不扩大为本包新实机通过。
 
 ## 5. APK及升级安全
 
-目标包名`dev.suicode.ide.debug`、versionName`0.5.1`、versionCode`1070804`（高于1070803）、ARM64。必须实际与v0.5证书比较，预期SHA256为`62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0`。最终文件大小/SHA256/badging/签名/图标二进制核验随交付。
+实际包名`dev.suicode.ide.debug`、versionName`0.5.1`、versionCode`1070804`（高于1070803）、仅ARM64。apksigner已实际与v0.5比较且一致，证书SHA256为`62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0`。APK文件：`sui-code-v0.5.1-ui-polish-debug.apk`，**87,042,788字节**。SHA-256：
+
+```text
+fcd8b4801e8fa01173ea06bea657f13b14ae1568043bb360f10e5f5d8a47b27f
+```
+
+badging、签名与15项编译图标比对日志随交付。功能提交`cda9bdc`，版本配置修正提交`2470902`；APK以`2470902a12e5d1d192febb1b21069ca503ffc78c`构建，后续只追加报告与交付元数据。
 
 本轮没有数据迁移/清理、没有环境重装、没有应用身份变化。布局偏好和语言选择使用新增独立偏好键。旧v0.4/v0.5 SHA256SUMS应保持通过。身份/签名/版本条件通过不能替代真实设备覆盖升级数据保留验收。
 
 ## 6. 下载及公共规范
 
-最终提供GitHub Actions实际运行页和Artifact入口，包含一个整合APK、report.md、changes.patch、modified-files.txt、source.zip、native-sdk.zip、部分中文示例包、构建日志、校验值及测试证据。Artifact需登录GitHub并有保留期，容器内部路径不算交付。
+[整合交付工作流及Artifact入口](https://github.com/suidi-guliu/j-code-android/actions/workflows/deliver-ui-polish-v0.5.yml)：在成功运行的Artifacts下载`sui-code-v0.5-ui-polish-integrated`，具体运行与直达入口在最终公开回执中补充。工作流不重构/重新签名APK，上传后下载并逐字节核验全部交付文件。包含一个整合APK、report.md、changes.patch、modified-files.txt、source.zip、native-sdk.zip、部分中文示例包、构建日志、校验值及测试证据。Artifact需登录GitHub，保留30天。六个官方语言包及官方目录保持v0.5原字节，不重新封装运行环境；新本地化开发样例单独提供。
 
 - [Native Extension Development Specification](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/docs/specifications/SUIC-SUIK-Development-Specification.md)
 - [UI Extension Design Specification](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5-ui-polish/docs/specifications/SuiCode-UI-Design-Specification.md)
