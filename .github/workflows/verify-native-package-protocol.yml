@@ -47,7 +47,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash gradlew --no-daemon --max-workers=4 :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
+          # JVM tests do not load ARM64 JNI. The actual APK is built with all native tasks in Codex Cloud.
+          # Keep this job focused on host contracts instead of requiring a second Rust cross toolchain.
+          bash gradlew --no-daemon --max-workers=4 -x :native:ripgrep-ffi:cargoBuildDebugJniLibs -x :native:wasmtime-ffi:cargoBuildDebugJniLibs :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
       - name: Publish concrete test and build diagnostics
         if: always()
         shell: python
