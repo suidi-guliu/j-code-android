@@ -132,7 +132,7 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
         }
         if(m.array("components").count { it.jsonObject["type"]?.jsonPrimitive?.content=="setup" }>1) fail("E_COMPONENT","Only one setup component is permitted")
         if(m.array("components").any { it.jsonObject["type"]?.jsonPrimitive?.content=="setup" } && !permissions.containsAll(setOf(Capability.FILE_READ,Capability.FILE_WRITE,Capability.RUN))) fail("E_PERMISSION","Kit setup requires declared file.read, file.write and process.run")
-        val allowed=if(kind==PackKind.PLUGIN) setOf("language","simpleRun","environment","basicBuild") else setOf("language","simpleRun","environment","lsp","dap","build","test","format","lint","project","workflow","command","panel","setup")
+        val allowed=if(kind==PackKind.PLUGIN) setOf("language","simpleRun","environment","basicBuild") else setOf("language","simpleRun","environment","lsp","dap","build","test","format","lint","project","workflow","command","panel","setup","localization")
         val componentIds=mutableMapOf<String, Operation?>()
         m.array("components").forEach { c ->
             val comp=c as? JsonObject ?: fail("E_COMPONENT","Expected object")
@@ -140,12 +140,19 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
             if (!comp.string("id").matches(Regex("[a-z][a-z0-9.-]{0,63}")) || componentIds.containsKey(comp.string("id"))) fail("E_COMPONENT","Duplicate/invalid component ID")
             if (comp.string("type") !in allowed) fail("E_BOUNDARY","Component outside ${kind.suffix} scope")
             if(comp.string("type")=="setup" && min<3) fail("E_API","setup requires API 3")
+            if(comp.string("type")=="localization" && (min<4 || Capability.LOCALIZATION !in permissions)) fail("E_LOCALIZATION","localization requires API 4 and ui.localization")
             val entry=comp.string("entry")
             val prefix=if(kind==PackKind.PLUGIN) "plugin/" else "ide/"
             if (!entry.startsWith(prefix) || entry !in files || !entry.endsWith(".json")) fail("E_COMPONENT","Missing declarative component $entry")
             componentIds[comp.string("id")]=validateDescriptor(comp.string("type"), jsonObject(files.getValue(entry)))
         }
+        val locales=mutableSetOf<String>()
         m.array("components").forEach { c ->
+            if(c.jsonObject.string("type")=="localization") {
+                val d=LocalizationDescriptor.parse(jsonObject(files.getValue(c.jsonObject.string("entry"))))
+                if(!locales.add(d.locale)) fail("E_LOCALIZATION","Duplicate locale in package")
+                LocalizationResources.parse(files[d.resource] ?: fail("E_LOCALIZATION","Missing translation resource"))
+            }
             if(c.jsonObject.string("type")=="setup") KitRequirements.parse(jsonObject(files.getValue(c.jsonObject.string("entry")))).forEach { req ->
                 if(req.resource!=null && req.resource !in files) fail("E_COMPONENT","Missing setup resource ${req.resource}")
             }

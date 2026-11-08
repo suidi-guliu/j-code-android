@@ -45,7 +45,7 @@ import kotlinx.coroutines.*
     }
     if(advancedVisible) {
         Column(modifier) {
-            Row {
+            FlowRow {
                 TextButton(onClick={advancedVisible=false}) { Text("← Language readiness") }
                 TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { distro.checkAvailableCatalogUpdates() } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text("Check trusted-source updates") }
             }
@@ -53,7 +53,7 @@ import kotlinx.coroutines.*
             Box(Modifier.weight(1f)) { advanced() }
         }
     } else Column(modifier.padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Text("Languages",style=MaterialTheme.typography.headlineSmall)
+        Text(dev.blamspot.jcode.design.uiText("languages.title"),style=MaterialTheme.typography.headlineSmall)
         Text("Ubuntu ${environment.runtime.selectedDistro.label} · ${environment.runtime.selectedDistro.arch.rootfsKey}\nReuse installed runtimes. IDE Kits deploy their required development tools after one reviewed plan.")
         if(busy || setup.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
@@ -77,7 +77,7 @@ import kotlinx.coroutines.*
                     if(kit!=null && library.firstOrNull { it.id==id }?.version!=kit.record.version) Text("Updated Kit available. Review its signed dependency plan to adopt the v0.5 workflow.",color=MaterialTheme.colorScheme.primary)
                     Text(when { status==null -> "Development tools: checking when a Kit is installed";status.isEmpty() -> "Legacy Kit: review updated prerequisites";status.all { it.ready } -> "Ready · runtime and all required tools detected";else -> "Partially Ready · missing: "+status.filter { !it.ready }.joinToString { it.requirement.name } })
                     status?.forEach { Text("${if(it.ready) "✓" else "○"} ${it.requirement.name} · ${it.installedVersion}",style=MaterialTheme.typography.bodySmall) }
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         if(installedBasic==null) TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.download(basic) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text("Basic run setup") }
                         Button(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.setupPreview(id) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(if(kit==null) "Set up complete IDE Kit" else "Review / repair dependencies") }
                     }

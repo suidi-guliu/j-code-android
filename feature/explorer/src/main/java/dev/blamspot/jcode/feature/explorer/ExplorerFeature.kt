@@ -39,6 +39,7 @@ object ExplorerFeature {
         hiddenPatterns: List<String> = emptyList(),
         greyOutExcluded: Boolean = true,
         autoRefreshEnabled: Boolean = true,
+        revealDirectory: String? = null,
         onFileSelected: ((dev.blamspot.jcode.fs.FsNode) -> Unit)? = null,
         onSnackbar: ((String) -> Unit)? = null,
     ) {
@@ -52,6 +53,7 @@ object ExplorerFeature {
             hiddenPatterns = hiddenPatterns,
             greyOutExcluded = greyOutExcluded,
             autoRefreshEnabled = autoRefreshEnabled,
+            revealDirectory = revealDirectory,
             onFileSelected = onFileSelected,
             onSnackbar = onSnackbar,
         )

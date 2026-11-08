@@ -1,0 +1,23 @@
+{
+  "id": "dev.suicode.example.zh-hans",
+  "name": "Simplified Chinese localization example",
+  "author": "sui-code SDK examples",
+  "description": "Partial development fixture, not a complete Chinese translation or official signed language pack.",
+  "version": "0.1.0",
+  "kind": "suik",
+  "api": {
+    "min": 4,
+    "max": 4
+  },
+  "permissions": [
+    "ui.localization"
+  ],
+  "dependencies": [],
+  "components": [
+    {
+      "id": "strings",
+      "type": "localization",
+      "entry": "ide/strings.json"
+    }
+  ]
+}

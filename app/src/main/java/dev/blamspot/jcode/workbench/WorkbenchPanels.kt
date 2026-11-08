@@ -89,7 +89,7 @@ internal fun WorkspaceEmptyState(workspace: Workspace?) {
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = workspace?.name ?: "sui-code",
+                text = "Internal Files",
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
@@ -200,7 +200,7 @@ internal fun ProjectRoster(
                                     ContextAction(JCodeIcon.Trash, "Delete project files to Trash", destructive=true) { trashTarget=project },
                                 ),
                                 listActions = listOf(
-                                    ContextAction(JCodeIcon.Open, if (isWorkspace) "Open workspace" else "Open") { onOpenProject(project) },
+                                    ContextAction(JCodeIcon.Open, if (isWorkspace) "Open saved project group" else "Open") { onOpenProject(project) },
                                     ContextAction(JCodeIcon.Settings, "Project settings") { onOpenProjectSettings(project.id) },
                                     ContextAction(JCodeIcon.Save, "Export to storage") { onExportProject(project) },
                                 ),

@@ -146,7 +146,7 @@ internal fun WorkspaceHeader(
                     listActions = listOf(
                         ContextAction(
                             JCodeIcon.Close,
-                            if (inUserWorkspace) "Close workspace" else "Close project",
+                            if (inUserWorkspace) "Close saved project group" else "Close project",
                         ) { if (inUserWorkspace) onCloseWorkspace() else onCloseProject() },
                     ),
                 )

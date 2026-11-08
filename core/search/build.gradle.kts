@@ -22,6 +22,7 @@ android {
 }
 
 dependencies {
+    testImplementation(kotlin("test"))
     implementation(libs.coroutines.android)
 }
 

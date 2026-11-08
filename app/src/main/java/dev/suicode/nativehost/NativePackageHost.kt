@@ -34,6 +34,15 @@ class NativePackageHost private constructor(private val context: Context) {
     private val mutation=Mutex()
     private val mutableRows=MutableStateFlow<List<NativePackageRow>>(emptyList())
     val rows=mutableRows.asStateFlow()
+    private val languagePrefs=context.getSharedPreferences("sui-native-ui-language",Context.MODE_PRIVATE)
+    private val mutableLanguage=MutableStateFlow(languagePrefs.getString("selection-v1",null))
+    val selectedUiLanguage=mutableLanguage.asStateFlow()
+    private val mutableLocalizations=MutableStateFlow<List<LocalizationBundle>>(emptyList())
+    val localizations=mutableLocalizations.asStateFlow()
+    fun selectUiLanguage(selection: String?) {
+        require(selection==null || mutableLocalizations.value.any { it.selectionId==selection }) { "Unavailable language package" }
+        languagePrefs.edit().putString("selection-v1",selection).apply();mutableLanguage.value=selection
+    }
     private val mutableError=MutableStateFlow<String?>(null)
     val error=mutableError.asStateFlow()
     private val backends=java.util.concurrent.ConcurrentHashMap<Operation,CoreBackend>()
@@ -48,7 +57,7 @@ class NativePackageHost private constructor(private val context: Context) {
             require(inputs.size<=64 && inputs.all { (k,v) -> k.matches(Regex("[a-z][a-z0-9.-]{0,63}")) && v.length<=4096 && '\u0000' !in v })
             val pack=store.load(id)
             val component=pack.declarations().first { it.id==componentId }
-            val operation=when(component.type) { "panel" -> Operation.PANEL_OPEN;"simpleRun","basicBuild" -> Operation.SIMPLE_RUN;"language","environment","setup" -> return@withLock Reply(false,"E_COMPONENT");else -> Operation.valueOf(component.descriptor.getValue("operation").jsonPrimitive.content) }
+            val operation=when(component.type) { "panel" -> Operation.PANEL_OPEN;"simpleRun","basicBuild" -> Operation.SIMPLE_RUN;"language","environment","setup","localization" -> return@withLock Reply(false,"E_COMPONENT");else -> Operation.valueOf(component.descriptor.getValue("operation").jsonPrimitive.content) }
             val args=if(component.type=="panel") component.descriptor.mapValues { if(it.value is JsonPrimitive) it.value.jsonPrimitive.content else it.value.toString() }
                 else if(component.type in setOf("simpleRun","basicBuild")) emptyMap()
                 else component.descriptor.getValue("arguments").jsonObject.mapValues { it.value.jsonPrimitive.content }
@@ -85,6 +94,7 @@ class NativePackageHost private constructor(private val context: Context) {
         sessions.values.forEach(CoreSession::close);sessions.clear();store.close()
         backends.clear()
         mutablePanel.value=null
+        mutableLocalizations.value=emptyList()
     }
     private val mutableSource=MutableStateFlow<String?>(null)
     val source=mutableSource.asStateFlow()
@@ -182,9 +192,13 @@ class NativePackageHost private constructor(private val context: Context) {
             runCatching { activate(r.id) }.onFailure { mutableError.value="${r.id}: ${it.message}" }
         }
     }
-    private fun publish() { mutableRows.value=store.records().mapNotNull {
-        runCatching { NativePackageRow(it,store.load(it.id)) }.onFailure { error -> mutableError.value="${it.id}: ${error.message}" }.getOrNull()
-    } }
+    private fun publish() {
+        mutableRows.value=store.records().mapNotNull { record ->
+            runCatching { NativePackageRow(record,store.load(record.id)) }.onFailure { error -> mutableError.value="${record.id}: ${error.message}" }.getOrNull()
+        }
+        mutableLocalizations.value=mutableRows.value.filter { it.record.enabled && sessions.containsKey(it.record.id) && Capability.LOCALIZATION in it.record.grants }
+            .flatMap { LocalizationResources.forPack(it.pack) }.sortedWith(compareBy({it.locale},{it.packageId}))
+    }
     private suspend fun action(block: ()->Unit) = withContext(Dispatchers.IO) {
         mutation.withLock {
             try { mutableError.value=null;block();reconcile();publish() }

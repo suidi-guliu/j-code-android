@@ -56,41 +56,10 @@ internal fun OpenFolderTypeDialog(
     onDismiss: () -> Unit,
     onConfirm: (isWorkspace: Boolean) -> Unit,
 ) {
-    var isWorkspace by rememberSaveable { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set folder type") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.md)) {
-                Text(
-                    "\"$folderName\" has no .jcode config yet. Is it a Project or a Workspace?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TypeOption(
-                        label = "Project",
-                        selected = !isWorkspace,
-                        onSelect = { isWorkspace = false },
-                        modifier = Modifier.weight(1f),
-                    )
-                    TypeOption(
-                        label = "Workspace",
-                        selected = isWorkspace,
-                        onSelect = { isWorkspace = true },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            CompactFilledButton(text = "Open", onClick = { onConfirm(isWorkspace) })
-        },
-        dismissButton = {
-            CompactOutlinedButton(text = "Cancel", onClick = onDismiss)
-        },
-    )
+    AlertDialog(onDismissRequest=onDismiss,title={Text("Open folder as Project?")},
+        text={Text("$folderName\nFiles remain accessible through Internal Files without a Project. Opening as a Project adds optional tools and context.")},
+        confirmButton={CompactFilledButton(text="Open Project",onClick={onConfirm(false)})},
+        dismissButton={CompactOutlinedButton(text="Cancel",onClick=onDismiss)})
 }
 
 /**
@@ -195,11 +164,7 @@ internal fun NewItemDialog(
      */
     onOpenGallery: (String, String, String) -> Unit = { _, _, _ -> },
     resolveDynamicOptions: suspend (String) -> List<String> = { emptyList() },
-    /** When false (already inside a User Workspace), the Project/Workspace type toggle is hidden and
-     *  the dialog only creates a project — you don't create a workspace inside a workspace. */
-    allowWorkspaceType: Boolean = true,
 ) {
-    var isWorkspace by rememberSaveable(allowWorkspaceType) { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var selectedTemplateId by rememberSaveable(templates) {
         mutableStateOf(templates.firstOrNull()?.id)
@@ -207,7 +172,7 @@ internal fun NewItemDialog(
     // 0 = pick folder type / name / template; 1 = configure the template's inputs.
     var step by rememberSaveable { mutableStateOf(0) }
 
-    val selectedTemplate = if (isWorkspace) null else templates.firstOrNull { it.id == selectedTemplateId }
+    val selectedTemplate = templates.firstOrNull { it.id == selectedTemplateId }
     val hasInputs = selectedTemplate?.inputs?.isNotEmpty() == true
     // Live values for the selected template's inputs, seeded from each input's default.
     val inputValues = remember(selectedTemplateId) {
@@ -236,40 +201,16 @@ internal fun NewItemDialog(
 
     // Left column: folder type + name. Right column (Project): template list; (Workspace): a hint.
     val primarySection: @Composable () -> Unit = {
-        if (allowWorkspaceType) {
-            Text("Folder type", style = MaterialTheme.typography.labelLarge)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TypeOption(
-                    label = "Project",
-                    selected = !isWorkspace,
-                    onSelect = { isWorkspace = false },
-                    modifier = Modifier.weight(1f),
-                )
-                TypeOption(
-                    label = "Workspace",
-                    selected = isWorkspace,
-                    onSelect = { isWorkspace = true },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
         SettingsTextFieldRow(
             label = "Name",
             value = name,
             onValueChange = { name = it },
-            placeholder = if (isWorkspace) "Workspace name" else "Project name",
+            placeholder = "Project name",
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         )
     }
     val detailSection: @Composable () -> Unit = {
-        if (isWorkspace) {
-            Text("Workspace", style = MaterialTheme.typography.labelLarge)
-            Text(
-                "A workspace is a container folder that holds multiple projects.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
+        run {
             Text("Template", style = MaterialTheme.typography.labelLarge)
             templates.forEach { template ->
                 TemplateOption(
@@ -288,8 +229,7 @@ internal fun NewItemDialog(
             Text(
                 when {
                     step == 1 && selectedTemplate != null -> selectedTemplate.name
-                    !allowWorkspaceType -> "New Project"
-                    else -> "New"
+                    else -> "New Project"
                 },
             )
         },
@@ -345,7 +285,7 @@ internal fun NewItemDialog(
         },
         confirmButton = {
             val gallery = selectedTemplate?.gallery.orEmpty()
-            val handsOff = !isWorkspace && gallery.isNotBlank() && selectedTemplate?.extensionId?.isNotBlank() == true
+            val handsOff = gallery.isNotBlank() && selectedTemplate?.extensionId?.isNotBlank() == true
             CompactFilledButton(
                 text = if (handsOff || (step == 0 && hasInputs)) "Next" else "Create",
                 onClick = {
@@ -361,8 +301,8 @@ internal fun NewItemDialog(
                         onConfirm(
                             MainViewModel.NewItemRequest(
                                 name = name,
-                                isWorkspace = isWorkspace,
-                                templateId = if (isWorkspace) null else selectedTemplateId,
+                                isWorkspace = false,
+                                templateId = selectedTemplateId,
                                 inputs = if (hasInputs) inputValues.toMap() else emptyMap(),
                             ),
                         )

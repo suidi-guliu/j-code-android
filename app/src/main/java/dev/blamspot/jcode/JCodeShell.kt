@@ -1885,7 +1885,6 @@ fun JCodeApp(
             },
             resolveDynamicOptions = viewModel::runTemplateOptionsCommand,
             // sui-code uses Internal Files as its permanent root; new user Workspaces are no longer offered.
-            allowWorkspaceType = false,
         )
     }
 
@@ -2186,10 +2185,15 @@ private fun JCodeShell(
     // landscape is tall too. Key off height, not width, so phones keep the modal drawers they use in
     // portrait instead of switching to the cramped persistent side panels a tablet would want.
     val isMobileLandscapeMode = isLandscape && windowInfo.heightClass == JCodeWindowHeightClass.Compact
-    val usesModalWorkspace = windowInfo.widthClass == JCodeWindowWidthClass.Compact || windowInfo.heightClass == JCodeWindowHeightClass.Compact
+    val paneDensity=LocalDensity.current
+    var measuredWorkbenchWidth by remember { mutableFloatStateOf(configuration.screenWidthDp.toFloat()) }
+    val panePrefs=remember(appContext) { appContext.getSharedPreferences("sui-workbench-layout",Context.MODE_PRIVATE) }
+    var requestedPaneWidth by remember { mutableFloatStateOf(panePrefs.getFloat("content-width-v1",Float.NaN)) }
+    val paneBounds=dev.blamspot.jcode.design.WorkbenchPaneSizing.bounds(measuredWorkbenchWidth,paneDensity.fontScale,requestedPaneWidth)
+    val usesModalWorkspace = paneBounds.modal || windowInfo.heightClass == JCodeWindowHeightClass.Compact
     val isPortraitMobileMode = usesModalWorkspace && windowInfo.widthClass == JCodeWindowWidthClass.Compact
     val canShowRightSidebar = true
-    val leftSidebarWidth = if (windowInfo.widthClass == JCodeWindowWidthClass.Expanded) 284.dp else 236.dp
+    val leftSidebarWidth = (dev.blamspot.jcode.design.WorkbenchPaneSizing.RAIL + paneBounds.width + dev.blamspot.jcode.design.WorkbenchPaneSizing.HANDLE).dp
     // Opt-in (Settings → Appearance) landscape split. It deliberately does NOT go through
     // usesModalWorkspace: that also drives the LEFT ModalNavigationDrawer, and docking the left
     // drawer on a phone would leave no editor at all. Only the right side changes.
@@ -3381,22 +3385,22 @@ private fun JCodeShell(
         }
         CommandRegistry.register(
             id = "workspace.newFolder",
-            title = "New Folder",
-            group = "Workspace",
+            title = "New Project",
+            group = "Files",
             action = onCreateProject,
             icon = JCodeIcon.NewFolder,
         )
         CommandRegistry.register(
             id = "workspace.openFolder",
             title = "Open Folder",
-            group = "Workspace",
+            group = "Files",
             action = { openFolderLauncher.launch(null) },
             icon = JCodeIcon.Files,
         )
         CommandRegistry.register(
             id = "workspace.autoSetupEnvironment",
             title = "Auto-Setup Environment",
-            group = "Workspace",
+            group = "Files",
             action = onAutoSetup,
             icon = JCodeIcon.Sdk,
         )
@@ -3496,7 +3500,7 @@ private fun JCodeShell(
 
     val drawerContent: @Composable () -> Unit = {
         ModalDrawerSheet(
-            modifier = Modifier.width(332.dp),
+            modifier = Modifier.width((dev.blamspot.jcode.design.WorkbenchPaneSizing.RAIL + paneBounds.width).dp),
             drawerContainerColor = MaterialTheme.colorScheme.surface,
         ) {
             WorkspacePanel(
@@ -3626,7 +3630,7 @@ private fun JCodeShell(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .onSizeChanged { splitWidthPx = it.height },
+                    .onSizeChanged { splitWidthPx = it.height; measuredWorkbenchWidth=it.width/paneDensity.density },
             ) {
                 Box(
                     modifier = Modifier
@@ -4086,7 +4090,7 @@ private fun JCodeShell(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
                                 .fillMaxHeight()
-                                .width(leftSidebarWidth)
+                                .width(leftSidebarWidth - 12.dp)
                                 .zIndex(1f),
                             breadcrumb = breadcrumb,
                             onCloseWorkspace = handleCloseWorkspace,
@@ -4123,6 +4127,11 @@ private fun JCodeShell(
                             // Persistent sidebar is only composed while visible (guarded above).
                             explorerAutoRefresh = true,
                         )
+                        dev.blamspot.jcode.workbench.WorkbenchPaneResize(paneBounds,
+                            onWidth={requestedPaneWidth=it},
+                            onDelta={delta -> val live=dev.blamspot.jcode.design.WorkbenchPaneSizing.bounds(measuredWorkbenchWidth,paneDensity.fontScale,requestedPaneWidth); requestedPaneWidth=(live.width+delta).coerceIn(live.minimum,live.maximum)},
+                            onCommit={panePrefs.edit().putFloat("content-width-v1",requestedPaneWidth).apply()},
+                            modifier=Modifier.align(Alignment.CenterStart).padding(start=leftSidebarWidth-12.dp).zIndex(2f))
                     }
                 }
 
@@ -4376,6 +4385,7 @@ private fun WorkspacePanel(
     val context = LocalContext.current
     val protectedProjectRoots by workspaceManager.registeredLocalRoots.collectAsStateWithLifecycle()
     var browseInternalFiles by rememberSaveable { mutableStateOf(true) }
+    var revealDirectory by rememberSaveable { mutableStateOf<String?>(null) }
     val internalRoot = remember(context) {
         dev.blamspot.jcode.fs.InternalFiles.root(context.filesDir)
     }
@@ -4398,7 +4408,7 @@ private fun WorkspacePanel(
                 listOf(WorkbenchTool.Explorer,WorkbenchTool.Search,WorkbenchTool.ToolchainManager,WorkbenchTool.Packages,WorkbenchTool.Settings).forEach { item ->
                     Column(Modifier.fillMaxWidth().clickable { onSelectTool(item) }.padding(vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally) {
                         Icon(jcIcon(item.icon),item.compactLabel,tint=if(selectedTool==item) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(item.compactLabel,style=MaterialTheme.typography.labelSmall)
+                        Text(dev.blamspot.jcode.design.uiText(when(item) { WorkbenchTool.Explorer -> "nav.files";WorkbenchTool.Search -> "nav.find";WorkbenchTool.ToolchainManager -> "nav.languages";WorkbenchTool.Packages -> "nav.packages";else -> "nav.settings" }),style=MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -4420,8 +4430,8 @@ private fun WorkspacePanel(
                 contributedDrawerActions = listOf(internalAction) + (if (selectedProject != null) listOf(activeProjectAction) else emptyList()) + contributedDrawerActions,
                 onDrawerAction = { action ->
                     when (action.id) {
-                        "files.internalRoot" -> { browseInternalFiles = true; onSelectTool(WorkbenchTool.Explorer) }
-                        "files.activeProject" -> { browseInternalFiles = false; onSelectTool(WorkbenchTool.Explorer) }
+                        "files.internalRoot" -> { revealDirectory=null; browseInternalFiles = true; onSelectTool(WorkbenchTool.Explorer) }
+                        "files.activeProject" -> { revealDirectory=null; browseInternalFiles = false; onSelectTool(WorkbenchTool.Explorer) }
                         else -> onDrawerAction(action)
                     }
                 },
@@ -4466,8 +4476,8 @@ private fun WorkspacePanel(
                             }
 
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                                TextButton(onClick={browseInternalFiles=true}) { Text("Internal Files") }
-                                if(selectedProject!=null) TextButton(onClick={browseInternalFiles=false}) { Text("Project files") }
+                                TextButton(onClick={revealDirectory=null;browseInternalFiles=true}) { Text("Internal Files") }
+                                if(selectedProject!=null) TextButton(onClick={revealDirectory=null;browseInternalFiles=false}) { Text("Project files") }
                             }
                             when {
                                 selectedProject == null || browseInternalFiles -> {
@@ -4475,6 +4485,7 @@ private fun WorkspacePanel(
                                     ExplorerFeature.Content(
                                         workspace = null,
                                         project = internalProject,
+                                        revealDirectory = revealDirectory,
                                         fs = workspaceManager.fsFor(internalProject.fsPath),
                                         context = context,
                                         modifier = Modifier.weight(1f),
@@ -4495,6 +4506,7 @@ private fun WorkspacePanel(
                                             ExplorerFeature.Content(
                                                 workspace = workspace,
                                                 project = selectedProject,
+                                                revealDirectory = revealDirectory,
                                                 fs = workspaceManager.fsFor(selectedProject.fsPath),
                                                 context = context,
                                                 modifier = Modifier.fillMaxSize(),
@@ -4515,6 +4527,8 @@ private fun WorkspacePanel(
                     WorkbenchTool.Search -> SearchToolPanel(
                         project = selectedProject ?: internalProject,
                         activeTab = editorGroup.activeTab,
+                        internalRoot=internalRoot,
+                        onOpenDirectory={ folder -> browseInternalFiles=folder.canonicalFile.toPath().startsWith(internalRoot.canonicalFile.toPath());revealDirectory=folder.absolutePath;onSelectTool(WorkbenchTool.Explorer) },
                         onOpenResult = onOpenPathAtLine,
                         seed = searchSeed,
                         onSeedConsumed = onSearchSeedConsumed,

@@ -1,6 +1,6 @@
 # sui-code Native Extension & IDE Kit Development Specification
 
-规范版本 **0.3.0**；Core API **3**（兼容 API 1、2 声明）；SUIC **1.0**；SUIK **1.0**。
+规范版本 **0.4.0**；Core API **4**（兼容 API 1、2、3 声明）；SUIC **1.0**；SUIK **1.0**。
 
 本文的 MUST/必须、MUST NOT/禁止、SHOULD/应为规范性要求。本文与 `core/native-packages/src/main/java/dev/suicode/packages` 中的生产验证器、加载器、授权会话及事务存储对应，不引用 JCode 插件 API。所有路径均相对仓库根目录。
 
@@ -568,7 +568,8 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
           "language.lsp",
           "debug.dap",
           "project.read",
-          "ui.panel"
+          "ui.panel",
+          "ui.localization"
         ]
       },
       "uniqueItems": true
@@ -624,7 +625,8 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
               "workflow",
               "command",
               "panel",
-              "setup"
+              "setup",
+              "localization"
             ]
           },
           "entry": {
@@ -651,6 +653,43 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
     "permissions",
     "dependencies",
     "components"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "components": {
+            "contains": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "localization"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "api": {
+            "properties": {
+              "min": {
+                "minimum": 4
+              }
+            }
+          },
+          "permissions": {
+            "contains": {
+              "const": "ui.localization"
+            }
+          }
+        }
+      }
+    }
   ]
 }
 ```
@@ -835,3 +874,326 @@ LSP 使用 UTF-16 坐标和正确编码的 file URI，发请求前冲刷 debounc
 `PackageVerifier.verify(bytes:ByteArray,suffix:String,installed:Map<String,String>=emptyMap(),checkDependencies:Boolean=true):VerifiedPack`：API3新增可选 checkDependencies。默认仍执行全部已安装依赖版本检查；仅宿主的隔离审阅/计划流程可传 false，此时仍验证依赖字段、区间、包身份、签名、哈希和职责边界，但不把预览视为可激活。PackageStore.install/load/enable始终使用true；禁止用预览跳过实际安装检查。第三方SDK的PackageTool仍按默认严格验证。
 
 API3 `setup` 的 Manifest 还必须声明 file.read/file.write/process.run，否则验证阶段报 E_PERMISSION，不能等到确认按钮触发异常。`project` 组件 arguments 可选 `markers:String="[]"`（内容为相对文件名 JSON 数组）；用于没有编辑器源文件时识别可选 Project 上下文。宿主忽略含空段、`.`/`..`、绝对路径或无效字符的 marker，不允许越出 Project。此字段不创建 Project、不执行脚本，缺省时可继续从已打开源文件匹配 Kit。Java/C_CPP/Python 正式模板分别声明 pom.xml、CMakeLists.txt、main.py。Kit 安装结束会串行更新服务注册、刷新与探测目录并重试现有编辑文件，无需手动进入 Servers 再安装。
+
+## 29. API 4：独立 UI 本地化资源（规范 0.4.0）
+
+这是生产 `Localization.kt` / Android NativePackageHost 的实际协议。包头、SUIC/SUIK容器版本仍为1.0。旧API1/2/3 Kit及其授权不变；Core API4是新增声明能力，不要求更新现有语言环境或重装Kit。`.suic`不能声明localization；`.suik`可只有本地化组件，也可同时含LSP/DAP/项目/面板等声明。语言资源不自动获得其他组件权限。
+
+### 29.1 Manifest、描述符及资源
+
+新增组件 `{"id":"strings","type":"localization","entry":"ide/strings.json"}`，Manifest `api.min >= 4`，权限包含`ui.localization`。没有隐含的process.run/file.write/project.read，也没有隐含语言环境依赖。一个包同一locale只能有一个组件。完整可安装示例为`examples/zh-hans-kit`，预构建文件为`examples/packages/zh-hans-kit.suik`；它仅是部分翻译的未签名开发样例，不是正式完整中文版。
+
+**完整合法 Manifest：**
+
+```json
+{
+  "id": "dev.suicode.example.zh-hans",
+  "name": "Simplified Chinese localization example",
+  "author": "sui-code SDK examples",
+  "description": "Partial development fixture, not a complete Chinese translation or official signed language pack.",
+  "version": "0.1.0",
+  "kind": "suik",
+  "api": {
+    "min": 4,
+    "max": 4
+  },
+  "permissions": [
+    "ui.localization"
+  ],
+  "dependencies": [],
+  "components": [
+    {
+      "id": "strings",
+      "type": "localization",
+      "entry": "ide/strings.json"
+    }
+  ]
+}
+```
+
+**完整描述符 Schema（Draft2020-12）：**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+      "not": {
+        "const": "en"
+      }
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "fallback": {
+      "const": "en"
+    },
+    "resource": {
+      "type": "string",
+      "pattern": "^resources/i18n/[A-Za-z0-9_-]+\\.json$"
+    }
+  },
+  "required": [
+    "locale",
+    "displayName",
+    "fallback",
+    "resource"
+  ]
+}
+```
+
+描述符必填字段：`locale:string`为大小写规范化BCP47（如zh-Hans、zh-CN），Java Locale规范化后必须相同；保留en不能覆盖。`displayName:string`长度1..80，纯文本，不得含控制字符或双向重排控制符。`fallback:string`当前只能为en，禁止循环/跨包回退。`resource:string`必须匹配resources/i18n/<ASCII文件名>.json；资源来自已认证包内容，禁止外部文件/URL/路径遍历。未知字段拒绝。
+
+**完整资源 Schema：**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 1,
+  "maxProperties": 34,
+  "properties": {
+    "nav.files": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "nav.find": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "nav.languages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "nav.packages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "nav.settings": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.internal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.filter": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.filterHint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.matches": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.newFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.newFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.refresh": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.more": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.content": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.names": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.current": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.scope": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.hint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.file": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.stop": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.debug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.continue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.stopDebug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.overview": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.build": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.test": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.run": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.tasks": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "languages.title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.language": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.english": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.fallback": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    }
+  }
+}
+```
+
+资源为遵循本规范canonical JSON+LF规则的严格UTF-8 JSON对象（pack.py会规范化源码JSON），最多64KiB；1..注册键数个条目，每值为1..2048字符纯文本。Core只开放下表键；未知键/保护键拒绝E_LOCALIZATION。每条翻译必须保留对应英文的命名占位符集合（如{count}），不支持printf、HTML、ICU程序或脚本；不完整/额外花括号拒绝。资源不完整时逐键回退英文，不读取任意包提供的英文覆盖。校验器还检查UTF-8、深度、控制字符及原包SHA256/签名。
+
+|公开键|Core英文默认值|
+|---|---|
+|`nav.files`|Files|
+|`nav.find`|Find|
+|`nav.languages`|Languages|
+|`nav.packages`|Packages|
+|`nav.settings`|Settings|
+|`files.internal`|Internal Files|
+|`files.filter`|Filter visible names|
+|`files.filterHint`|Filters loaded entries only. Use Find for nested names and contents.|
+|`files.matches`|{count} visible matches|
+|`files.newFile`|New File|
+|`files.newFolder`|New Folder|
+|`files.refresh`|Refresh|
+|`files.more`|More file actions|
+|`find.content`|File contents|
+|`find.names`|Files and folders|
+|`find.current`|Current document|
+|`find.query`|Search {scope}|
+|`find.scope`|Search scope|
+|`find.hint`|Search names or contents across the selected folder.|
+|`run.file`|Run file|
+|`run.stop`|Stop file|
+|`run.debug`|Debug|
+|`run.continue`|Continue|
+|`run.stopDebug`|Stop debug|
+|`run.overview`|Overview|
+|`project.build`|Build|
+|`project.test`|Test|
+|`project.run`|Run Project|
+|`project.tasks`|Advanced tasks|
+|`packages.title`|Packages|
+|`languages.title`|Languages|
+|`ui.language`|Interface language|
+|`ui.english`|English (default)|
+|`ui.fallback`|Missing translations use English. Language resources do not install development environments.|
+
+
+### 29.2 实际 Core 接口
+
+所有接口在`dev.suicode.packages`，不依赖Android/JCode插件。新增能力`Capability.LOCALIZATION("ui.localization")`，这是被动资源授权，没有任意执行操作。
+
+|接口|参数、返回值、调用时机与失败|
+|---|---|
+|`LocalizationDescriptor.parse(d: JsonObject): LocalizationDescriptor`|验证包安装/加载时调用，全部字段必填；返回locale/displayName/fallback/resource。非法字段/值抛PackageFailure，code E_LOCALIZATION（公共JSON字段类型错误可为E_MANIFEST）。不产生IO/副作用。API4。|
+|`LocalizationResources.parse(bytes: ByteArray): Map<String,String>`|输入完整认证资源字节，返回不可执行的键/文本映射。校验上述限额与占位符；不合法抛PackageFailure（E_LOCALIZATION或通用JSON错误）。纯函数，不要求权限；它不等于启用。|
+|`LocalizationResources.forPack(pack: VerifiedPack): List<LocalizationBundle>`|从认证归档中解析全部localization组件；仅取包内resource；缺失/错误失败。返回每个locale的bundle，包含packageId、locale、displayName、entries和selectionId。API4；宿主必须另外检查生命周期/授权。|
+|`LocalizationBundle.selectionId: String`|只读，格式packageId/locale，用于明确选择；不能只按locale自动抢占。|
+|`UiTranslations(bundles: List<LocalizationBundle> = emptyList(), selection: String? = null)`|宿主仅传入已启用且已授予ui.localization的资源，构建当前不可变快照。没有选择、不可用或重复selectionId时使用英文，防止冲突自动选取。|
+|`UiTranslations.text(key: String, arguments: Map<String,String> = emptyMap()): String`|必填已注册key；arguments键集合必须等于该英文的占位符集合，无占位符时为空。返回当前译文或英文，并一次性按匹配替换参数；参数中的花括号保持字面量，不递归替换。未知key/缺失或额外参数抛IllegalArgumentException，属于宿主编程错误。无IO/权限升级。|
+|`UiTextKeys.english: Map<String,String>`|公开只读键表，是本版本唯一允许翻译的Core键；新增键随API向前添加，移除键需重大API版本及弃用周期。安全授权/签名/来源/删除确认不在键表。|
+
+### 29.3 Android加载、启停及选择
+
+NativePackageHost在安装、恢复、启用、禁用、更新、卸载、回滚后的publish阶段，于IO线程读取已校验归档。只有enabled、有活跃CoreSession且记录授予ui.localization的包才进入`localizations: StateFlow<List<LocalizationBundle>>`。`selectedUiLanguage: StateFlow<String?>`保存用户明确选择；`selectUiLanguage(selection: String?)`为宿主界面操作，null选择英文，不存在selection抛IllegalArgumentException。偏好单独保存，不改系统Locale、不重建Ubuntu、不清任何项目数据。UI通过NativeLocalizationProvider和core/design的LocalUiTranslations订阅不可变快照；`@Composable uiText(key,arguments): String`与上述text契约相同。
+
+Packages页面提供界面语言选择和来源ID。安装只增加可选资源，不自动切换；同locale的不同包各自列出，用户明确选择，不靠安装时间覆盖。禁用/卸载当前资源立即英文回退；偏好保留，重新启用相同ID/locale可恢复。进程重启恢复包和选择。资源更新仍走完整摘要/签名/授权审阅与原子包替换，解析失败回滚旧归档；不允许未确认脚本执行。API4仅已接入的导航、Files筛选、Find模式、主运行操作、Languages/Packages标题等公开键可被替换；未接入的既有设置/高级界面仍英文，完整翻译迁移属于后续范围。
+
+### 29.4 安全、测试与兼容
+
+localization仅可提供纯数据；禁止全局主题覆盖、HTML/View/DEX/JS注入和安全确认文案篡改。完整性/签名状态沿用标准包协议；未签名样例显示未验证且必须确认。权限检查在宿主生命周期而非仅靠Schema，插件越界仍E_BOUNDARY。无环境、下载或执行依赖的语言包审阅计划为零工具步骤；与已启用Java/C_CPP/Python Kit并存。测试覆盖安装/启用/禁用/卸载后资源回退、两来源冲突、占位符、错误key/locale/资源大小及损坏包；规范工具同步验证完整Schema及包样例。旧接口未弃用；后续开放键/新增回退机制必须同步SDK、规范、校验工具和测试。

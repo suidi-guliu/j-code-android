@@ -58,7 +58,8 @@
           "language.lsp",
           "debug.dap",
           "project.read",
-          "ui.panel"
+          "ui.panel",
+          "ui.localization"
         ]
       },
       "uniqueItems": true
@@ -114,7 +115,8 @@
               "workflow",
               "command",
               "panel",
-              "setup"
+              "setup",
+              "localization"
             ]
           },
           "entry": {
@@ -141,5 +143,42 @@
     "permissions",
     "dependencies",
     "components"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "components": {
+            "contains": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "localization"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "api": {
+            "properties": {
+              "min": {
+                "minimum": 4
+              }
+            }
+          },
+          "permissions": {
+            "contains": {
+              "const": "ui.localization"
+            }
+          }
+        }
+      }
+    }
   ]
 }

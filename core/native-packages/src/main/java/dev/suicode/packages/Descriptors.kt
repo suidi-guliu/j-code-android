@@ -6,6 +6,7 @@ import kotlinx.serialization.json.*
 internal fun validateDescriptor(type: String, d: JsonObject): Operation? {
     fun text(key: String) { if(d.string(key).length !in 1..4096) fail("E_COMPONENT",key) }
     when(type) {
+        "localization" -> { LocalizationDescriptor.parse(d); return null }
         "setup" -> { KitRequirements.parse(d); return null }
         "language" -> {
             d.keysExactly(setOf("languageId","extensions","priority"))

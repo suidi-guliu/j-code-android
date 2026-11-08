@@ -35,6 +35,21 @@ class PackageVerifierTest {
         return (magic+ByteBuffer.allocate(12).putShort(1).putShort(0).putLong(body.size.toLong()).array()+body) to key?.public
     }
     private fun rejected(code: String, action: ()->Unit) { assertEquals(code,assertFailsWith<PackageFailure>(block=action).code) }
+    @Test fun localizationRequiresKitApiPermissionAndValidAuthenticatedResources() {
+        fun fixture(api:Int=4,permission:String="ui.localization",resource:Boolean=true): ByteArray {
+            val m=manifest("suik","[{\"entry\":\"ide/strings.json\",\"id\":\"strings\",\"type\":\"localization\"}]","[\"$permission\"]").toString(Charsets.UTF_8).replace("\"max\":1,\"min\":1","\"max\":$api,\"min\":$api").toByteArray()
+            val d="""{"displayName":"中文","fallback":"en","locale":"zh-Hans","resource":"resources/i18n/zh.json"}
+""".toByteArray()
+            val files=mutableMapOf("manifest.json" to m,"ide/strings.json" to d)
+            if(resource) files["resources/i18n/zh.json"]="""{"nav.files":"文件"}
+""".toByteArray()
+            return pack("suik",files).first
+        }
+        assertEquals(1,LocalizationResources.forPack(PackageVerifier().verify(fixture(),"suik")).size)
+        rejected("E_LOCALIZATION") { PackageVerifier().verify(fixture(api=3),"suik") }
+        rejected("E_LOCALIZATION") { PackageVerifier().verify(fixture(permission="ui.panel"),"suik") }
+        rejected("E_LOCALIZATION") { PackageVerifier().verify(fixture(resource=false),"suik") }
+    }
     @Test fun allValidExamplesVerify() {
         examples.listFiles()!!.filter { !it.name.startsWith("illegal") }.forEach { f ->
             PackageVerifier().verify(f.readBytes(),f.extension,mapOf("dev.suicode.example.java" to "0.1.0","dev.suicode.example.c-cpp" to "0.1.0","dev.suicode.example.python" to "0.1.0"))

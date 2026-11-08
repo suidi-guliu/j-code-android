@@ -12,7 +12,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
+import dev.blamspot.jcode.design.uiText
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -113,7 +118,7 @@ import java.util.Locale
  * @param onFileSelected callback when a file is tapped
  * @param onSnackbar callback for showing user messages
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ExplorerView(
     workspace: Workspace?,
@@ -127,6 +132,7 @@ fun ExplorerView(
     /** Auto-refresh the tree from filesystem events while the Explorer is actually on-screen. Gated
      *  by the caller (drawer open / sidebar visible) so watchers stop the moment it's hidden. */
     autoRefreshEnabled: Boolean = true,
+    revealDirectory: String? = null,
     onFileSelected: ((FsNode) -> Unit)? = null,
     onSnackbar: ((String) -> Unit)? = null,
 ) {
@@ -157,24 +163,14 @@ fun ExplorerView(
     var clipboard by remember { mutableStateOf<List<ClipboardEntry>>(emptyList()) }
     var multi by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    var searchRows by remember { mutableStateOf<List<TreeRow>>(emptyList()) }
-    var searchNote by remember { mutableStateOf("") }
+    val searchRows=remember(query,treeRows,listRows,activeViewMode) { (if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.node.name.contains(query,ignoreCase=true) } }
+    val searchNote=if(query.isBlank()) "" else uiText("files.matches",mapOf("count" to searchRows.size.toString()))
     var sort by remember { mutableStateOf(TreeViewModel.Sort.Name) }
     var properties by remember { mutableStateOf<String?>(null) }
     var batchDelete by remember { mutableStateOf(false) }
     val selectedRows=(if(query.isNotBlank()) searchRows else treeRows+listRows).distinctBy { it.id }.filter { it.id in selectedIds && !it.isPlaceholder }
     // If a directory and its child are selected, operate only on the directory.
     val batchRows=selectedRows.filter { child -> selectedRows.none { parent -> parent.id!=child.id && child.id.startsWith(parent.id+"/") } }
-    LaunchedEffect(query,project) {
-        if(query.isBlank()) { searchRows=emptyList();searchNote="";return@LaunchedEffect }
-        kotlinx.coroutines.delay(180)
-        val root=(project.fsPath as? FsPath.Local)?.file
-        if(root==null) { searchNote="Search requires an internal/local directory. SAF access remains available through the file tree.";return@LaunchedEffect }
-        val taskContext=kotlinx.coroutines.currentCoroutineContext()
-        val result=withContext(Dispatchers.IO) { dev.blamspot.jcode.fs.LocalFileSearch.search(root,query) { taskContext.ensureActive() } }
-        searchRows=withContext(Dispatchers.IO) { result.files.map { f -> TreeRow(f.absolutePath,FsNode(FsPath.Local(f),f.name,if(f.isDirectory && !java.nio.file.Files.isSymbolicLink(f.toPath())) FsKind.Directory else FsKind.File,f.length(),f.lastModified()),0,false,false) } }
-        searchNote="${searchRows.size} matches"+if(result.truncated) " · limited; refine search" else ""
-    }
 
     // The bin. Its button stays on the toolbar while there is anything in it even after the setting
     // is turned off — opting out should stop deletes going there, not strand what already has.
@@ -187,8 +183,15 @@ fun ExplorerView(
     LaunchedEffect(trashRevision, autoRefreshEnabled) { trashHasItems = !trash.isEmpty() }
 
     // Load project root on first composition
-    LaunchedEffect(project) {
+    LaunchedEffect(project,revealDirectory) {
         viewModel.loadProjectRoot(project)
+        revealDirectory?.let { requested ->
+            val root=(project.fsPath as? FsPath.Local)?.file
+            val target=File(requested)
+            if(root!=null && runCatching { dev.blamspot.jcode.fs.DocumentPaths(root).resolve(requested).isDirectory }.getOrDefault(false)) {
+                viewModel.setViewMode(ExplorerViewMode.List);viewModel.navigateTo(FsPath.Local(target),target.name)
+            }
+        }
     }
 
     // The view mode is an app preference (Settings); react when it changes.
@@ -336,6 +339,7 @@ fun ExplorerView(
             return
         }
         when (action) {
+            RowAction.Properties -> properties="${row.node.name}\n${row.node.path.stableId}\n${row.node.kind} · ${row.node.sizeBytes} bytes\nModified: ${java.util.Date(row.node.modifiedAtMillis)}"
             RowAction.Open -> onFileSelected?.invoke(row.node)
             RowAction.NewFile -> showCreateDialog = CreateTarget(row.node.path, isDirectory = false)
             RowAction.NewFolder -> showCreateDialog = CreateTarget(row.node.path, isDirectory = true)
@@ -374,18 +378,25 @@ fun ExplorerView(
     Column(modifier = modifier.fillMaxSize()) {
         // Compact action toolbar (always visible) with create/refresh/paste. The Tree|List view mode
         // is set in Settings, not here.
-        OutlinedTextField(value=query,onValueChange={query=it.take(256)},label={Text("Search files / folders")},singleLine=true,modifier=Modifier.fillMaxWidth())
+        OutlinedTextField(value=query,onValueChange={query=it.take(256)},label={Text(uiText("files.filter"))},singleLine=true,modifier=Modifier.fillMaxWidth())
+        Text(uiText("files.filterHint"),style=MaterialTheme.typography.bodySmall)
         if(searchNote.isNotBlank()) Text(searchNote,style=MaterialTheme.typography.bodySmall)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        FlowRow(Modifier.fillMaxWidth()) {
             TextButton(onClick={multi=!multi;selectionState.clear()}) { Text(if(multi) "Done (${selectedIds.size})" else "Select") }
             TextButton(onClick={sort=TreeViewModel.Sort.entries[(sort.ordinal+1)%TreeViewModel.Sort.entries.size];scope.launch { viewModel.setSort(sort) }}) { Text("Sort: ${sort.name}") }
-            if(multi) {
-                TextButton(onClick={ (if(query.isNotBlank()) searchRows else if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.id!=project.fsPath.stableId }.forEach { if(it.id !in selectedIds) selectionState.toggle(it.id) } }) { Text("All") }
-                TextButton(enabled=batchRows.isNotEmpty(),onClick={clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,false) }}) { Text("Copy") }
-                TextButton(enabled=batchRows.isNotEmpty(),onClick={if(batchRows.any { isProtectedPath(it.node.path) }) onSnackbar?.invoke("Project/root folders must be managed through Projects") else clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,true) }}) { Text("Cut / move") }
-                TextButton(enabled=batchRows.isNotEmpty(),onClick={batchDelete=true}) { Text("Trash") }
+            var actionsExpanded by remember { mutableStateOf(false) }
+            Box {
+                TextButton(onClick={actionsExpanded=true}) { Text("Selection actions ▾") }
+                CompactContextMenu(expanded=actionsExpanded,onDismissRequest={actionsExpanded=false},listActions=buildList {
+                    if(multi) {
+                        add(ContextAction(JCodeIcon.SelectAll,"Select all visible") { (if(query.isNotBlank()) searchRows else if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.id!=project.fsPath.stableId }.forEach { if(it.id !in selectedIds) selectionState.toggle(it.id) } })
+                        add(ContextAction(JCodeIcon.Copy,"Copy",enabled=batchRows.isNotEmpty()) { clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,false) } })
+                        add(ContextAction(JCodeIcon.Cut,"Cut / move",enabled=batchRows.isNotEmpty()) { if(batchRows.any { isProtectedPath(it.node.path) }) onSnackbar?.invoke("Project/root folders must be managed through Projects") else clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,true) } })
+                        add(ContextAction(JCodeIcon.Trash,"Move to Trash",enabled=batchRows.isNotEmpty()) { batchDelete=true })
+                    }
+                    add(ContextAction(JCodeIcon.Settings,"Properties / full names",enabled=selectedRows.isNotEmpty()) { properties=selectedRows.joinToString("\n\n") { "${it.node.name}\n${it.node.path.stableId}\n${it.node.kind} · ${it.node.sizeBytes} bytes\nModified: ${java.util.Date(it.node.modifiedAtMillis)}" } })
+                })
             }
-            TextButton(enabled=selectedRows.isNotEmpty(),onClick={properties=selectedRows.joinToString("\n\n") { "${it.node.name}\n${it.node.path.stableId}\n${it.node.kind} · ${it.node.sizeBytes} bytes\nModified: ${java.util.Date(it.node.modifiedAtMillis)}" }}) { Text("Properties") }
         }
         ExplorerToolbar(
             viewMode = activeViewMode,
@@ -477,7 +488,7 @@ fun ExplorerView(
     }
     }
 
-    properties?.let { value -> AlertDialog(onDismissRequest={properties=null},title={Text("File properties")},text={Text(value)},confirmButton={TextButton(onClick={properties=null}) { Text("Close") }}) }
+    properties?.let { value -> AlertDialog(onDismissRequest={properties=null},title={Text("File properties")},text={Text(value,Modifier.verticalScroll(rememberScrollState()))},confirmButton={TextButton(onClick={properties=null}) { Text("Close") }}) }
     if(batchDelete) AlertDialog(onDismissRequest={batchDelete=false},title={Text("Move ${batchRows.size} selected items to Trash?")},text={Text("Files remain recoverable from Trash. Registered project roots cannot be removed here.")},confirmButton={TextButton(onClick={
         batchDelete=false
         fileOpScope.launch {
@@ -612,7 +623,7 @@ data class ClipboardEntry(
 )
 
 /** Per-row actions surfaced via the visible overflow (⋮) menu. */
-enum class RowAction { Open, NewFile, NewFolder, Rename, Copy, Cut, Delete, ImportHere, Export }
+enum class RowAction { Open, NewFile, NewFolder, Rename, Copy, Cut, Delete, ImportHere, Export, Properties }
 
 /** Parent of a path, or null when there is no addressable parent (SAF tree URIs). */
 private fun parentPathOf(path: FsPath): FsPath? = when (path) {
@@ -650,7 +661,7 @@ private fun RowOverflowMenu(
         JcTooltip("More actions") {
             IconButton(
                 onClick = { onExpandedChange(true) },
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     painter = jcIcon(JCodeIcon.MoreVert),
@@ -678,6 +689,7 @@ private fun RowOverflowMenu(
                     add(ContextAction(JCodeIcon.NewFolder, "New folder") { onAction(row, RowAction.NewFolder) })
                     add(ContextAction(JCodeIcon.Add, "Import files…") { onAction(row, RowAction.ImportHere) })
                 }
+                add(ContextAction(JCodeIcon.Settings, "Properties / full name") { onAction(row, RowAction.Properties) })
                 add(ContextAction(JCodeIcon.Save, "Export…") { onAction(row, RowAction.Export) })
                 // Extension-contributed actions (e.g. "Add to .gitignore") target a path inside the
                 // repo — the project root isn't a valid target, so omit them there.
@@ -711,7 +723,7 @@ private fun ExplorerBreadcrumb(
     ) {
         if (entries.size > 1) {
             JcTooltip("Up one level") {
-                IconButton(onClick = onNavigateUp, modifier = Modifier.size(28.dp)) {
+                IconButton(onClick = onNavigateUp, modifier = Modifier.size(48.dp)) {
                     Icon(
                         painter = jcIcon(JCodeIcon.ArrowUp),
                         contentDescription = "Up one level",
@@ -810,7 +822,7 @@ private const val EXCLUDED_ROW_ALPHA = 0.4f
  *  `git status` in the guest, and slow enough that a large expanded tree isn't re-listed constantly. */
 private const val EXPLORER_VISIBLE_REFRESH_MS = 2_000L
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun TreeRowItem(
     row: TreeRow,
@@ -820,7 +832,7 @@ private fun TreeRowItem(
     onAction: (TreeRow, RowAction) -> Unit,
 ) {
     val iconSize = IconSize.md
-    val indent = (row.depth * 16).dp
+    val indent = (row.depth.coerceAtMost(4) * 16).dp
 
     if (row.isPlaceholder) {
         DenseRow(
@@ -840,6 +852,7 @@ private fun TreeRowItem(
     val isDir = row.node.kind == FsKind.Directory
 
     DenseRow(
+        height = 48.dp,
         modifier = Modifier
             .combinedClickable(
                 onClick = onClick,
@@ -914,7 +927,7 @@ private fun TreeRowItem(
 
 // --- List View ---
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ListViewContent(
     rows: List<TreeRow>,
@@ -1034,25 +1047,20 @@ private fun ExplorerToolbar(
     showTrash: Boolean,
     onOpenTrash: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Space.xs, vertical = Space.xxs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ToolbarIcon(jcIcon(JCodeIcon.NewFile), "New File", onCreateFile)
-        ToolbarIcon(jcIcon(JCodeIcon.NewFolder), "New Folder", onCreateFolder)
-        ToolbarIcon(jcIcon(JCodeIcon.Add), "Import files", onImport)
-        ToolbarIcon(jcIcon(JCodeIcon.Paste), "Paste", onPaste, enabled = canPaste)
-        ToolbarIcon(jcIcon(JCodeIcon.Refresh), "Refresh", onRefresh)
-        if (viewMode == ExplorerViewMode.Tree) {
-            ToolbarIcon(jcIcon(JCodeIcon.Collapse), "Collapse all", onCollapseAll)
-        }
-        // Away from the make-and-refresh cluster, at the end of the row: the bin is where deletes
-        // are undone, not another thing to do to the tree.
-        if (showTrash) {
-            Spacer(modifier = Modifier.weight(1f))
-            ToolbarIcon(jcIcon(JCodeIcon.Trash), "Trash", onOpenTrash)
+    Row(Modifier.fillMaxWidth().padding(horizontal=Space.xs),verticalAlignment=Alignment.CenterVertically) {
+        ToolbarIcon(jcIcon(JCodeIcon.NewFile),uiText("files.newFile"),onCreateFile)
+        ToolbarIcon(jcIcon(JCodeIcon.NewFolder),uiText("files.newFolder"),onCreateFolder)
+        ToolbarIcon(jcIcon(JCodeIcon.Refresh),uiText("files.refresh"),onRefresh)
+        Spacer(Modifier.weight(1f))
+        var more by remember { mutableStateOf(false) }
+        Box {
+            ToolbarIcon(jcIcon(JCodeIcon.MoreVert),uiText("files.more"),{more=true})
+            CompactContextMenu(expanded=more,onDismissRequest={more=false},listActions=buildList {
+                add(ContextAction(JCodeIcon.Add,"Import files",onClick=onImport))
+                if(canPaste) add(ContextAction(JCodeIcon.Paste,"Paste",onClick=onPaste))
+                if(viewMode==ExplorerViewMode.Tree) add(ContextAction(JCodeIcon.Collapse,"Collapse all",onClick=onCollapseAll))
+                if(showTrash) add(ContextAction(JCodeIcon.Trash,"Trash / restore",onClick=onOpenTrash))
+            })
         }
     }
 }
@@ -1065,7 +1073,7 @@ private fun ToolbarIcon(
     enabled: Boolean = true,
 ) {
     JcTooltip(description) {
-        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(34.dp)) {
+        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(48.dp)) {
             Icon(
                 painter = icon,
                 contentDescription = description,

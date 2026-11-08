@@ -3512,6 +3512,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createNewItem(request: NewItemRequest) {
         viewModelScope.launch {
+            if(request.isWorkspace) { emitMessage("Create a folder in Internal Files or use an optional Project. Existing folder metadata is retained.");return@launch }
             if(!saveAllDirtyAwait()) { emitMessage("Creation cancelled: existing files could not be saved");return@launch }
             val name=request.name.trim().ifBlank { if(request.isWorkspace) "untitled-workspace" else "untitled-project" }
             val nativeTemplate=if(request.isWorkspace) null else nativePackages.templates().firstOrNull { it.id==request.templateId }

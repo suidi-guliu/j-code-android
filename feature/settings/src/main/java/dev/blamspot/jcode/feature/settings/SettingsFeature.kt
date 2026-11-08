@@ -294,7 +294,7 @@ object SettingsFeature {
                                 Text(
                                     text = when (scope) {
                                         null -> "GLOBAL"
-                                        ConfigScope.Workspace -> "WORKSPACE"
+                                        ConfigScope.Workspace -> "FILES"
                                         ConfigScope.Project -> "PROJECT"
                                     },
                                     style = MaterialTheme.typography.labelMedium,
@@ -1474,7 +1474,7 @@ object SettingsFeature {
             if (query.isBlank()) {
                 Text(
                     text = when (selectedScope) {
-                        ConfigScope.Workspace -> "These settings save to the workspace .jcode and apply across its projects unless a project override exists."
+                        ConfigScope.Workspace -> "These settings preserve the shared folder .jcode configuration and apply unless a Project overrides them."
                         ConfigScope.Project -> "These settings save to the project .jcode and only affect the selected local project."
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -1484,7 +1484,7 @@ object SettingsFeature {
             }
 
             workspaceError?.let { message ->
-                WarningCard(title = "Workspace YAML warning", message = message)
+                WarningCard(title = "Shared folder YAML warning", message = message)
             }
 
             if (projectOverridesAvailable) {
@@ -1588,7 +1588,7 @@ object SettingsFeature {
                 keywords = "yaml files config workspace project open backing edit",
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    CompactFilledButton(text = "Open workspace YAML", onClick = onOpenWorkspaceConfig)
+                    CompactFilledButton(text = "Open shared folder YAML (advanced)", onClick = onOpenWorkspaceConfig)
                     CompactOutlinedButton(
                         text = "Open project YAML",
                         onClick = onOpenProjectConfig,

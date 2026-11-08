@@ -54,7 +54,8 @@ import kotlinx.coroutines.launch
                 }
                 Text("Completed tools stay installed on cancellation or uninstall. Package archives update atomically and support rollback. No environment, project or user data is removed.")
             }
-            Text("Permissions and execution: Ubuntu processes can access app/guest files; PRoot is not a hostile-code sandbox. Install only publishers you trust. Installation uses the existing Setup PTY. apt/dpkg cancellation waits for a safe boundary.")
+            dev.suicode.packages.LocalizationResources.forPack(preview.pack).forEach { b -> Text("UI language: ${b.displayName} (${b.locale}) · ${b.entries.size} keys · English fallback. No development environment is required by this resource component.") }
+            if(Capability.RUN in permissions || plan?.scripts?.isNotEmpty()==true) Text("Permissions and execution: Ubuntu processes can access app/guest files; PRoot is not a hostile-code sandbox. Install only publishers you trust. Installation uses the existing Setup PTY. apt/dpkg cancellation waits for a safe boundary.")
             if(!preview.pack.official) Row { Checkbox(trusted,{trusted=it});Text("I trust this unverified publisher") }
             TextButton(onClick={grants=permissions}) { Text("Approve all listed permissions") }
             permissions.sortedBy { it.wire }.forEach { p -> Row { Checkbox(p in grants,{yes -> grants=if(yes) grants+p else grants-p});Text(p.wire,Modifier.padding(top=12.dp)) } }

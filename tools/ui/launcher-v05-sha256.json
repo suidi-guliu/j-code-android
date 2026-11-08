@@ -1,0 +1,14 @@
+{
+  "baseline": "d4ea352432d075a13e84bc9cfe3e558455ea3701",
+  "files": {
+    "app/src/main/res/drawable/ic_launcher_foreground.xml": "01b4bb787ad7ce8c64a3b1e28f2096e116250213ac418b5f2e09fa2a6f6a3b7e",
+    "app/src/main/res/drawable/ic_launcher_foreground_beta.xml": "98fce6fa45826b222520c382c1a5664581e226f5e77104efc1b91c62d8a4a67d",
+    "app/src/main/res/drawable/ic_launcher_foreground_debug.xml": "02fa66e495e4fdbd5fc3612f4dccc5106433f51c2e3162ffe0883d1fd3c0202e",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "782436920161e1855dcd048e9f1dff31e7f6b656be28c1c415dddb85ba37ef8f",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_beta.xml": "585e8f8fef7fd58fdf451d7741e1a49e3281390d4a1d3e4e890a90abcf38d712",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_beta_round.xml": "585e8f8fef7fd58fdf451d7741e1a49e3281390d4a1d3e4e890a90abcf38d712",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_debug.xml": "317345ea126aee2a89a6610c360ddf27afc6bd291ea76e2467fd3dc21b9bfebd",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_debug_round.xml": "317345ea126aee2a89a6610c360ddf27afc6bd291ea76e2467fd3dc21b9bfebd",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": "782436920161e1855dcd048e9f1dff31e7f6b656be28c1c415dddb85ba37ef8f"
+  }
+}

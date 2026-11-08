@@ -14,6 +14,7 @@ import dev.suicode.packages.*
 import kotlinx.coroutines.launch
 
 /** Real document import, authenticated download, consent and lifecycle UI. No legacy market bridge. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
     val context=LocalContext.current
@@ -28,6 +29,7 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
     var section by remember(initialSection) { mutableIntStateOf(initialSection.coerceIn(0,2)) }
     var pending by remember { mutableStateOf<PackagePreview?>(null) }
     var replyDialog by remember { mutableStateOf<Pair<String,String>?>(null) }
+    var languageDialog by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -43,13 +45,14 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
         if(uri!=null) perform { pending=host.importDocument(uri) }
     }
     Column(modifier.padding(16.dp)) {
-        Text("Packages",style=MaterialTheme.typography.titleLarge)
+        Text(dev.blamspot.jcode.design.uiText("packages.title"),style=MaterialTheme.typography.titleLarge)
         Text(source?.let { "Source context: $it" } ?: "Open a source file for language actions; project workflows use the selected Project",style=MaterialTheme.typography.bodySmall)
+        TextButton(onClick={languageDialog=true}) { Text(dev.blamspot.jcode.design.uiText("ui.language")) }
         Spacer(Modifier.height(12.dp))
         ScrollableTabRow(selectedTabIndex=section,edgePadding=0.dp) {
             listOf("Plugin Library","IDE Kit Library","Installed").forEachIndexed { i,title -> Tab(selected=section==i,onClick={section=i},text={Text(title)}) }
         }
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             OutlinedButton(enabled=!busy,onClick={perform { host.refreshLibrary() }}) { Text("Refresh") }
             OutlinedButton(enabled=!busy,onClick={picker.launch(arrayOf("*/*"))}) { Text("Import .suic / .suik") }
         }
@@ -92,15 +95,16 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
                             Text("${row.record.id}\n${row.record.version} · .${row.record.kind} · ${if(row.record.enabled) "enabled" else "disabled"}")
                             Text(if(row.pack.official) "Verified sui-code signature" else "Unverified publisher")
                             Text("Permissions: "+row.record.grants.joinToString { it.wire })
-                            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                 TextButton(enabled=!busy,onClick={perform { if(row.record.enabled) host.disable(row.record.id) else if(row.pack.kind==PackKind.KIT) pending=host.setupPreview(row.record.id) else host.enable(row.record.id) }}) { Text(if(row.record.enabled) "Disable" else "Enable") }
                                 TextButton(enabled=!busy,onClick={perform { pending=host.rollbackPreview(row.record.id) }}) { Text("Rollback") }
                             }
-                            if(row.record.kind=="suik") {
+                            if(row.pack.declarations().all { it.type=="localization" }) Text("UI language resources · no language environment required")
+                            else if(row.record.kind=="suik") {
                                 Text(setupState.ready[row.record.id] ?: "Prerequisites not checked this session")
                                 TextButton(enabled=!setupState.busy && !busy,onClick={perform { pending=host.setupPreview(row.record.id) }}) { Text("Review dependencies / repair") }
                             }
-                            if(row.record.kind=="suik" && row.record.enabled) row.pack.declarations().filter { it.type !in setOf("project","language","environment","setup","panel") }.forEach { component ->
+                            if(row.record.kind=="suik" && row.record.enabled) row.pack.declarations().filter { it.type !in setOf("project","language","environment","setup","panel","localization") }.forEach { component ->
                                 TextButton(enabled=!busy,onClick={perform {
                                     val reply=host.invoke(row.record.id,component.id)
                                     check(reply.accepted) { reply.code+": "+reply.values.toString() }
@@ -117,6 +121,7 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0) {
             }
         }
     }
+    if(languageDialog) AlertDialog(onDismissRequest={languageDialog=false},title={Text("Interface language")},text={Column(Modifier.verticalScroll(rememberScrollState())) { NativeLanguageSelection(host) }},confirmButton={TextButton(onClick={languageDialog=false}) { Text("Close") }})
     replyDialog?.let { (title,text) -> AlertDialog(onDismissRequest={replyDialog=null},title={Text(title)},text={Text(text)},confirmButton={TextButton(onClick={replyDialog=null}) { Text("Close") }}) }
     pending?.let { preview -> NativePackageReview(host,preview,onDismiss={pending=null},onInstalled={section=2}) }
 }

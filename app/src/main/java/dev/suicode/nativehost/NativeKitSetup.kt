@@ -153,6 +153,19 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
         if(job?.isActive==true) return
         check((plan.preview.pack.official || allowUnverified) && (plan.scripts.isEmpty() || grants.containsAll(setOf(Capability.RUN,Capability.FILE_READ,Capability.FILE_WRITE)))) { "IDE dependency deployment needs reviewed file.read, file.write and process.run permissions" }
         job=scope.launch {
+            // Metadata-only Kits (including localization) never require Ubuntu, a PTY or a runtime.
+            if(plan.status.isEmpty() && plan.scripts.isEmpty()) {
+                mutable.update { it.copy(busy=true,installing=true,message="Installing reviewed package resources",logPath=null,log="") }
+                try {
+                    check(System.currentTimeMillis()-plan.created<3600000) { "Plan expired; review again" }
+                    plan.dependencies.forEach { dep -> host.install(dep,grants.intersect(dep.pack.permissions),allowUnverified || dep.pack.official) }
+                    host.install(plan.preview,grants.intersect(plan.preview.pack.permissions),allowUnverified)
+                    mutable.update { it.copy(progress=100,message="Ready · package resources enabled; no language environment required",ready=it.ready+(plan.preview.pack.id to "Ready")) }
+                } catch(e: CancellationException) { throw e }
+                catch(e: Exception) { mutable.update { it.copy(message="Package resources could not be enabled: ${e.message}. Review and retry; installed environments are unchanged.") } }
+                finally { mutable.update { it.copy(busy=false,installing=false,cancelling=false) } }
+                return@launch
+            }
             var poller: Job?=null
             val token=UUID.randomUUID().toString()
             val cancelPath=plan.cancellationPath

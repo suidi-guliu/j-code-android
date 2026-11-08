@@ -1,14 +1,14 @@
 package dev.suicode.packages
 
 /** Version 1 protocol. No Android Context, filesystem handle, classloader or shell is exposed. */
-object CoreApi { const val VERSION = 3; const val MIN_SUPPORTED = 1; fun compatible(min: Int,max: Int)=min>=1 && min<=max && min<=VERSION && max>=MIN_SUPPORTED }
+object CoreApi { const val VERSION = 4; const val MIN_SUPPORTED = 1; fun compatible(min: Int,max: Int)=min>=1 && min<=max && min<=VERSION && max>=MIN_SUPPORTED }
 enum class PackKind(val magic: String, val suffix: String, val mime: String) {
     PLUGIN("SUICPKG\u0000", "suic", "application/vnd.suicode.plugin"),
     KIT("SUIKPKG\u0000", "suik", "application/vnd.suicode.ide-kit")
 }
 enum class Capability(val wire: String) {
     FILE_READ("file.read"), FILE_WRITE("file.write"), RUN("process.run"),
-    LSP("language.lsp"), DAP("debug.dap"), PROJECT("project.read"), UI("ui.panel")
+    LSP("language.lsp"), DAP("debug.dap"), PROJECT("project.read"), UI("ui.panel"), LOCALIZATION("ui.localization")
 }
 enum class Operation(val permission: Capability) {
     SIMPLE_RUN(Capability.RUN), LSP_START(Capability.LSP), DAP_START(Capability.DAP),

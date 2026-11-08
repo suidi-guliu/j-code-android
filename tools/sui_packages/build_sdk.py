@@ -29,7 +29,7 @@ application { mainClass.set("dev.suicode.packages.PackageTool") }
   rel=p.relative_to(ROOT);assert p.read_bytes()==(dst/rel).read_bytes()
   sums.append(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+rel.as_posix())
  (dst/'API-SOURCE-SHA256SUMS').write_text('\n'.join(sums)+'\n')
- (dst/'README.md').write_text('''# sui-code Native SDK 0.3 / Core API 3
+ (dst/'README.md').write_text('''# sui-code Native SDK 0.4 / Core API 4
 
 This standalone JVM SDK copies the exact production Kotlin verifier, independent loaders, authorization API, native recipe/dataflow interpreter and design model. API-SOURCE-SHA256SUMS records byte identity. It does not emulate Android services or embed runtimes.
 

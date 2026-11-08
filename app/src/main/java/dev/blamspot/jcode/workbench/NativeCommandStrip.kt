@@ -56,20 +56,20 @@ internal val LocalAdvancedTaskNavigation=compositionLocalOf<()->Unit> { {} }
     }
     Column {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=8.dp),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-            FilledTonalButton(enabled=file!=null && basic!=null || save.quickRunActive,onClick={if(save.quickRunActive) save.onStopQuickRun() else save.onQuickRun(0)}) { Text(if(save.quickRunActive) "Stop file" else "Run file") }
+            FilledTonalButton(enabled=file!=null && basic!=null || save.quickRunActive,onClick={if(save.quickRunActive) save.onStopQuickRun() else save.onQuickRun(0)}) { Text(if(save.quickRunActive) dev.blamspot.jcode.design.uiText("run.stop") else dev.blamspot.jcode.design.uiText("run.file")) }
             FilledTonalButton(enabled=debug.canDebug || debug.state in setOf(dev.blamspot.jcode.core.debug.DebugState.STOPPED,dev.blamspot.jcode.core.debug.DebugState.RUNNING),onClick={
                 when(debug.state) {
                     dev.blamspot.jcode.core.debug.DebugState.STOPPED -> debug.onContinue()
                     dev.blamspot.jcode.core.debug.DebugState.RUNNING -> debug.onStop()
                     else -> debug.onDebug()
                 }
-            }) { Text(when(debug.state) { dev.blamspot.jcode.core.debug.DebugState.STOPPED -> "Continue";dev.blamspot.jcode.core.debug.DebugState.RUNNING -> "Stop debug";else -> "Debug" }) }
-            OutlinedButton(onClick={invoke("overview")}) { Text("Overview") }
+            }) { Text(when(debug.state) { dev.blamspot.jcode.core.debug.DebugState.STOPPED -> dev.blamspot.jcode.design.uiText("run.continue");dev.blamspot.jcode.core.debug.DebugState.RUNNING -> dev.blamspot.jcode.design.uiText("run.stopDebug");else -> dev.blamspot.jcode.design.uiText("run.debug") }) }
+            OutlinedButton(onClick={invoke("overview")}) { Text(dev.blamspot.jcode.design.uiText("run.overview")) }
             VerticalDivider(Modifier.height(40.dp).padding(horizontal=4.dp))
-            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("build")}) { Text("Build") }
-            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("test")}) { Text("Test") }
-            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("run-project")}) { Text("Run Project") }
-            TextButton(onClick=tasks) { Text("Advanced tasks") }
+            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("build")}) { Text(dev.blamspot.jcode.design.uiText("project.build")) }
+            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("test")}) { Text(dev.blamspot.jcode.design.uiText("project.test")) }
+            TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("run-project")}) { Text(dev.blamspot.jcode.design.uiText("project.run")) }
+            TextButton(onClick=tasks) { Text(dev.blamspot.jcode.design.uiText("project.tasks")) }
         }
         feedback?.let { text -> Row(Modifier.padding(horizontal=8.dp)) { Text(text,Modifier.weight(1f),color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall);TextButton(onClick={feedback=null}) { Text("Dismiss") } } }
     }

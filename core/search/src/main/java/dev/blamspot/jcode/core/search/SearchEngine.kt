@@ -26,6 +26,7 @@ data class SearchMatch(
     val lineText: String,
     /** Matched text */
     val matchText: String,
+    val isDirectory: Boolean = false,
 )
 
 /**
@@ -97,27 +98,25 @@ class SearchEngine {
      */
     fun searchFileNames(rootDir: File, options: SearchOptions): Flow<SearchMatch> = flow {
         val pattern = compilePattern(options)
-        var resultCount = 0
-        rootDir.walkTopDown()
-            .filter { it.isFile }
-            .filter { file -> shouldInclude(file, rootDir, options, checkSize = false) }
-            .forEach { file ->
-                if (resultCount >= options.maxResults) return@forEach
-                val matcher = pattern.matcher(file.name)
-                if (matcher.find()) {
-                    emit(
-                        SearchMatch(
-                            filePath = file.relativeTo(rootDir).path,
-                            lineNumber = 0,
-                            columnStart = matcher.start(),
-                            columnEnd = matcher.end(),
-                            lineText = file.name,
-                            matchText = matcher.group(),
-                        )
-                    )
-                    resultCount++
-                }
+        val pending=java.util.ArrayDeque<File>()
+        rootDir.listFiles()?.sortedByDescending { it.name }?.forEach(pending::addLast)
+        var count=0
+        while(pending.isNotEmpty()) {
+            currentCoroutineContext().ensureActive()
+            val file=pending.removeLast()
+            if(java.nio.file.Files.isSymbolicLink(file.toPath())) continue
+            val directory=file.isDirectory
+            val traversalOptions=options.copy(includePatterns=emptyList())
+            if(!shouldInclude(file,rootDir,traversalOptions,checkSize=false)) continue
+            if(directory) file.listFiles()?.sortedByDescending { it.name }?.forEach(pending::addLast)
+            if(!shouldInclude(file,rootDir,options,checkSize=false)) continue
+            val matcher=pattern.matcher(file.name)
+            if(matcher.find()) {
+                emit(SearchMatch(file.relativeTo(rootDir).path,0,matcher.start(),matcher.end(),file.name,matcher.group(),directory))
+                count++
+                if(options.maxResults>0 && count>=options.maxResults) break
             }
+        }
     }.flowOn(Dispatchers.IO)
 
     /**

@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 1,
+  "maxProperties": 34,
+  "properties": {
+    "nav.files": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "nav.find": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "nav.languages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "nav.packages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "nav.settings": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.internal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.filter": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.filterHint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.matches": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.newFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.newFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.refresh": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.more": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.content": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.names": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.current": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.scope": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.hint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.file": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.stop": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.debug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.continue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.stopDebug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.overview": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.build": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.test": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.run": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.tasks": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "languages.title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.language": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.english": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.fallback": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    }
+  }
+}

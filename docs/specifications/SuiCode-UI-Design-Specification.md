@@ -1,6 +1,6 @@
 # sui-code UI Extension & Design Specification
 
-规范版本 **0.3.0**；对应 Core API **3**（兼容 API1 只读面板及 API2 原生交互面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
+规范版本 **0.4.0**；对应 Core API **4**（兼容 API1 只读面板及 API2 原生交互面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
 
 ## 1. 范围、实现状态与品牌
 
@@ -235,3 +235,15 @@ QuickRun Stop 只终止当前任务进程树，交互 shell、终端及已输出
 `.suik` 面板仍仅通过 UiNodes API 扩展，不能覆盖导航轨、全局主题、底部终端或主运行带。遵守前述48dp触控、键盘焦点、TalkBack标签、动态字级、横竖屏响应和主题继承规范；0.3.0不授权任意第三方Android View/HTML脚本注入。
 
 文件删除事务必须先持久化恢复意图，再移动原文件，最后更新统计；统计写入失败不使已移动数据失去可恢复索引。不能自动清理仍含用户数据但元数据损坏的 Trash 条目。重命名/移动同步标签和断点路径；影响当前调试源时结束该调试并明确提示重新启动，避免继续使用失效源映射。系统 DocumentsProvider 保留旧 Root ID/authority 授权身份，仅改显示名称和内部安全实现；拒绝越界名称、符号链接和从系统文件入口直接移动/删除登记中的工程根。
+
+## 28. UI polish与本地化扩展（规范0.4.0 / API4）
+
+导航轨固定68dp，第二栏独立测量内容宽度，分隔条12dp；`WorkbenchPaneSizing.bounds(available:Float,fontScale:Float,requested:Float?):Bounds`输入当前可用宽度dp、系统字号缩放及可选用户内容宽度。返回modal/minimum/maximum/width，非有限输入安全回退。内容最小260×clamp(fontScale,1,1.5)dp，编辑区至少320×该缩放dp；空间不足使用抽屉，最大内容560dp。初始内容为窗口30%，限制300..420dp再按实际边界夹取。拖动/方向键16dp步进/无障碍setProgress均受边界限制，释放才持久化；缩小窗口夹取显示值而不覆盖原偏好。横竖屏、分屏由实测宽度重算。底部终端位置与原高度调节独立保留。
+
+Files仅过滤已加载树/当前目录名称，不递归走盘；Find通过明确下拉模式选择文件内容、文件和目录名称、当前文档，显示根范围，可选Internal Files/Project，保留大小写/正则。工具栏用响应式FlowRow；Files保留新文件、新目录和刷新，其他动作进入溢出菜单；不得删除功能。行操作48dp触控区域，深树缩进有界，长名称省略但逐行Properties提供完整名称和路径。
+
+普通创建仅有Project，文件/目录由Internal Files创建。原Workspace数据库、.jcode及PRoot/workspace映射保留；旧容器以saved project group兼容显示，不允许新建。高级共享配置保留，但不再以Default Workspace作用户前置概念。
+
+UI本地化仅由.suik的localization声明及ui.localization权限提供。完整定义、Schema、公开键、英文回退、生命周期、参数类型和错误行为见[总规范第29节](SUIC-SUIK-Development-Specification.md#29-api-4独立-ui-本地化资源规范-040)。`LocalUiTranslations`为CompositionLocal<UiTranslations>；`uiText(key:String,arguments:Map<String,String>=emptyMap()):String`在Compose读取快照，不进行IO。第三方UI只使用其认证资源和Core开放键，不能覆盖主题、全局布局、权限确认或签名状态。默认英文，不安装任何额外运行环境。当前局部键接入不宣称已完成全应用中文翻译。
+
+本轮Launcher图标逐字节保持原v0.5，包括常规/Debug/Beta前景和Adaptive入口；所有临时S-dot方案停用。后续图标设计由用户另行提供。本轮没有改变配色、字体大小、圆角及主题。

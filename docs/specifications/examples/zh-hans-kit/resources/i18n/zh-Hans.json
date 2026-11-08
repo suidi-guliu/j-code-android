@@ -1,0 +1,14 @@
+{
+  "nav.files": "文件",
+  "nav.find": "查找",
+  "nav.languages": "语言",
+  "nav.packages": "扩展包",
+  "nav.settings": "设置",
+  "files.filter": "筛选当前名称",
+  "files.filterHint": "仅筛选已加载条目。递归名称和内容搜索请使用“查找”。",
+  "files.matches": "{count} 个当前匹配项",
+  "run.file": "运行文件",
+  "run.debug": "调试",
+  "run.overview": "概览",
+  "ui.language": "界面语言"
+}

@@ -1,6 +1,6 @@
 # sui-code 开发规范
 
-当前规范 **0.3.0**；Core API **3**（兼容 API1/2）；SUIC/SUIK **1.0**。
+当前规范 **0.4.0**；Core API **4**（兼容 API1/2/3）；SUIC/SUIK **1.0**。
 
 - [Native Extension & IDE Kit Development Specification](SUIC-SUIK-Development-Specification.md)
 - [UI Extension & Design Specification](SuiCode-UI-Design-Specification.md)
@@ -216,3 +216,5 @@ stays stable so `## 6` always means "protocol or format" where it appears.
   [CI, quality and invariants](09-platform/03-ci-quality-and-invariants.md#4-specification-checks):
   every source path cited by a spec must still exist, and every relative spec link must resolve.
 - Update the **Verified against** row of any document you re-check against source.
+
+- [API4 简体中文本地化开发样例（部分翻译，无运行环境依赖）](examples/zh-hans-kit/manifest.json) · [可导入示例包](examples/packages/zh-hans-kit.suik)

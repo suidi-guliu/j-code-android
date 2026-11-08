@@ -2,11 +2,21 @@ package dev.blamspot.jcode.workbench
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import dev.blamspot.jcode.design.uiText
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -67,7 +77,7 @@ private const val MIN_QUERY_LENGTH = 2
 /** Where the Search tool looks for matches. */
 internal enum class SearchScope(val label: String, val placeholder: String) {
     Content("Content", "Search in files"),
-    Names("Names", "Search file names"),
+    Names("Names", "Search file and folder names"),
     CurrentDoc("Current", "Search in current document"),
 }
 
@@ -79,32 +89,12 @@ private fun SearchScopeSelector(
     onSelect: (SearchScope) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(Radius.lg))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f))
-            .padding(Space.xxs),
-        horizontalArrangement = Arrangement.spacedBy(Space.xxs),
-    ) {
-        SearchScope.entries.forEach { s ->
-            val sel = s == selected
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(Radius.md))
-                    .background(if (sel) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.Transparent)
-                    .clickable { onSelect(s) }
-                    .padding(vertical = Space.s),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = s.label,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    var expanded by remember { mutableStateOf(false) }
+    val key=when(selected) { SearchScope.Content -> "find.content";SearchScope.Names -> "find.names";SearchScope.CurrentDoc -> "find.current" }
+    Box(modifier) {
+        TextButton(onClick={expanded=true},modifier=Modifier.fillMaxWidth()) { Text(uiText(key)+" ▾") }
+        DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
+            SearchScope.entries.forEach { mode -> DropdownMenuItem(text={Text(uiText(when(mode) { SearchScope.Content -> "find.content";SearchScope.Names -> "find.names";SearchScope.CurrentDoc -> "find.current" }))},onClick={onSelect(mode);expanded=false}) }
         }
     }
 }
@@ -117,16 +107,21 @@ private fun SearchScopeSelector(
  * Three scopes: file content across the project (default), file names only, and the current
  * document — the active editor tab's live buffer, so unsaved edits are searched too.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SearchToolPanel(
     project: Project?,
     activeTab: EditorTab?,
+    internalRoot: File? = null,
+    onOpenDirectory: (File)->Unit = {},
     onOpenResult: (String) -> Unit,
     seed: Pair<Int, String>? = null,
     onSeedConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val rootFile = (project?.fsPath as? FsPath.Local)?.file
+    var searchInternal by remember { mutableStateOf(false) }
+    val rootFile = if(searchInternal) internalRoot else (project?.fsPath as? FsPath.Local)?.file
+    var searchError by remember { mutableStateOf<String?>(null) }
 
     if (rootFile == null) {
         SearchHint("Open a local project to search its files.", modifier)
@@ -158,21 +153,24 @@ internal fun SearchToolPanel(
     // cancels the prior collection, which closes the flow and stops the native search.
     LaunchedEffect(rootFile, caseSensitive, regex, scope, activeDocTab?.id) {
         snapshotFlow { query }
-            .debounce(250)
             .distinctUntilChanged()
-            .collect { q ->
+            .collectLatest { q ->
                 results.clear()
+                searching=false
+                searchError=null
                 truncated = false
+                kotlinx.coroutines.delay(250)
                 if (q.length < MIN_QUERY_LENGTH || (scope == SearchScope.CurrentDoc && activeDocTab == null)) {
                     searching = false
-                    return@collect
+                    return@collectLatest
                 }
                 searching = true
+                searchError=null
                 val options = SearchOptions(
                     query = q,
                     isRegex = regex,
                     caseSensitive = caseSensitive,
-                    maxResults = MAX_DISPLAY_RESULTS,
+                    maxResults = MAX_DISPLAY_RESULTS+1,
                 )
                 val matches = when (scope) {
                     SearchScope.Content -> SearchModule.engine.search(rootFile, options)
@@ -196,7 +194,7 @@ internal fun SearchToolPanel(
                             truncated = true
                         }
                     }
-                } finally {
+                } catch(e: CancellationException) { throw e } catch(e: Exception) { searchError="Search failed: ${e.message}. Check the expression or choose another scope." } finally {
                     searching = false
                 }
             }
@@ -209,38 +207,41 @@ internal fun SearchToolPanel(
         } else {
             File(rootFile, match.filePath).absolutePath
         }
-        base?.let { onOpenResult("$it:${match.lineNumber + 1}:${match.columnStart + 1}") }
+        base?.let { if(match.isDirectory) onOpenDirectory(File(it)) else onOpenResult("$it:${match.lineNumber + 1}:${match.columnStart + 1}") }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.md, vertical = Space.sm),
+            modifier = Modifier.fillMaxWidth().heightIn(max=260.dp).verticalScroll(rememberScrollState()).padding(horizontal = Space.md, vertical = Space.sm),
             verticalArrangement = Arrangement.spacedBy(Space.s),
         ) {
+            Text(uiText("find.hint"),style=MaterialTheme.typography.bodySmall)
+            if(internalRoot!=null && project?.id!=dev.blamspot.jcode.fs.InternalFiles.ROOT_NODE_ID) FlowRow {
+                TextButton(onClick={searchInternal=true}) { Text((if(searchInternal) "✓ " else "")+uiText("files.internal")) }
+                TextButton(onClick={searchInternal=false}) { Text((if(!searchInternal) "✓ " else "")+"Project") }
+            }
+            Text(rootFile.path,style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis)
             CompactSearchField(
                 query = query,
                 onQueryChange = { query = it },
                 searching = searching,
                 placeholder = scope.placeholder,
             )
-            Row(
+            SearchScopeSelector(selected=scope,onSelect={scope=it},modifier=Modifier.fillMaxWidth())
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(Space.s),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 ManagerFilterChip(selected = caseSensitive, label = "Aa") { caseSensitive = !caseSensitive }
                 ManagerFilterChip(selected = regex, label = ".*") { regex = !regex }
-                SearchScopeSelector(
-                    selected = scope,
-                    onSelect = { scope = it },
-                    modifier = Modifier.weight(1f),
-                )
+
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-        val grouped = remember(results.size) {
-            results.groupBy { it.filePath }.entries.toList()
+        val resultSnapshot=results.toList()
+        val grouped = remember(resultSnapshot) {
+            resultSnapshot.groupBy { it.filePath }.entries.toList()
         }
         val fileCount = grouped.size
 
@@ -256,11 +257,11 @@ internal fun SearchToolPanel(
                 results.isEmpty() && searching -> "Searching…"
                 results.isEmpty() -> "No results"
                 scope == SearchScope.Names ->
-                    "${results.size}$plus file${if (results.size == 1) "" else "s"}"
+                    "${results.size}$plus files / folders"
                 else -> "${results.size}$plus results in $fileCount file${if (fileCount == 1) "" else "s"}"
             }
             Text(
-                text = summary,
+                text = searchError ?: summary,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -268,7 +269,7 @@ internal fun SearchToolPanel(
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             if (scope == SearchScope.Names) {
-                items(results, key = { it.filePath }) { match ->
+                items(results.toList(), key = { it.filePath }) { match ->
                     FileNameRow(match) { openMatch(match) }
                 }
             } else {
@@ -328,9 +329,10 @@ private fun FileNameRow(match: SearchMatch, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SearchFileIcon(match.lineText)
+        if(match.isDirectory) Icon(dev.blamspot.jcode.design.jcIcon(JCodeIcon.Folder),"Folder") else SearchFileIcon(match.lineText)
         Text(
             text = match.lineText,
+            modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall,
             fontFamily = FontFamily.Monospace,
             maxLines = 1,
@@ -342,6 +344,7 @@ private fun FileNameRow(match: SearchMatch, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                modifier=Modifier.weight(1f),
                 overflow = TextOverflow.Ellipsis,
             )
         }

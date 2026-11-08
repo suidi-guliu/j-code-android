@@ -3,6 +3,7 @@
 Requires jsonschema (development dependency only, never used by Android).
 """
 import json
+import re
 import pathlib
 import sys
 import jsonschema
@@ -31,5 +32,14 @@ for p in sorted((base / "examples").glob("*/manifest.json")) + sorted((root / "n
         ds = json.loads((base / "schemas" / (c["type"] + ".schema.json")).read_text())
         jsonschema.Draft202012Validator(ds).validate(descriptor)
         count += 1
-assert "0.3.0" in doc and "0.3.0" in ui
+keys=dict(re.findall(r'"([a-z][a-zA-Z0-9.]+)" to "([^"\n]*)"',(root/'core/native-packages/src/main/java/dev/suicode/packages/Localization.kt').read_text()))
+resources=json.loads((base/'schemas/localization-resources.schema.json').read_text())
+assert set(resources['properties'])==set(keys), 'E_SPEC_STALE: localization keys'
+for descriptor in (base/'examples').glob('*/ide/*.json'):
+ d=json.loads(descriptor.read_text())
+ if 'locale' in d and 'resource' in d:
+  strings=json.loads((descriptor.parent.parent/d['resource']).read_text())
+  jsonschema.Draft202012Validator(resources).validate(strings)
+  for key,value in strings.items():assert set(re.findall(r'\{([a-z][a-zA-Z0-9]*)}',value))==set(re.findall(r'\{([a-z][a-zA-Z0-9]*)}',keys[key]))
+assert "0.4.0" in doc and "0.4.0" in ui
 print(f"PASS: schemas, embedded schema/manifest snapshots, {count} valid descriptors, illegal example rejected")

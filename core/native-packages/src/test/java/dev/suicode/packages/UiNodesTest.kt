@@ -22,6 +22,6 @@ class UiNodesTest {
         assertEquals("E_SIZE",assertFailsWith<PackageFailure> { UiNodes.validate(nodes("[$tree]")) }.code)
     }
     @Test fun newCoreStillSupportsVersionOnePackages() {
-        assertTrue(CoreApi.compatible(1,1));assertTrue(CoreApi.compatible(2,2));assertTrue(CoreApi.compatible(3,3));assertFalse(CoreApi.compatible(4,5));assertFalse(CoreApi.compatible(2,1))
+        assertTrue(CoreApi.compatible(1,1));assertTrue(CoreApi.compatible(2,2));assertTrue(CoreApi.compatible(3,3));assertTrue(CoreApi.compatible(4,4));assertFalse(CoreApi.compatible(5,6));assertFalse(CoreApi.compatible(2,1))
     }
 }

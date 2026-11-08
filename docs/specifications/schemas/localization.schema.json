@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+      "not": {
+        "const": "en"
+      }
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "fallback": {
+      "const": "en"
+    },
+    "resource": {
+      "type": "string",
+      "pattern": "^resources/i18n/[A-Za-z0-9_-]+\\.json$"
+    }
+  },
+  "required": [
+    "locale",
+    "displayName",
+    "fallback",
+    "resource"
+  ]
+}

@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         setContent {
-            JCodeRoot(viewModel = viewModel)
+            dev.suicode.nativehost.NativeLocalizationProvider { JCodeRoot(viewModel = viewModel) }
         }
     }
 
