@@ -2,6 +2,18 @@
 
 基线：`sui-code/v0.5-ui-polish` / `f6bf5ad29e8e8ddabdc0b546357e4ec70c29a1b1`。修复分支：`sui-code/v0.5.2-startup-recovery`。P0仅修启动与补测试/诊断，不继续UI设计或三语言功能开发；main、官方上游及旧v0.4/v0.5/v0.5.1交付目录保持不变。
 
+## 已完成的 Android 验证与真实下载
+
+2026-11-09，[Android 启动及交付工作流](https://github.com/suidi-guliu/j-code-android/actions/runs/42557387384) **Success，6分0秒**；[下载最终 Artifact](https://github.com/suidi-guliu/j-code-android/actions/runs/42557387384/artifacts/13647164754)（需登录GitHub，保留30天）。Artifact名`sui-code-v0.5.2-startup-recovery`，内含唯一修复主APK、报告、源码补丁/源码包、SDK、构建日志、完整Android截图与测试日志。Artifact归档摘要为`2726a6307295d7b341c0bb5ce3458043bad6a64b6f1c6eecb17274a224a8843b`；它与下文主APK摘要是不同对象。
+
+实际执行源码/测试/交付提交：`8cc1e1b0694944b9adea3223d22b2bac4bd5ae93`，主APK生产源码仍是`4caff73cd264fa3b9c0cf3f4624da4e1da968b27`，之后只改测试、报告、交付机制。上传后再次下载，全部文件SHA256和逐字节比较通过。
+
+- Android16独立x86_64 AVD，ARM64 APK通过系统native bridge运行，**不是ARM64实机**。
+- 原v0.5首屏正常；保留数据覆盖v0.5.1后，在真实Activity中再次复现`PatternSyntaxException / UiTranslations.text`。
+- 覆盖v0.5.2后重复启动、原项目元数据与13个夹具文件SHA256保留通过；另一个新AVD全新安装和重复启动通过。
+- **8例Android回归 + 2例原版Project创建/保留验证全部通过**，无未通过用例被跳过以交付。坏偏好、有效/损坏/缺失语言资源、英文回退及原API3包共存均包含在内。
+- 没有安装Ubuntu的AVD正常显示既有Environment setup引导；环境目录哨兵不冒充已运行Ubuntu/JDK，真实平板启动及完整环境保留仍需下一节验收。
+
 ## 1. 已复现的实际错误与证据边界
 
 在Android16 x86_64模拟器（提供ARM64 native bridge）的ART/libcore上，直接以原始已交付v0.5.1 APK的DEX运行`UiTranslations.text("nav.files", emptyMap())`，得到：
@@ -20,7 +32,7 @@ java.util.regex.PatternSyntaxException: Syntax error in regexp pattern near inde
 
 修复版同一实际APK DEX在相同Android运行时返回`SHIPPING_DEX_ENGLISH_STARTUP_PASS: Files`。Linux ICU76也独立复现旧式U_REGEX_RULE_SYNTAX，但只作为辅助证据，不冒充Android结果。
 
-没有用户平板logcat，不能证明该设备仅有这一问题，也不能宣称用户真实ARM64设备闪退已解决。首屏与保留数据升级由最终Actions的独立KVM模拟器验证强制把关；只有通过才上传最终Artifact，具体结果附运行回执。
+没有用户平板logcat，不能证明该设备仅有这一问题，也不能宣称用户真实ARM64设备闪退已解决。首屏与保留数据升级由最终Actions的独立KVM模拟器验证强制把关；只有通过才上传最终Artifact，具体通过结果见上方运行回执与Artifact中的Android原始日志。
 
 ## 2. 实际修复
 

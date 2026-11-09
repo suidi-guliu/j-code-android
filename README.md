@@ -10,7 +10,7 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开�
 
 ## v0.5.2 启动修复
 
-修复Android ICU导致默认英文首屏崩溃的表达式，保留UI与全部用户环境。[启动修复报告](docs/sui-code-startup-recovery-0.5.2.md)。最终APK由独立AVD验证保留数据升级与全新启动后交付，不宣称ARM64平板已验收。
+修复Android ICU导致默认英文首屏崩溃的表达式，保留UI与全部用户环境。[启动修复报告](docs/sui-code-startup-recovery-0.5.2.md)。独立Android16 AVD的保留数据升级、全新启动和8例回归及2例Project验证已通过。[下载修复APK及证据](https://github.com/suidi-guliu/j-code-android/actions/runs/42557387384/artifacts/13647164754) · [Actions运行日志](https://github.com/suidi-guliu/j-code-android/actions/runs/42557387384)。不宣称ARM64平板已验收。
 
 ## v0.5.1 UI polish
 
