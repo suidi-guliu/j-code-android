@@ -1,0 +1,41 @@
+name: Inspect retained Chinese Kit Android failure evidence
+on:
+  push:
+    branches: [sui-code/v0.5.3-zh-hans-kit]
+    paths: ['.github/workflows/inspect-zh-hans-failure.yml']
+  workflow_dispatch:
+permissions:
+  actions: read
+jobs:
+  previous-fresh-failure:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5.3-zh-hans-kit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read only this repository's retained emulator diagnostic archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' https://api.github.com/repos/suidi-guliu/j-code-android/actions/artifacts/13662396134/zip -o "$RUNNER_TEMP/previous-fresh.zip"
+      - name: Expose the actual failed fresh-launch trace without altering the shipping APK
+        shell: python
+        run: |
+          import os,zipfile
+          with zipfile.ZipFile(os.environ['RUNNER_TEMP']+'/previous-fresh.zip') as z:
+              names=z.namelist()
+              print('Evidence files:',names)
+              for suffix in ['fresh/failure.txt','fresh/v053-first-frame-launch.txt']:
+                  for name in names:
+                      if name.endswith(suffix):
+                          text=z.read(name).decode(errors='replace')
+                          print('::notice title='+suffix.replace('/',' ')+'::'+text[-9000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
+              for name in names:
+                  if name.endswith('fresh/failure-logcat.txt'):
+                      lines=z.read(name).decode(errors='replace').splitlines(); selected=[]
+                      for i,line in enumerate(lines):
+                          if any(q in line for q in ['FATAL EXCEPTION','Fatal signal','*** *** ***','Force finishing activity','Start proc','Killing ','am_crash','am_anr','lmkd:']):
+                              selected.extend(lines[max(0,i-2):i+(70 if any(q in line for q in ['FATAL EXCEPTION','Fatal signal','*** *** ***']) else 3)])
+                      text='\n'.join(dict.fromkeys(selected))
+                      for i in range(0,len(text),9000):
+                          print('::notice title=Previous fresh Android process trace '+str(i//9000+1)+'::'+text[i:i+9000].replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
