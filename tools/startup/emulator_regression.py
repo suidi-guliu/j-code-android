@@ -15,6 +15,12 @@ def failure_hook(kind,error,tb):
   r=subprocess.run(['adb','-s',a.serial,'logcat','-b','crash','-d','-v','brief'],text=True,capture_output=True,timeout=30)
   (a.evidence/'failure-crash.log').write_text(r.stdout+r.stderr)
  except Exception: pass
+ try:
+  xmls=sorted(a.evidence.glob('*.xml'),key=lambda p:p.stat().st_mtime)
+  if xmls:
+   nodes=[{k:v for k,v in n.attrib.items() if k in ['text','content-desc','class','bounds','package']} for n in ET.fromstring(xmls[-1].read_text()).iter('node') if n.attrib.get('text') or n.attrib.get('content-desc')]
+   text+='\nLATEST_UI_NODES '+json.dumps(nodes,ensure_ascii=False)[-5000:]
+ except Exception: pass
  print('::error title=Android startup regression::'+text[-6500:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'),flush=True)
  traceback.print_exception(kind,error,tb)
 sys.excepthook=failure_hook
@@ -42,11 +48,16 @@ def snapshot(name):
 def alive(name,project=False):
  adb('shell','am force-stop '+pkg)
  result=adb('shell','am start -W -n '+activity,timeout=180);(a.evidence/(name+'-start.txt')).write_text(result.stdout+result.stderr)
- time.sleep(5)
- assert adb('shell','pidof '+pkg).stdout.strip(),'Activity process did not survive'
- xml=snapshot(name)
- assert any(label in xml for label in ['Run file','Internal Files','sui-code','Files']),'No recognizable app content in first frame'
- if project:assert 'PreservedProject' in xml,'Registered Project not present after restart'
+ deadline=time.monotonic()+90
+ while True:
+  assert adb('shell','pidof '+pkg).stdout.strip(),'Activity process did not survive'
+  xml=snapshot(name)
+  nodes=list(ET.fromstring(xml).iter('node'))
+  ready=any(n.attrib.get('package')==pkg and n.attrib.get('text') in ['Run file','Internal Files'] for n in nodes)
+  registered=not project or sum(n.attrib.get('text')=='PreservedProject' for n in nodes)>=2
+  if ready and registered:break
+  assert time.monotonic()<deadline,'Workbench/registered Project not visible in actual app window'
+  time.sleep(2)
  note('FIRST_FRAME_PASS '+name)
  return xml
 def hashes(label):
@@ -70,7 +81,17 @@ if a.mode=='upgrade':
  hashes('v050-before-open')
  xml=alive('v050-with-data')
  # Register a real optional Project using the original v0.5 UI, not direct SQLite edits.
- click(xml,lambda n:n.get('content-desc')=='Add project')
+ choices=lambda n:'add project' in n.get('content-desc','').lower() or n.get('text') in ['New Project','New project']
+ if any(choices(n.attrib) for n in ET.fromstring(xml).iter('node')):
+  click(xml,choices)
+ else:
+  # The original v0.5 narrow panel may clip its + icon. Use its retained real command palette.
+  adb('shell','input keycombination 113 59 44');time.sleep(1)
+  xml=snapshot('v050-command-palette')
+  click(xml,lambda n:n.get('class')=='android.widget.EditText')
+  adb('shell','input text New%sFolder');time.sleep(1)
+  xml=snapshot('v050-command-search')
+  click(xml,lambda n:n.get('text')=='New Folder')
  xml=snapshot('v050-create-project')
  click(xml,lambda n:n.get('class')=='android.widget.EditText')
  adb('shell','input text PreservedProject');time.sleep(1)
