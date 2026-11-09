@@ -164,6 +164,8 @@ internal data class WorkbenchRunActions(
 )
 
 internal data class WorkbenchManagerActions(
+    val nativeDapState: kotlinx.coroutines.flow.StateFlow<dev.blamspot.jcode.core.debug.DebugState>? = null,
+    val nativeDapOwnedBy: (String)->Boolean = { false },
     val nativeLspStatuses: kotlinx.coroutines.flow.StateFlow<List<dev.blamspot.jcode.lsp.LspServerStatus>>? = null,
     val onRestartNativeLsp: (String)->Unit = {},
     val nativeLspLog: (String)->String = { "" },

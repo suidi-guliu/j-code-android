@@ -8,6 +8,7 @@ root=pathlib.Path('/evidence/stop-tests');root.mkdir(exist_ok=True)
 java=root/'LongRun.java';java.write_text('public class LongRun { public static void main(String[] a) throws Exception { System.out.println("READY_JAVA"); while(true) Thread.sleep(1000); }}')
 c=root/'long.c';c.write_text('#include <stdio.h>\n#include <unistd.h>\nint main(){puts("READY_C");fflush(stdout);for(;;)sleep(1);}')
 bin=root/'program';subprocess.run(['gcc',str(c),'-o',str(bin)],check=True)
+cpp=root/'program-cpp';subprocess.run(['g++','-x','c++',str(c),'-o',str(cpp)],check=True)
 results=[]
 def read_until(fd,needle,timeout=30):
  text='';end=time.monotonic()+timeout
@@ -17,7 +18,7 @@ def read_until(fd,needle,timeout=30):
    except OSError:break
    if needle in text:return text
  raise AssertionError((needle,text))
-for name,command,ready in [('Java',['/jdk/bin/java',str(java)],'READY_JAVA'),('C',[str(bin)],'READY_C'),('Python',['python3','-u','-c','import time;print("READY_PYTHON");time.sleep(600)'],'READY_PYTHON')]:
+for name,command,ready in [('Java',['/jdk/bin/java',str(java)],'READY_JAVA'),('C',[str(bin)],'READY_C'),('C++',[str(cpp)],'READY_C'),('Python',['python3','-u','-c','import time;print("READY_PYTHON");time.sleep(600)'],'READY_PYTHON')]:
  owner='sui-quickrun:'+uuid.uuid4().hex
  master,slave=pty.openpty()
  attrs=termios.tcgetattr(slave);attrs[3]&=~termios.ECHO;termios.tcsetattr(slave,termios.TCSANOW,attrs)

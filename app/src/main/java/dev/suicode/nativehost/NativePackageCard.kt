@@ -16,7 +16,7 @@ import kotlinx.serialization.json.*
     host: NativePackageHost,item: LibraryItem?,row: NativePackageRow?,busy: Boolean,
     review: ()->Unit,rollback: ()->Unit,perform: (suspend ()->Unit)->Unit,showLanguage: ()->Unit,
     invoke: (String)->Unit,showText: (String,String)->Unit,
-    serverStates: Map<String,String>,restartServer: (String)->Unit,serverLog: (String)->String,
+    serverStates: Map<String,String>,restartServer: (String)->Unit,serverLog: (String)->String,dapStatus: String?,
 ) {
     val uriHandler=androidx.compose.ui.platform.LocalUriHandler.current
     val strings=dev.blamspot.jcode.design.LocalUiTranslations.current
@@ -59,6 +59,7 @@ import kotlinx.serialization.json.*
                         val statusText=when {
                             reference==null -> strings.text("management.notProvided")
                             slot==LanguageKitSlot.RUNTIME -> status.firstOrNull { it.requirement.id==reference }?.let { if(it.ready) strings.text("management.detected") else strings.text("management.runtimeNeedsAttention") } ?: strings.text("packages.checking")
+                            slot==LanguageKitSlot.DAP -> dapStatus ?: strings.text("management.notRunning")
                             slot==LanguageKitSlot.LSP -> component?.descriptor?.get("arguments")?.jsonObject?.get("serverId")?.jsonPrimitive?.content?.let { serverStates[it] } ?: strings.text("management.notRunning")
                             else -> strings.text("management.declared")
                         }

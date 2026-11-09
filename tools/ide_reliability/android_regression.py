@@ -64,12 +64,15 @@ def swipe(pane=False):
  x=220 if pane else WIDTH//2
  top,bottom=100,HEIGHT-50
  if last_xml:
-  candidates=[]
+  candidates=[];fallback=[]
   for n in ET.fromstring(last_xml).iter('node'):
    if n.attrib.get('scrollable')=='true':
     x1,y1,x2,y2=bounds(n)
-    if x1<x<x2 and y2-y1>90:candidates.append(((x2-x1)*(y2-y1),y1,y2))
+    if y2-y1>90:
+     fallback.append(((x2-x1)*(y2-y1),x1,x2,y1,y2))
+     if x1<x<x2:candidates.append(((x2-x1)*(y2-y1),y1,y2))
   if candidates:_,top,bottom=max(candidates)
+  elif fallback:_,left,right,top,bottom=max(fallback);x=(left+right)//2
  start=min(bottom-24,int(HEIGHT*.84));end=max(top+20,start-min(220,int((bottom-top)*.40)))
  adb('shell',f'input swipe {x} {start} {x} {end} 350');time.sleep(.4)
 def wait_text(label,contains=False,scroll=False,pane=False,timeout=50):
@@ -178,21 +181,11 @@ def select_language(chinese):
  checkpoint('language-selected-'+('zh' if chinese else 'en'),['运行文件','概览','文件','扩展包'] if chinese else ['Run file','Overview','Files','Packages'])
 def card_action(label,chinese):
  open_packages(chinese);tap('已安装' if chinese else 'Installed')
- deadline=time.monotonic()+70
- while True:
-  tree=xml();owners=[]
-  for n in tree.iter('node'):
-   subtree=list(n.iter('node'))
-   records=[c for c in subtree if c.attrib.get('text','').startswith(kitid)]
-   if records:
-    record_bottom=min(bounds(c)[3] for c in records)
-    # A partially visible card must not borrow Disable/Uninstall from the preceding Kit.
-    actions=[c for c in subtree if c.attrib.get('text')==label and bounds(c)[1]>=record_bottom]
-    if actions:owners.append((len(subtree),actions))
-  if owners:
-   actions=min(owners,key=lambda t:t[0])[1];tap_node(min(actions,key=lambda n:bounds(n)[1]));return
-  assert time.monotonic()<deadline,'Package action not visible for '+kitid+': '+label
-  swipe(False)
+ tree=xml();editors=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
+ assert editors,'The real Packages search editor must be available'
+ tap_node(editors[0]);adb('shell','input keycombination 113 29');adb('shell','input text '+kitid);adb('shell','input keyevent 4');time.sleep(.7)
+ # A unique ID search prevents borrowing a lifecycle action from an adjacent Kit.
+ tap(label,scroll=True)
 
 def ui_lifecycle():
  import_kit();select_language(True)
@@ -250,6 +243,16 @@ instrument('dev.blamspot.jcode.ZhHansRuntimeTest','full-kit-android',4)
 instrument('dev.blamspot.jcode.PackageManagementUiTest','package-management-ui',5)
 instrument('dev.blamspot.jcode.LauncherIconRuntimeTest','launcher-icons',2)
 if a.mode=='upgrade':hashes('after-all-android-tests');legacy_records('after-all-tests')
+# Rendered framework icons and an actual Launcher app-drawer/launch interaction.
+for size in [48,96,216]:
+ data=adb('exec-out','run-as',pkg,'cat',f'files/sui-code/test-evidence/icons/launcher-{size}px.png',binary=True).stdout
+ assert data.startswith(b'\x89PNG'),size
+ (a.evidence/f'adaptive-launcher-{size}px.png').write_bytes(data)
+adb('shell','input keyevent 3');time.sleep(1)
+adb('shell',f'input swipe {WIDTH//2} {HEIGHT-35} {WIDTH//2} 150 400');time.sleep(1)
+wait_text('sui-code',scroll=True);checkpoint('system-launcher-user-icon',['sui-code'])
+tap('sui-code');wait_text('Run file');checkpoint('launched-via-official-user-icon',['Run file'])
+note('ANDROID_FRAMEWORK_ADAPTIVE_AND_ACTUAL_LAUNCHER_DISPLAY_PASS')
 (a.evidence/'logcat.txt').write_text(adb('logcat','-d','-v','threadtime','-s','AndroidRuntime','SuiStartup','SuiStartupTest','SuiPerformance').stdout)
 for name in ['startup.log','startup.previous.log']:
  r=runas('cat files/sui-code/diagnostics/'+name,check=False)

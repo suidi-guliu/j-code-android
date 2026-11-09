@@ -19,9 +19,10 @@ import kotlinx.coroutines.launch
 /** Real document import, authenticated download, consent and lifecycle UI. No legacy market bridge. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0,serverStates: kotlinx.coroutines.flow.StateFlow<List<dev.blamspot.jcode.lsp.LspServerStatus>>? = null,restartServer: (String)->Unit = {},serverLog: (String)->String = { "" }) {
+fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0,serverStates: kotlinx.coroutines.flow.StateFlow<List<dev.blamspot.jcode.lsp.LspServerStatus>>? = null,restartServer: (String)->Unit = {},serverLog: (String)->String = { "" },dapState: kotlinx.coroutines.flow.StateFlow<dev.blamspot.jcode.core.debug.DebugState>? = null,ownsDebug: (String)->Boolean = { false }) {
     val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
 
+    val debugging=dapState?.collectAsState()?.value?.name
     val liveServers=serverStates?.collectAsState()?.value.orEmpty().groupBy { it.serverId }.mapValues { (_,states) -> states.joinToString("\n") { "${it.state}: ${it.root} ${it.detail.orEmpty()}" } }
     val context=LocalContext.current
     val host=remember { NativePackageHost.get(context) }
@@ -92,7 +93,7 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0,server
                     val row=rows.firstOrNull { it.record.id==id };val item=library.firstOrNull { it.id==id }
                     NativePackageCard(host,item,row,busy,review={perform { pending=if(item!=null && (row==null || item.version!=row.record.version)) host.download(item) else host.setupPreview(id) }},rollback={perform { pending=host.rollbackPreview(id) }},perform=::perform,showLanguage={languageDialog=true},
                         invoke={component -> perform { val reply=host.invoke(id,component);check(reply.accepted) { reply.code+": "+reply.values.toString() };feedback="$component: ${reply.code}";if(reply.values.isNotEmpty()) replyDialog=component to reply.values.entries.joinToString("\n") { "${it.key}: ${it.value}" } }},
-                        showText={title,text -> replyDialog=title to text},serverStates=liveServers,restartServer=restartServer,serverLog=serverLog)
+                        showText={title,text -> replyDialog=title to text},serverStates=liveServers,restartServer=restartServer,serverLog=serverLog,dapStatus=debugging?.takeIf { ownsDebug(id) })
                 }
             }
         }

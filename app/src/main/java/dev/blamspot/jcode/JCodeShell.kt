@@ -1822,6 +1822,8 @@ fun JCodeApp(
         onDeleteBuild = viewModel::deleteBuildConfig,
         runConfigVersion = runConfigVersion,
         managerActions = remember(viewModel, contributedToolchainManagers) { WorkbenchManagerActions(
+            nativeDapState=viewModel.debugState,
+            nativeDapOwnedBy=viewModel::nativeDebugOwnedBy,
             nativeLspStatuses=viewModel.lspServers,
             onRestartNativeLsp=viewModel::restartLanguageServer,
             nativeLspLog=viewModel::languageServerLog,
@@ -3922,7 +3924,7 @@ private fun JCodeShell(
                         onShowIssues = panelActions.onShowIssues,
                         managers = panelActions.toolchainManagers,
                         onOpenManager = panelActions.onOpenToolchainManager,
-                    ) } else dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),section,managerActions.nativeLspStatuses,managerActions.onRestartNativeLsp,managerActions.nativeLspLog)
+                    ) } else dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),section,managerActions.nativeLspStatuses,managerActions.onRestartNativeLsp,managerActions.nativeLspLog,dapState=managerActions.nativeDapState,ownsDebug=managerActions.nativeDapOwnedBy)
                                 }
                                 EditorPageKind.AndroidDevice -> AndroidDevicePage(
                                     adbInstalled = ADB_CATALOG_ID in sdkCatalogState.installedEntryIds,
@@ -4581,7 +4583,7 @@ private fun WorkspacePanel(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                    WorkbenchTool.Extensions,WorkbenchTool.IdeKits,WorkbenchTool.Packages -> dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),when(tool) { WorkbenchTool.IdeKits -> 1;WorkbenchTool.Packages -> 2;else -> 0 },managerActions.nativeLspStatuses,managerActions.onRestartNativeLsp,managerActions.nativeLspLog)
+                    WorkbenchTool.Extensions,WorkbenchTool.IdeKits,WorkbenchTool.Packages -> dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),when(tool) { WorkbenchTool.IdeKits -> 1;WorkbenchTool.Packages -> 2;else -> 0 },managerActions.nativeLspStatuses,managerActions.onRestartNativeLsp,managerActions.nativeLspLog,dapState=managerActions.nativeDapState,ownsDebug=managerActions.nativeDapOwnedBy)
 
                     WorkbenchTool.ToolchainManager -> dev.suicode.nativehost.NativeLanguageCenter(Modifier.fillMaxSize()) { ToolchainManagerPanel(
                         sdkState = sdkCatalogState,

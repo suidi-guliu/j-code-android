@@ -2499,6 +2499,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val sdkInstallRequestedId: StateFlow<String?> = _sdkInstallRequestedId.asStateFlow()
 
     private val debugController = DebugController(distroService, viewModelScope)
+    fun nativeDebugOwnedBy(packageId: String): Boolean = debugController.ownedBy(packageId)
     val debugState = debugController.state
     val debugCallStack = debugController.callStack
     val debugVariables = debugController.variables
