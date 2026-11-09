@@ -83,6 +83,17 @@ class PackageManagementUiTest {
             runBlocking { if(host.rows.value.any { it.record.id==fixture.pack.id }) host.uninstall(fixture.pack.id);if(added) host.uninstall(basic.pack.id) }
         }
     }
+    @Test fun locallyImportedBasicPluginUsesTheSameHostCard() {
+        val fixture=fixture("minimal.suic")
+        check(host.rows.value.none { it.record.id==fixture.pack.id })
+        runBlocking { host.install(fixture,fixture.pack.permissions,true) }
+        try {
+            content { NativePackageCenter(Modifier.fillMaxSize(),0) }
+            compose.onNodeWithTag("packages-search").performTextInput(fixture.pack.id)
+            compose.onNodeWithTag("package-${fixture.pack.id}").assertIsDisplayed()
+            compose.onNodeWithText("Unverified publisher").assertExists()
+        } finally { runBlocking { host.uninstall(fixture.pack.id) } }
+    }
     @Test fun localizationPlanNeedsActualSourceAndPermissionConsentButNoUbuntu() {
         val fixture=fixture("localization-card.suik")
         content { NativePackageReview(host,fixture,onDismiss={}) }

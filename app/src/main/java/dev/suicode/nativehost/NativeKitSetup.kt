@@ -26,7 +26,7 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
         if(r.provider!="environment" || r.environmentId=="java") r.files.forEach { add("test -r ${shellQuote(it)}") }
         r.pythonModules.forEach { add("python3 -c ${shellQuote("import $it")}") }
         r.commands.forEach { add("command -v ${shellQuote(it)} >/dev/null 2>&1") }
-        r.packages.forEach { add("dpkg-query -W -f='\${db:Status-Abbrev}' ${shellQuote(it)} 2>/dev/null | grep -q '^ii '") }
+        if(r.files.isEmpty() && r.commands.isEmpty() && r.anyCommands.isEmpty() && r.pythonModules.isEmpty()) r.packages.forEach { add("dpkg-query -W -f='\${db:Status-Abbrev}' ${shellQuote(it)} 2>/dev/null | grep -q '^ii '") }
         if(r.environmentId=="java") add("( . /opt/sui-code/java.env && test -x \"\$JAVA_HOME/bin/java\" && \"\$JAVA_HOME/bin/java\" -version && \"\$JAVA_HOME/bin/javac\" -version ) >/dev/null 2>&1")
         if(r.environmentId in setOf("c","cpp")) add("command -v gcc >/dev/null && command -v g++ >/dev/null")
         if(r.environmentId=="python") add("command -v python3 >/dev/null")

@@ -1,17 +1,17 @@
 {
-  "display_bound_key_sites": 824,
+  "display_bound_key_sites": 850,
   "unbound_display_literal_sites": 373,
-  "scanned_display_literal_coverage_percent": 68.84,
-  "catalog_keys": 732,
-  "translated_keys": 732,
+  "scanned_display_literal_coverage_percent": 69.5,
+  "catalog_keys": 783,
+  "translated_keys": 783,
   "catalog_translation_percent": 100.0,
-  "key_reference_sites": 902,
-  "referenced_keys": 720,
-  "remaining_literal_sites": 667,
+  "key_reference_sites": 939,
+  "referenced_keys": 740,
+  "remaining_literal_sites": 644,
   "literal_categories": {
-    "verbatim-technical-or-resource-id": 267,
+    "verbatim-technical-or-resource-id": 256,
     "unbound-gap": 373,
-    "protected-host-English": 27
+    "protected-host-English": 15
   },
   "physical_arm64_tested": false,
   "method": "Lexical display-argument scan; dynamic backend/extension prose is not fully measurable by this scan. Catalog completeness does not equal whole-application translation.",
@@ -28,8 +28,8 @@
       "WorkbenchDialogs.kt",
       "WorkbenchPanels.kt"
     ],
-    "bound_display_key_sites": 623,
+    "bound_display_key_sites": 586,
     "unbound_display_literal_sites": 22,
-    "scanned_display_literal_coverage_percent": 96.59
+    "scanned_display_literal_coverage_percent": 96.38
   }
 }
