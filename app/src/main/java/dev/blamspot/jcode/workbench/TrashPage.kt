@@ -81,6 +81,8 @@ fun TrashPage(
     onSnackbar: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scmUi = LocalExplorerScmUi.current
@@ -208,7 +210,7 @@ fun TrashPage(
         val count = entries.size
         AlertDialog(
             onDismissRequest = { confirmEmpty = false },
-            title = { Text("Empty the Trash?") },
+            title = { Text(strings.text("ui.emptyTheTrash")) },
             text = {
                 Text(
                     "This permanently destroys " + count + " item" + (if (count == 1) "" else "s") +
@@ -217,7 +219,7 @@ fun TrashPage(
             },
             confirmButton = {
                 CompactDestructiveButton(
-                    text = "Empty",
+                    text = strings.text("ui.emptyTextc6c094"),
                     onClick = {
                         confirmEmpty = false
                         busy = true
@@ -230,7 +232,7 @@ fun TrashPage(
                     },
                 )
             },
-            dismissButton = { CompactFilledButton(text = "Cancel", onClick = { confirmEmpty = false }) },
+            dismissButton = { CompactFilledButton(text = strings.text("ui.cancel"), onClick = { confirmEmpty = false }) },
         )
     }
 }
@@ -245,17 +247,19 @@ private fun TrashBar(
     enabled: Boolean,
     onEmpty: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = "Trash", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(text = strings.text("ui.trash"), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
                 text = when {
-                    loading -> "Reading the Trash…"
-                    count == 0 -> "Empty"
+                    loading -> strings.text("ui.readingTheTrash")
+                    count == 0 -> strings.text("ui.emptyTextc6c094")
                     else -> count.toString() + " item" + (if (count == 1) "" else "s") + " · " +
                         humanSize(bytes) + " · kept for " + trashRetentionLabel(retentionDays).lowercase()
                 },
@@ -264,20 +268,21 @@ private fun TrashBar(
             )
         }
         if (count > 0) {
-            CompactDestructiveButton(text = "Empty Trash", onClick = onEmpty, enabled = enabled)
+            CompactDestructiveButton(text = strings.text("ui.emptyTrash"), onClick = onEmpty, enabled = enabled)
         }
     }
 }
 
 @Composable
 private fun EmptyBin(loading: Boolean, retentionDays: Int, modifier: Modifier) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = if (loading) {
-                "Reading the Trash…"
+                strings.text("ui.readingTheTrash")
             } else {
-                "Nothing here. Deleted files and folders are kept for " +
-                    trashRetentionLabel(retentionDays).lowercase() + "."
+                strings.text("trash.emptyDescription", mapOf("retention" to (if(retentionDays==0) strings.text("trash.untilEmpty") else strings.text("trash.days",mapOf("count" to retentionDays.toString()))).toString()))
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -359,6 +364,8 @@ private fun Preview(
     onRestore: () -> Unit,
     onPurge: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // The file being shown: the entry itself, or one inside it when the entry is a folder.
     var inside by remember(entry.id) { mutableStateOf<String?>(null) }
     var peek by remember(entry.id, inside) { mutableStateOf<Peek>(Peek.Loading) }
@@ -377,11 +384,11 @@ private fun Preview(
             // first, and only then out of the preview itself.
             val back: (() -> Unit)? = if (inside != null) ({ inside = null }) else onBack
             if (back != null) {
-                JcTooltip("Back") {
+                JcTooltip(strings.text("ui.back")) {
                     IconButton(onClick = back, modifier = Modifier.size(32.dp)) {
                         Icon(
                             painter = jcIcon(JCodeIcon.ArrowBack),
-                            contentDescription = "Back",
+                            contentDescription = strings.text("ui.back"),
                             modifier = Modifier.size(IconSize.md),
                         )
                     }
@@ -409,8 +416,8 @@ private fun Preview(
             // The actions restore or destroy the whole entry, so they stay out of a file inside it:
             // "Restore" while looking at one file of a folder would read as restoring that file.
             if (inside == null) {
-                CompactOutlinedButton(text = "Restore", onClick = onRestore, enabled = !busy)
-                CompactDestructiveButton(text = "Delete forever", onClick = onPurge, enabled = !busy)
+                CompactOutlinedButton(text = strings.text("ui.restore"), onClick = onRestore, enabled = !busy)
+                CompactDestructiveButton(text = strings.text("ui.deleteForever"), onClick = onPurge, enabled = !busy)
             }
         }
         HorizontalDivider(
@@ -441,6 +448,8 @@ private fun Preview(
 
 @Composable
 private fun TextPeek(state: Peek.Text) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SelectionContainer {
             Text(
@@ -454,7 +463,7 @@ private fun TextPeek(state: Peek.Text) {
         }
         if (state.truncated) {
             Text(
-                text = "… preview truncated; the whole file is restored intact.",
+                text = strings.text("ui.previewTruncatedTheWholeFileIsRestoredIntact"),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = Space.md, vertical = Space.sm),

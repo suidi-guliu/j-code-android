@@ -31,6 +31,8 @@ import dev.blamspot.jcode.core.distro.JavaRelease
 /** Uses the current Toolchains detail slot and theme; no tablet layout redesign. */
 @Composable
 internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: Modifier = Modifier) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val context = LocalContext.current
     val manager = remember(context) { DistroServiceLocator.distroService(context).javaEnvironmentManager }
     val state by manager.state.collectAsState()
@@ -43,13 +45,13 @@ internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: 
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Java · latest GA", style = MaterialTheme.typography.titleLarge)
-        Text("Native language environment · Eclipse Temurin OpenJDK")
+        Text(strings.text("ui.javaLatestGA"), style = MaterialTheme.typography.titleLarge)
+        Text(strings.text("ui.nativeLanguageEnvironmentEclipseTemurinOpenJDK"))
         Text("Environment: ${environment.runtime.selectedDistro.label} · Linux ${environment.runtime.selectedDistro.arch.rootfsKey}")
-        if (!ready) Text(if (!supported) "Unavailable: this milestone requires a Linux ARM64 environment." else "Complete Ubuntu setup before installing Java.")
+        if (!ready) Text(if (!supported) strings.text("ui.unavailableThisMilestoneRequiresALinuxARM64Environment") else strings.text("ui.completeUbuntuSetupBeforeInstallingJava"))
         Text(state.message)
         if (state.busy) CircularProgressIndicator()
-        Button(onClick = manager::query, enabled = ready && !state.busy) { Text("Query latest GA / retry query") }
+        Button(onClick = manager::query, enabled = ready && !state.busy) { Text(strings.text("ui.queryLatestGARetryQuery")) }
         state.release?.let { release ->
             SelectionContainer {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -63,36 +65,36 @@ internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: 
                 }
             }
             Button(onClick = { confirmation = release }, enabled = ready && !state.busy && state.distroId == environment.runtime.selectedDistro.id) {
-                Text("Review and install / retry")
+                Text(strings.text("ui.reviewAndInstallRetry"))
             }
         }
-        if (state.busy) TextButton(onClick = manager::cancel) { Text("Cancel") }
-        Text("Installed JDKs",style=MaterialTheme.typography.titleMedium)
-        TextButton(onClick=manager::refreshInstalled,enabled=ready && !state.busy) { Text("Refresh installed JDKs") }
+        if (state.busy) TextButton(onClick = manager::cancel) { Text(strings.text("ui.cancel")) }
+        Text(strings.text("ui.installedJDKs"),style=MaterialTheme.typography.titleMedium)
+        TextButton(onClick=manager::refreshInstalled,enabled=ready && !state.busy) { Text(strings.text("ui.refreshInstalledJDKs")) }
         state.installations.forEach { item ->
             Text("${if(item.active) "Active · " else ""}${item.version}\n${item.home}")
             if(!item.active) {
-                TextButton(onClick={ management=item.home to false },enabled=!state.busy) { Text("Verify and select") }
-                TextButton(onClick={ management=item.home to true },enabled=!state.busy) { Text("Remove inactive JDK") }
+                TextButton(onClick={ management=item.home to false },enabled=!state.busy) { Text(strings.text("ui.verifyAndSelect")) }
+                TextButton(onClick={ management=item.home to true },enabled=!state.busy) { Text(strings.text("ui.removeInactiveJDK")) }
             }
         }
-        Text("QuickRun: open a .java file in the editor and press Ctrl+F5. The current file is saved before running in Ubuntu.")
-        Text("Install Java Basic Plugin from the sui-code Plugin Library for single-file running. Java IDE Kit adds language services and debugging. No JCode plugin market is used.")
+        Text(strings.text("ui.quickRunOpenAJavaFileInTheEditorAnd"))
+        Text(strings.text("ui.installJavaBasicPluginFromTheSuiCodePlugin"))
         state.logPath?.let { Text("Install log in Ubuntu: $it") }
         if (state.log.isNotBlank()) SelectionContainer { Text(state.log, style = MaterialTheme.typography.bodySmall) }
     }
     management?.let { (home,remove) ->
-        AlertDialog(onDismissRequest={ management=null },title={ Text(if(remove) "Remove inactive JDK?" else "Change managed JDK?") },
+        AlertDialog(onDismissRequest={ management=null },title={ Text(if(remove) strings.text("ui.removeInactiveJDKText012cf8") else strings.text("ui.changeManagedJDK")) },
             text={ Text("$home\n${if(remove) "Only this inactive managed installation will be deleted. Active or in-use JDKs are protected." else "java, javac and jshell will be verified before updating java.env. Existing terminals and language services need a restart."}") },
-            confirmButton={ TextButton(onClick={ management=null;manager.manage(home,remove) }) { Text("Confirm") } },dismissButton={ TextButton(onClick={ management=null }) { Text("Cancel") } })
+            confirmButton={ TextButton(onClick={ management=null;manager.manage(home,remove) }) { Text(strings.text("ui.confirm")) } },dismissButton={ TextButton(onClick={ management=null }) { Text(strings.text("ui.cancel")) } })
     }
     confirmation?.let { release ->
         AlertDialog(
             onDismissRequest = { confirmation = null },
             title = { Text("Install Java ${release.version}?") },
             text = { Text("${release.source}\n${release.fileName}\n\nThe Ubuntu Setup terminal will open. Download, checksum verification and HelloWorld must succeed before activation. Existing JDKs and an existing usable system default will be kept.\n\nNo language plugin will be downloaded.") },
-            confirmButton = { TextButton(onClick = { confirmation = null; manager.install(release) }) { Text("Confirm and open terminal") } },
-            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { confirmation = null; manager.install(release) }) { Text(strings.text("ui.confirmAndOpenTerminal")) } },
+            dismissButton = { TextButton(onClick = { confirmation = null }) { Text(strings.text("ui.cancel")) } },
         )
     }
 }

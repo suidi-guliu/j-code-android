@@ -58,6 +58,8 @@ fun ManagerPanelHeader(
     noticeCount: Int = 0,
     onNotice: (() -> Unit)? = null,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // The header carries its own padding and the rule spans the drawer, so a panel pads only its
     // body. Panels used to wrap this in their own inset, which left the title further in than the
     // drawer's other panels and the rule stopping short of both edges.
@@ -105,7 +107,7 @@ fun ManagerPanelHeader(
             }
             HeaderIconButton(
                 icon = jcIcon(JCodeIcon.Search),
-                contentDescription = "Search",
+                contentDescription = strings.text("ui.Search"),
                 onClick = onToggleSearch,
                 active = searchActive,
             )
@@ -122,13 +124,13 @@ fun ManagerPanelHeader(
             } else {
                 HeaderIconButton(
                     icon = jcIcon(JCodeIcon.Refresh),
-                    contentDescription = "Refresh",
+                    contentDescription = strings.text("files.refresh"),
                     onClick = onRefresh,
                 )
             }
         }
         Text(
-            text = "$installedCount installed",
+            text = strings.text("manager.installed", mapOf("count" to (installedCount).toString())),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -171,7 +173,9 @@ private fun ManagerSearchField(
  */
 @Composable
 private fun HeaderNoticeButton(count: Int, onClick: () -> Unit) {
-    val label = if (count == 1) "1 problem — show in Issues" else "$count problems — show in Issues"
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
+    val label = if (count == 1) strings.text("manager.oneProblem") else strings.text("manager.problems", mapOf("count" to (count).toString()))
     JcTooltip(label) {
         IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
             Box(

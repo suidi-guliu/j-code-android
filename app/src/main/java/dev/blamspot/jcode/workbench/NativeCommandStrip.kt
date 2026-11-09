@@ -19,6 +19,8 @@ internal val LocalAdvancedTaskNavigation=compositionLocalOf<()->Unit> { {} }
 
 /** Current-file execution and project workflows have distinct labelled controls, shared across layouts. */
 @Composable internal fun NativeCommandStrip(activeTab: EditorTab?,project: dev.blamspot.jcode.fs.Project?) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val host=NativePackageHost.get(LocalContext.current)
     val rows by host.rows.collectAsState()
     val panel by host.panel.collectAsState()
@@ -48,7 +50,7 @@ internal val LocalAdvancedTaskNavigation=compositionLocalOf<()->Unit> { {} }
     val kit=rows.firstOrNull { it.record.id==projectKitIds.singleOrNull() } ?: sourceKit
 
     fun invoke(id: String) {
-        if(kit==null) { feedback="Install and enable the source language's IDE Kit in Packages.";return }
+        if(kit==null) { feedback=strings.text("run.kitMissing");return }
         scope.launch {
             try { val result=host.invoke(kit.record.id,id);feedback=if(result.accepted) null else result.code+": "+result.values.entries.joinToString { "${it.key}: ${it.value}" } }
             catch(e: Exception) { feedback=e.message }
@@ -71,7 +73,7 @@ internal val LocalAdvancedTaskNavigation=compositionLocalOf<()->Unit> { {} }
             TextButton(enabled=hasProject && kit!=null && !save.quickRunActive,onClick={invoke("run-project")}) { Text(dev.blamspot.jcode.design.uiText("project.run")) }
             TextButton(onClick=tasks) { Text(dev.blamspot.jcode.design.uiText("project.tasks")) }
         }
-        feedback?.let { text -> Row(Modifier.padding(horizontal=8.dp)) { Text(text,Modifier.weight(1f),color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall);TextButton(onClick={feedback=null}) { Text("Dismiss") } } }
+        feedback?.let { text -> Row(Modifier.padding(horizontal=8.dp)) { Text(text,Modifier.weight(1f),color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall);TextButton(onClick={feedback=null}) { Text(strings.text("ui.dismiss")) } } }
     }
     panel?.let { NativeKitPanel(host,it) }
 }

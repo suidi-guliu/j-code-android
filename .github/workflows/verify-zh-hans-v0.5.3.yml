@@ -1,0 +1,104 @@
+name: Verify sui-code v0.5.3 Chinese localization
+on:
+  push:
+    branches: [sui-code/v0.5.3-zh-hans-kit]
+    paths:
+      - 'localization/**'
+      - 'tools/localization/**'
+      - 'app/build.gradle.kts'
+      - 'core/**'
+      - 'app/src/**'
+      - 'feature/**'
+      - 'native-library/**'
+      - 'docs/specifications/**'
+      - 'tools/sui_packages/**'
+      - 'tools/ui/**'
+      - 'tools/startup/**'
+      - 'tools/device/**'
+      - '.github/workflows/verify-zh-hans-v0.5.3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5.3-zh-hans-kit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        id: runtime
+        with:
+          distribution: temurin
+          java-version: '27'
+      - name: Retain verified Java runtime for real source execution tests
+        run: echo "SUI_QUICKRUN_TEST_JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Check compilers, schemas and documentation
+        run: |
+          set -euo pipefail
+          gcc --version
+          g++ --version
+          script --version
+          python -m pip install -r tools/sui_packages/requirements-dev.txt
+          python tools/sui_packages/check_specifications.py
+          python tools/ui/verify_launcher.py
+          python tools/localization/catalog.py
+          python tools/localization/audit.py
+          python -m unittest discover -s tools/localization -p "test_*.py"
+      - name: Unit and Linux x64 integration tests (not ARM64 acceptance)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # JVM tests do not load ARM64 JNI. The actual APK is built with all native tasks in Codex Cloud.
+          # Keep this job focused on host contracts instead of requiring a second Rust cross toolchain.
+          bash gradlew --no-daemon --max-workers=4 -x :native:ripgrep-ffi:cargoBuildDebugJniLibs -x :native:wasmtime-ffi:cargoBuildDebugJniLibs :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:search:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :core:editor:testDebugUnitTest :core:term:testDebugUnitTest :core:debug:testDebugUnitTest :core:lsp:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
+      - name: Publish concrete test and build diagnostics
+        if: always()
+        shell: python
+        run: |
+          import pathlib, os, xml.etree.ElementTree as ET
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
+              out.write('## Native contract verification\n\n')
+              for pattern in ['core/*/build/test-results/testDebugUnitTest/TEST-*.xml','app/build/test-results/testDebugUnitTest/TEST-*.xml']:
+                  for file in pathlib.Path('.').glob(pattern):
+                      root=ET.parse(file).getroot()
+                      out.write(f"- {root.get('name')}: {root.get('tests')} tests, {root.get('failures')} failures\n")
+                      for failure in root.iter('failure'):
+                          out.write('```text\n'+(failure.text or '')[-4000:]+'\n```\n')
+              log=pathlib.Path('native-verification.log')
+              if log.exists():
+                  tail='\n'.join(log.read_text().splitlines()[-100:])
+                  out.write('\n### Gradle tail\n```text\n'+tail+'\n```\n')
+                  if 'BUILD FAILED' in tail:
+                      encoded=tail[-7000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+                      print('::error title=Native Gradle diagnostics::'+encoded)
+      - name: Verify development packages and reject the illegal plugin
+        run: |
+          set -euo pipefail
+          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/minimal.suic"
+          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/minimal-kit.suik"
+          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/zh-hans-kit.suik"
+          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/localization/releases/sui-code-zh-hans-1.0.0.suik"
+          if bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/illegal-plugin.suic" > "$RUNNER_TEMP/illegal.log" 2>&1; then
+            echo 'Illegal plugin was accepted'; exit 1
+          fi
+          grep 'E_BOUNDARY' "$RUNNER_TEMP/illegal.log"
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sui-code-v0.5.3-locale-tests
+          path: |
+            core/*/build/test-results/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+            native-verification.log
+          if-no-files-found: warn
+          retention-days: 30

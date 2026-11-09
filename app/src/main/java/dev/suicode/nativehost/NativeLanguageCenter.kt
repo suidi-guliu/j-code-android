@@ -14,6 +14,8 @@ import kotlinx.coroutines.*
 
 /** The normal path is language readiness + one reviewed plan. Catalog internals remain advanced. */
 @Composable fun NativeLanguageCenter(modifier: Modifier=Modifier,advanced: @Composable ()->Unit) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val context=LocalContext.current
     val host=remember { NativePackageHost.get(context) }
     val distro=remember { DistroServiceLocator.distroService(context) }
@@ -46,22 +48,22 @@ import kotlinx.coroutines.*
     if(advancedVisible) {
         Column(modifier) {
             FlowRow {
-                TextButton(onClick={advancedVisible=false}) { Text("← Language readiness") }
-                TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { distro.checkAvailableCatalogUpdates() } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text("Check trusted-source updates") }
+                TextButton(onClick={advancedVisible=false}) { Text(strings.text("ui.languageReadiness")) }
+                TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { distro.checkAvailableCatalogUpdates() } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(strings.text("ui.checkTrustedSourceUpdates")) }
             }
             error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
             Box(Modifier.weight(1f)) { advanced() }
         }
     } else Column(modifier.padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Text(dev.blamspot.jcode.design.uiText("languages.title"),style=MaterialTheme.typography.headlineSmall)
-        Text("Ubuntu ${environment.runtime.selectedDistro.label} · ${environment.runtime.selectedDistro.arch.rootfsKey}\nReuse installed runtimes. IDE Kits deploy their required development tools after one reviewed plan.")
+        Text(strings.text("languages.context", mapOf("distro" to (environment.runtime.selectedDistro.label).toString(), "architecture" to (environment.runtime.selectedDistro.arch.rootfsKey).toString())))
         if(busy || setup.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
         if(setup.message.isNotBlank()) {
-            Text(setup.message)
-            if(setup.installing) { LinearProgressIndicator(progress={setup.progress/100f},modifier=Modifier.fillMaxWidth());TextButton(onClick=host.setup::cancel) { Text("Cancel safely") } }
+            Text(when(setup.message) { "Checking prerequisites…" -> strings.text("packages.checking"); "Installing reviewed package resources" -> strings.text("packages.installingResources"); "Ready · package resources enabled; no language environment required" -> strings.text("packages.resourcesReady"); else -> setup.message })
+            if(setup.installing) { LinearProgressIndicator(progress={setup.progress/100f},modifier=Modifier.fillMaxWidth());TextButton(onClick=host.setup::cancel) { Text(strings.text("ui.cancelSafely")) } }
             var logs by remember { mutableStateOf(false) }
-            TextButton(onClick={logs=!logs}) { Text(if(logs) "Hide installation log" else "Installation log") }
+            TextButton(onClick={logs=!logs}) { Text(if(logs) strings.text("ui.hideInstallationLog") else strings.text("ui.installationLog")) }
             if(logs) Text("${setup.logPath.orEmpty()}\n${setup.log.takeLast(12000)}",style=MaterialTheme.typography.bodySmall)
         }
         library.filter { it.kind=="suic" }.forEach { basic ->
@@ -72,20 +74,20 @@ import kotlinx.coroutines.*
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
                     Text(basic.name.removeSuffix(" Basic Plugin"),style=MaterialTheme.typography.titleLarge)
-                    Text("Basic plugin: ${installedBasic?.let { "${it.record.version} · ${if(it.record.enabled) "enabled" else "disabled"}" } ?: "not installed"}")
-                    Text("IDE Kit: ${kit?.let { "${it.record.version} · ${if(it.record.enabled) "enabled" else "disabled"}" } ?: "optional · not installed"}")
-                    if(kit!=null && library.firstOrNull { it.id==id }?.version!=kit.record.version) Text("Updated Kit available. Review its signed dependency plan to adopt the v0.5 workflow.",color=MaterialTheme.colorScheme.primary)
-                    Text(when { status==null -> "Development tools: checking when a Kit is installed";status.isEmpty() -> "Legacy Kit: review updated prerequisites";status.all { it.ready } -> "Ready · runtime and all required tools detected";else -> "Partially Ready · missing: "+status.filter { !it.ready }.joinToString { it.requirement.name } })
+                    Text(strings.text("languages.basicStatus", mapOf("status" to (installedBasic?.let { it.record.version+" · "+strings.text(if(it.record.enabled) "status.enabled" else "status.disabled") } ?: strings.text("status.notInstalled")).toString())))
+                    Text(strings.text("languages.kitStatus", mapOf("status" to (kit?.let { it.record.version+" · "+strings.text(if(it.record.enabled) "status.enabled" else "status.disabled") } ?: strings.text("status.optionalNotInstalled")).toString())))
+                    if(kit!=null && library.firstOrNull { it.id==id }?.version!=kit.record.version) Text(strings.text("ui.updatedKitAvailableReviewItsSignedDependencyPlanTo"),color=MaterialTheme.colorScheme.primary)
+                    Text(when { status==null -> strings.text("ui.developmentToolsCheckingWhenAKitIsInstalled");status.isEmpty() -> strings.text("ui.legacyKitReviewUpdatedPrerequisites");status.all { it.ready } -> strings.text("ui.readyRuntimeAndAllRequiredToolsDetected");else -> strings.text("languages.partial", mapOf("tools" to (status.filter { !it.ready }.joinToString { it.requirement.name }).toString())) })
                     status?.forEach { Text("${if(it.ready) "✓" else "○"} ${it.requirement.name} · ${it.installedVersion}",style=MaterialTheme.typography.bodySmall) }
                     FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        if(installedBasic==null) TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.download(basic) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text("Basic run setup") }
-                        Button(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.setupPreview(id) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(if(kit==null) "Set up complete IDE Kit" else "Review / repair dependencies") }
+                        if(installedBasic==null) TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.download(basic) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(strings.text("ui.basicRunSetup")) }
+                        Button(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.setupPreview(id) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(if(kit==null) strings.text("ui.setUpCompleteIDEKit") else strings.text("ui.reviewRepairDependencies")) }
                     }
                 }
             }
         }
-        TextButton(enabled=!busy && !setup.busy,onClick={revision++}) { Text("Refresh readiness") }
-        TextButton(onClick={advancedVisible=true}) { Text("Advanced environment and server controls") }
+        TextButton(enabled=!busy && !setup.busy,onClick={revision++}) { Text(strings.text("ui.refreshReadiness")) }
+        TextButton(onClick={advancedVisible=true}) { Text(strings.text("ui.advancedEnvironmentAndServerControls")) }
     }
     pending?.let { NativePackageReview(host,it,onDismiss={pending=null},onInstalled={revision++}) }
 }

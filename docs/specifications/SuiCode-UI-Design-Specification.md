@@ -247,3 +247,12 @@ Files仅过滤已加载树/当前目录名称，不递归走盘；Find通过明�
 UI本地化仅由.suik的localization声明及ui.localization权限提供。完整定义、Schema、公开键、英文回退、生命周期、参数类型和错误行为见[总规范第29节](SUIC-SUIK-Development-Specification.md#29-api-4独立-ui-本地化资源规范-040)。`LocalUiTranslations`为CompositionLocal<UiTranslations>；`uiText(key:String,arguments:Map<String,String>=emptyMap()):String`在Compose读取快照，不进行IO。第三方UI只使用其认证资源和Core开放键，不能覆盖主题、全局布局、权限确认或签名状态。默认英文，不安装任何额外运行环境。当前局部键接入不宣称已完成全应用中文翻译。
 
 本轮Launcher图标逐字节保持原v0.5，包括常规/Debug/Beta前景和Adaptive入口；所有临时S-dot方案停用。后续图标设计由用户另行提供。本轮没有改变配色、字体大小、圆角及主题。
+
+
+### UI 本地化目录版 0.4.1 / 宿主0.5.3
+
+Core API4与UiTranslations/uiText接口保持兼容。资源键完整目录、参数和值约束见总规范第29/30节与`localization/en.json`。完整简体中文包由独立`.suik`安装，不内置中文到APK，不修改系统Locale；用户明确选择后通过CompositionLocal即时重新组合。启用、禁用、更新、缺失归档和卸载均由原资源生命周期控制，失效时回退英文并留存SuiStartup诊断。来源、权限及签名审阅保持宿主受保护英文，不能被包替换。
+
+菜单、按钮、提示、设置标题及状态使用资源键；保存到磁盘的枚举名/配置键与显示文案分离。文件名、用户代码、终端输出、扩展作者自带标题保持原文，禁止自动对任何任意String进行字典替换。宿主事件从当前快照生成，Compose不在首屏同步扫描资源。无环境时使用原暂缓配置能力访问被动资源，不能伪装Ubuntu已安装；运行与调试仍检查真实环境。
+
+横屏、竖屏、第二栏宽度及字体缩放沿用现有约束，文本使用既有换行、滚动和省略控件；不能以缩小中文字号或裁掉操作替代适配。覆盖表、剩余高级界面缺口与Android截图由`docs/localization/locale-key-audit.md`及版本交付报告公开。公开键中文值100%仅指资源表，不能据此宣称所有动态界面、工具输出及第三方面板都已翻译。

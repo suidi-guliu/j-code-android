@@ -65,6 +65,8 @@ import dev.blamspot.jcode.fs.WorkspaceNodeType
  */
 @Composable
 internal fun WorkspaceEmptyState(workspace: Workspace?) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -89,11 +91,11 @@ internal fun WorkspaceEmptyState(workspace: Workspace?) {
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "Internal Files",
+                text = strings.text("files.internal"),
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "No project yet — add one with + above, or open an existing folder.",
+                text = strings.text("ui.noProjectYetAddOneWithAboveOrOpen"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -112,6 +114,8 @@ internal fun ProjectRoster(
     onOpenProjectSettings: (Long) -> Unit,
     onExportProject: (Project) -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val trashProject=LocalProjectTrash.current
     var trashTarget by remember { mutableStateOf<Project?>(null) }
     var renameTarget by remember { mutableStateOf<Project?>(null) }
@@ -124,7 +128,7 @@ internal fun ProjectRoster(
         verticalArrangement = Arrangement.spacedBy(Space.xs),
     ) {
         Text(
-            text = "PROJECTS",
+            text = strings.text("ui.pROJECTS"),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -181,11 +185,11 @@ internal fun ProjectRoster(
                             modifier = Modifier.weight(1f),
                         )
                         Box {
-                            JcTooltip("Project actions") {
+                            JcTooltip(strings.text("ui.projectActions")) {
                                 IconButton(onClick = { openMenuId = project.id }, modifier = Modifier.size(32.dp)) {
                                     Icon(
                                         painter = jcIcon(JCodeIcon.MoreVert),
-                                        contentDescription = "Project actions",
+                                        contentDescription = strings.text("ui.projectActions"),
                                         modifier = Modifier.size(IconSize.md),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -195,14 +199,14 @@ internal fun ProjectRoster(
                                 expanded = openMenuId == project.id,
                                 onDismissRequest = { openMenuId = null },
                                 quickActions = listOf(
-                                    ContextAction(JCodeIcon.Rename, "Rename") { renameTarget = project },
-                                    ContextAction(JCodeIcon.Close, "Remove from list (keep files)") { onRemoveProject(project.id) },
-                                    ContextAction(JCodeIcon.Trash, "Delete project files to Trash", destructive=true) { trashTarget=project },
+                                    ContextAction(JCodeIcon.Rename, strings.text("ui.rename")) { renameTarget = project },
+                                    ContextAction(JCodeIcon.Close, strings.text("ui.removeFromListKeepFiles")) { onRemoveProject(project.id) },
+                                    ContextAction(JCodeIcon.Trash, strings.text("ui.deleteProjectFilesToTrash"), destructive=true) { trashTarget=project },
                                 ),
                                 listActions = listOf(
-                                    ContextAction(JCodeIcon.Open, if (isWorkspace) "Open saved project group" else "Open") { onOpenProject(project) },
-                                    ContextAction(JCodeIcon.Settings, "Project settings") { onOpenProjectSettings(project.id) },
-                                    ContextAction(JCodeIcon.Save, "Export to storage") { onExportProject(project) },
+                                    ContextAction(JCodeIcon.Open, if (isWorkspace) strings.text("ui.openSavedProjectGroup") else strings.text("ui.open")) { onOpenProject(project) },
+                                    ContextAction(JCodeIcon.Settings, strings.text("ui.projectSettings")) { onOpenProjectSettings(project.id) },
+                                    ContextAction(JCodeIcon.Save, strings.text("ui.exportToStorage")) { onExportProject(project) },
                                 ),
                             )
                         }
@@ -213,32 +217,32 @@ internal fun ProjectRoster(
     }
 
     trashTarget?.let { target ->
-        AlertDialog(onDismissRequest={trashTarget=null},title={Text("Delete project files?")},text={Text("${target.name}\n${target.location}\nThe complete directory moves to Trash for recovery. Removing from the list is a separate action.")},confirmButton={CompactFilledButton(text="Move project to Trash",onClick={trashTarget=null;trashProject(target)})},dismissButton={CompactOutlinedButton(text="Cancel",onClick={trashTarget=null})})
+        AlertDialog(onDismissRequest={trashTarget=null},title={Text(strings.text("ui.deleteProjectFiles"))},text={Text(strings.text("project.deleteDescription", mapOf("name" to (target.name).toString(), "path" to (target.location).toString())))},confirmButton={CompactFilledButton(text=strings.text("ui.moveProjectToTrash"),onClick={trashTarget=null;trashProject(target)})},dismissButton={CompactOutlinedButton(text=strings.text("ui.cancel"),onClick={trashTarget=null})})
     }
     renameTarget?.let { target ->
         var newName by remember(target.id) { mutableStateOf(target.name) }
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text("Rename") },
+            title = { Text(strings.text("ui.rename")) },
             text = {
                 TextField(
                     value = newName,
                     onValueChange = { newName = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Name") },
+                    placeholder = { Text(strings.text("ui.name")) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 )
             },
             confirmButton = {
                 CompactFilledButton(
-                    text = "Rename",
+                    text = strings.text("ui.rename"),
                     onClick = { onRenameProject(target.id, newName); renameTarget = null },
                     enabled = newName.isNotBlank() && newName.trim() != target.name,
                 )
             },
             dismissButton = {
-                CompactOutlinedButton(text = "Cancel", onClick = { renameTarget = null })
+                CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = { renameTarget = null })
             },
         )
     }

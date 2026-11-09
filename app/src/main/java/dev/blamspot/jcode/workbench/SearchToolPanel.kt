@@ -119,6 +119,8 @@ internal fun SearchToolPanel(
     onSeedConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     var searchInternal by remember { mutableStateOf(false) }
     val rootFile = if(searchInternal) internalRoot else (project?.fsPath as? FsPath.Local)?.file
     var searchError by remember { mutableStateOf<String?>(null) }
@@ -194,7 +196,7 @@ internal fun SearchToolPanel(
                             truncated = true
                         }
                     }
-                } catch(e: CancellationException) { throw e } catch(e: Exception) { searchError="Search failed: ${e.message}. Check the expression or choose another scope." } finally {
+                } catch(e: CancellationException) { throw e } catch(e: Exception) { searchError=strings.text("find.failed", mapOf("reason" to (e.message ?: "").toString())) } finally {
                     searching = false
                 }
             }
@@ -218,14 +220,14 @@ internal fun SearchToolPanel(
             Text(uiText("find.hint"),style=MaterialTheme.typography.bodySmall)
             if(internalRoot!=null && project?.id!=dev.blamspot.jcode.fs.InternalFiles.ROOT_NODE_ID) FlowRow {
                 TextButton(onClick={searchInternal=true}) { Text((if(searchInternal) "✓ " else "")+uiText("files.internal")) }
-                TextButton(onClick={searchInternal=false}) { Text((if(!searchInternal) "✓ " else "")+"Project") }
+                TextButton(onClick={searchInternal=false}) { Text((if(!searchInternal) "✓ " else "")+strings.text("ui.project")) }
             }
             Text(rootFile.path,style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis)
             CompactSearchField(
                 query = query,
                 onQueryChange = { query = it },
                 searching = searching,
-                placeholder = scope.placeholder,
+                placeholder = strings.text(when(scope) { SearchScope.Content -> "find.placeholderContent";SearchScope.Names -> "find.placeholderNames";SearchScope.CurrentDoc -> "find.placeholderCurrent" }),
             )
             SearchScopeSelector(selected=scope,onSelect={scope=it},modifier=Modifier.fillMaxWidth())
             FlowRow(
@@ -252,13 +254,13 @@ internal fun SearchToolPanel(
             val plus = if (truncated) "+" else ""
             val summary = when {
                 scope == SearchScope.CurrentDoc && activeDocTab == null ->
-                    "Open a file to search the current document"
-                query.length < MIN_QUERY_LENGTH -> "Type at least $MIN_QUERY_LENGTH characters"
-                results.isEmpty() && searching -> "Searching…"
-                results.isEmpty() -> "No results"
+                    strings.text("find.openCurrent")
+                query.length < MIN_QUERY_LENGTH -> strings.text("find.minimum", mapOf("count" to (MIN_QUERY_LENGTH).toString()))
+                results.isEmpty() && searching -> strings.text("find.searching")
+                results.isEmpty() -> strings.text("find.none")
                 scope == SearchScope.Names ->
-                    "${results.size}$plus files / folders"
-                else -> "${results.size}$plus results in $fileCount file${if (fileCount == 1) "" else "s"}"
+                    strings.text("find.namesSummary", mapOf("count" to ("${results.size}$plus").toString()))
+                else -> strings.text("find.contentSummary", mapOf("count" to ("${results.size}$plus").toString(), "files" to (fileCount).toString()))
             }
             Text(
                 text = searchError ?: summary,

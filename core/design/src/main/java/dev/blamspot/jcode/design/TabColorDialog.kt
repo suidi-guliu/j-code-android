@@ -35,10 +35,12 @@ fun TabColorDialog(
     onClear: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val current = currentHex?.let { tabColorFromHex(it) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Tab color") },
+        title = { Text(strings.text("ui.Tabcolor")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
                 TabColorPalette.chunked(5).forEach { row ->
@@ -73,14 +75,14 @@ fun TabColorDialog(
             }
         },
         confirmButton = {
-            CompactFilledButton(text = "Random", onClick = { onPick(randomTabColor()) })
+            CompactFilledButton(text = strings.text("option.Random"), onClick = { onPick(randomTabColor()) })
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
                 if (current != null) {
-                    CompactDestructiveButton(text = "Clear", onClick = onClear)
+                    CompactDestructiveButton(text = strings.text("ui.clear"), onClick = onClear)
                 }
-                CompactOutlinedButton(text = "Cancel", onClick = onDismiss)
+                CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = onDismiss)
             }
         },
     )

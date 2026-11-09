@@ -2527,7 +2527,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // starting a debug session saves. A buffer that cannot be written reports that itself; the
         // save failure cancels debugging so it cannot run stale source.
         viewModelScope.launch {
-            if (!saveAllDirtyAwait()) { emitMessage("Debug cancelled: files could not be saved"); return@launch }
+            if (!saveAllDirtyAwait()) { emitMessage(nativePackages.uiText("message.Debugcancelledfilescouldnotbesaved")); return@launch }
             debugController.startDebug(hostPath, deriveProjectDir(hostPath), _breakpoints.value)
         }
     }
@@ -2701,7 +2701,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!requireLanguageServer(path, LspFeature.Definition, "Go to Definition")) return
         val targets = lspController.definition(path, line, character)
         when (targets.size) {
-            0 -> emitMessage("No definition found for \"$word\"")
+            0 -> emitMessage(nativePackages.uiText("message.noDefinition", mapOf("symbol" to (word).toString())))
             1 -> openLspLocation(targets.first())
             else -> _lspLocationPicker.value =
                 LspLocationPicker("Definitions of \"$word\"", targets.toEntries())
@@ -2712,7 +2712,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!requireLanguageServer(path, LspFeature.References, "Find References")) return
         val results = lspController.references(path, line, character)
         if (results.isEmpty()) {
-            emitMessage("No references found for \"$word\"")
+            emitMessage(nativePackages.uiText("message.noReferences", mapOf("symbol" to (word).toString())))
             return
         }
         _lspLocationPicker.value = LspLocationPicker("References to \"$word\"", results.toEntries())
@@ -2721,7 +2721,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun lspBeginRename(path: String, line: Int, character: Int, word: String) {
         if (!requireLanguageServer(path, LspFeature.Rename, "Rename Symbol")) return
         if (word.isBlank()) {
-            emitMessage("Put the cursor on a symbol to rename it")
+            emitMessage(nativePackages.uiText("message.Putthecursoronasymboltorename"))
             return
         }
         _lspRenameRequest.value = LspRenameRequest(path, line, character, word)
@@ -2736,7 +2736,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val edit = lspController.rename(request.path, request.line, request.character, trimmed)
             if (edit == null || edit.isEmpty) {
-                emitMessage("\"${request.symbol}\" can't be renamed here")
+                emitMessage(nativePackages.uiText("message.cannotRename", mapOf("symbol" to (request.symbol).toString())))
                 return@launch
             }
             val applied = applyWorkspaceEdit(edit)
@@ -2745,7 +2745,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     "Renamed to \"$trimmed\" in ${edit.fileCount} " +
                         if (edit.fileCount == 1) "file" else "files"
                 } else {
-                    "Rename failed"
+                    nativePackages.uiText("message.Renamefailed")
                 },
             )
         }
@@ -2761,7 +2761,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun openLspLocation(location: LocationResult) {
         if (!location.path.startsWith("/") && location.path.contains("://")) {
             val text = lspController.virtualDocument(location.path)
-            if (text == null) { emitMessage("Language server could not load this source: ${location.path}"); return }
+            if (text == null) { emitMessage(nativePackages.uiText("message.sourceLoadFailed", mapOf("path" to (location.path).toString()))); return }
             val digest = java.security.MessageDigest.getInstance("SHA-256").digest(location.path.toByteArray()).joinToString("") { "%02x".format(it) }
             val file = withContext(Dispatchers.IO) {
                 File(getApplication<Application>().cacheDir,"language-sources/$digest/" + location.path.substringBefore('?').substringAfterLast('/').ifBlank { "Source.java" }.removeSuffix(".class")+".java").apply { parentFile!!.mkdirs();writeText(text) }
@@ -2772,7 +2772,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val file = File(location.path)
         if (!file.isFile) {
-            emitMessage("Can't open ${file.name}: file not found")
+            emitMessage(nativePackages.uiText("message.fileMissing", mapOf("name" to (file.name).toString())))
             return
         }
         _bringEditorToFront.tryEmit(Unit)
@@ -2864,7 +2864,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         notifyWorkspaceFilesChanged()
         true
     }.getOrElse {
-        emitMessage("Failed to apply edits: ${it.message ?: "error"}")
+        emitMessage(nativePackages.uiText("message.applyEditsFailed", mapOf("reason" to (it.message ?: "error").toString())))
         false
     }
 
@@ -2966,8 +2966,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (tab == null || tab.isPage || !lspController.supports(tab.filePath.path,LspFeature.Formatting)) dev.suicode.packages.Reply(false,"E_UNAVAILABLE")
             else {
                 viewModelScope.launch {
-                    if (formatWithLanguageServer(tab)) emitMessage("Formatted ${tab.title}")
-                    else emitMessage("Language server returned no formatting edits")
+                    if (formatWithLanguageServer(tab)) emitMessage(nativePackages.uiText("message.formatted", mapOf("name" to (tab.title).toString())))
+                    else emitMessage(nativePackages.uiText("message.Languageserverreturnednoformattingedits"))
                 }
                 dev.suicode.packages.Reply(true,"REQUESTED")
             }
@@ -3512,12 +3512,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createNewItem(request: NewItemRequest) {
         viewModelScope.launch {
-            if(request.isWorkspace) { emitMessage("Create a folder in Internal Files or use an optional Project. Existing folder metadata is retained.");return@launch }
-            if(!saveAllDirtyAwait()) { emitMessage("Creation cancelled: existing files could not be saved");return@launch }
+            if(request.isWorkspace) { emitMessage(nativePackages.uiText("project.createFolderHint"));return@launch }
+            if(!saveAllDirtyAwait()) { emitMessage(nativePackages.uiText("project.saveFailed"));return@launch }
             val name=request.name.trim().ifBlank { if(request.isWorkspace) "untitled-workspace" else "untitled-project" }
             val nativeTemplate=if(request.isWorkspace) null else nativePackages.templates().firstOrNull { it.id==request.templateId }
             if(!request.isWorkspace && request.templateId!=null && request.templateId!="empty" && nativeTemplate==null) {
-                emitMessage("Enable the native IDE Kit and grant project.read/file.write to use this template");return@launch
+                emitMessage(nativePackages.uiText("project.templateUnavailable"));return@launch
             }
             if(request.isWorkspace) {
                 clearEditorTabs()
@@ -3531,8 +3531,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 if(nativeTemplate!=null) nativePackages.applyTemplate(nativeTemplate,(project.fsPath as? FsPath.Local)?.file ?: error("Native templates require local storage"))
                 notifyWorkspaceFilesChanged()
-                emitMessage("Project '${project.name}' created"+(nativeTemplate?.let { " from ${it.title}" } ?: ""))
-            } catch(e: Exception) { emitMessage("Project retained; template failed safely: ${e.message}") }
+                emitMessage(nativePackages.uiText("project.created", mapOf("name" to (project.name).toString(), "template" to (nativeTemplate?.let { " · ${it.title}" } ?: "").toString())))
+            } catch(e: Exception) { emitMessage(nativePackages.uiText("message.templateFailed", mapOf("reason" to (e.message ?: "").toString()))) }
         }
     }
 
@@ -3571,7 +3571,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 resetDefaultWorkspaceProject()
                 val project = workspaceManager.addFolder(resolved)
                 _selectedProjectId.value = project.id
-                emitMessage("Opened '${project.name}'.")
+                emitMessage(nativePackages.uiText("message.opened", mapOf("name" to (project.name).toString())))
             }
         }
     }
@@ -3583,11 +3583,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _importProgress.value = ImportProgress(label, ImportPhase.Scanning)
         val staged = try {
             val scan = runCatching { scanFolderForImport(appContext, source) }.getOrElse {
-                emitMessage("Couldn't read '$label': ${it.message ?: "unknown error"}.")
+                emitMessage(nativePackages.uiText("message.readFailed", mapOf("name" to (label).toString(), "reason" to (it.message ?: "unknown error").toString())))
                 return
             }
             if (scan.fileCount == 0) {
-                emitMessage("'$label' is empty — nothing to import.")
+                emitMessage(nativePackages.uiText("message.emptyImport", mapOf("name" to (label).toString())))
                 return
             }
             val sources = sourcesRoot().apply { mkdirs() }
@@ -3599,7 +3599,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return
             }
             if (!saveAllDirtyAwait()) {
-                emitMessage("Save or close open files before importing a folder.")
+                emitMessage(nativePackages.uiText("message.Saveorcloseopenfilesbeforeimportinga"))
                 return
             }
             _importProgress.value = ImportProgress(label, ImportPhase.Copying, done = 0, total = scan.fileCount)
@@ -3608,7 +3608,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _importProgress.value = ImportProgress(label, ImportPhase.Copying, done, scan.fileCount)
                 }
             }.getOrElse {
-                emitMessage("Import failed: ${it.message ?: "unknown error"}.")
+                emitMessage(nativePackages.uiText("message.importFailed", mapOf("reason" to (it.message ?: "unknown error").toString())))
                 return
             }
         } finally {
@@ -3623,7 +3623,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _openFolderTypePrompt.value = PendingFolderType.AdoptStaged(staged)
 
             else ->
-                adoptStagedGuarded(staged, WorkspaceNodeType.Project)?.let { emitMessage("Imported '${it.name}'.") }
+                adoptStagedGuarded(staged, WorkspaceNodeType.Project)?.let { emitMessage(nativePackages.uiText("message.importedFolder", mapOf("name" to (it.name).toString()))) }
         }
     }
 
@@ -3632,7 +3632,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      *  saving. On an unsaveable buffer the staged copy is discarded (already messaged) and null returned. */
     private suspend fun adoptStagedGuarded(staged: File, nodeType: WorkspaceNodeType): Project? {
         if (!saveAllDirtyAwait()) {
-            emitMessage("Save or close open files before importing a folder.")
+            emitMessage(nativePackages.uiText("message.Saveorcloseopenfilesbeforeimportinga"))
             withContext(Dispatchers.IO) { staged.deleteRecursively() }
             return null
         }
@@ -3706,7 +3706,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 is PendingFolderType.AdoptStaged -> {
                     if (!pending.staged.isDirectory) {
-                        emitMessage("The imported folder is no longer available.")
+                        emitMessage(nativePackages.uiText("message.Theimportedfolderisnolongeravailable"))
                         return@launch
                     }
                     adoptStagedGuarded(pending.staged, nodeType)?.let {
@@ -3741,7 +3741,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun removeProject(projectId: Long) {
         viewModelScope.launch {
             workspaceManager.removeProject(projectId)
-            emitMessage("Removed from the project list. Files remain in Internal Files.")
+            emitMessage(nativePackages.uiText("message.RemovedfromtheprojectlistFilesremainin"))
         }
     }
 
@@ -3754,8 +3754,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 WorkspaceServiceLocator.trash(appContext).put(appContext,project.fsPath,project.name,(project.fsPath as FsPath.Local).file.path,dev.blamspot.jcode.fs.TrashSource.Explorer)
                 workspaceManager.removeProject(project.id)
                 workspaceManager.removeRecent(project.location)
-                emitMessage("Project files moved to Trash. Restore from Files → Trash; Ubuntu and installed tools retained.")
-            } catch(e: Exception) { emitMessage("Project deletion stopped: ${e.message}. Check Trash and Internal Files before retrying.") }
+                emitMessage(nativePackages.uiText("message.ProjectfilesmovedtoTrashRestorefromFiles"))
+            } catch(e: Exception) { emitMessage(nativePackages.uiText("message.projectDeleteStopped", mapOf("reason" to (e.message ?: "").toString()))) }
         }
     }
 
@@ -3798,7 +3798,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             clearEditorTabs()
             clearDefaultWorkspaceProjects()
             persistSession()
-            emitMessage("Project closed.")
+            emitMessage(nativePackages.uiText("message.Projectclosed"))
         }
     }
 
@@ -3833,8 +3833,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val ok=workspaceManager.renameProject(projectId,newName)
-                emitMessage(if(ok) "Renamed to '$newName'." else "Rename failed: destination exists or the project is unavailable.")
-            } catch(e: Exception) { emitMessage("Rename rejected: ${e.message}. Project files were not overwritten.") }
+                emitMessage(if(ok) nativePackages.uiText("message.renamed", mapOf("name" to (newName).toString())) else nativePackages.uiText("message.Renamefaileddestinationexistsortheprojectis"))
+            } catch(e: Exception) { emitMessage(nativePackages.uiText("message.renameRejected", mapOf("reason" to (e.message ?: "").toString()))) }
         }
     }
 
@@ -3845,15 +3845,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      *  [source] (e.g. a SAF project with no local dir) is rejected with a message. */
     fun exportDirTo(name: String, source: File?, dest: Uri) {
         if (source == null || !source.isDirectory) {
-            viewModelScope.launch { emitMessage("Export failed: '$name' isn't a local folder.") }
+            viewModelScope.launch { emitMessage(nativePackages.uiText("message.exportNotLocal", mapOf("name" to (name).toString()))) }
             return
         }
         viewModelScope.launch {
-            emitMessage("Exporting '$name'…")
+            emitMessage(nativePackages.uiText("message.exporting", mapOf("name" to (name).toString())))
             val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(java.util.Date())
             runCatching { copyLocalTreeToDocumentTree(appContext, source, dest, "$name-$stamp") }
-                .onSuccess { emitMessage("Exported $it file(s) from '$name'.") }
-                .onFailure { emitMessage("Export failed: ${it.message ?: "unknown error"}") }
+                .onSuccess { emitMessage(nativePackages.uiText("message.exported", mapOf("count" to (it).toString(), "name" to (name).toString()))) }
+                .onFailure { emitMessage(nativePackages.uiText("message.exportFailed", mapOf("reason" to (it.message ?: "unknown error").toString()))) }
         }
     }
 
@@ -3997,7 +3997,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (!ensureScopeAvailable(ConfigScope.Project)) return@launch
             val root = (selectedProject.value?.fsPath as? FsPath.Local)?.file ?: return@launch
             val rel = relativeTabKey(root, tab.filePath)
-                ?: run { emitMessage("Can't color a file outside the project"); return@launch }
+                ?: run { emitMessage(nativePackages.uiText("message.Cantcolorafileoutsidetheproject")); return@launch }
             configService.updateProjectTabColorMaps { files, dirs ->
                 (if (hex == null) files - rel else files + (rel to hex)) to dirs
             }
@@ -4101,7 +4101,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val file = configService.ensureConfigFile(ConfigScope.Workspace)
             if (file == null) {
-                emitMessage("Workspace config is unavailable.")
+                emitMessage(nativePackages.uiText("message.Workspaceconfigisunavailable"))
                 return@launch
             }
             openLocalFile(file)
@@ -4112,7 +4112,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val file = configService.ensureConfigFile(ConfigScope.Project)
             if (file == null) {
-                emitMessage("Project overrides require a local project.")
+                emitMessage(nativePackages.uiText("message.Projectoverridesrequirealocalproject"))
                 return@launch
             }
             openLocalFile(file)
@@ -5319,12 +5319,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun restartApp() {
         if(distroService.kitInstallationActive || distroService.nativeEnvironmentManager.state.value.installing) {
-            viewModelScope.launch { emitMessage("Finish or safely cancel package installation before restarting. Existing Ubuntu and data are retained.") }
+            viewModelScope.launch { emitMessage(nativePackages.uiText("message.Finishorsafelycancelpackageinstallationbeforerestarting")) }
             return
         }
         if (distroService.nativeEnvironmentManager.state.value.installing) {
             distroService.nativeEnvironmentManager.cancel()
-            viewModelScope.launch { emitMessage("Restart postponed: wait for apt/dpkg to reach a safe cancellation boundary.") }
+            viewModelScope.launch { emitMessage(nativePackages.uiText("message.Restartpostponedwaitforaptdpkgtoreach")) }
             return
         }
         runCatching { flushSessionNow() }
@@ -5838,7 +5838,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (state == null) {
             viewModelScope.launch(Dispatchers.IO) {
                 runCatching { File(path).writeText(text) }
-                    .onFailure { emitMessage("Could not write ${File(path).name}: ${it.message ?: "error"}") }
+                    .onFailure { emitMessage(nativePackages.uiText("message.writeFailed", mapOf("name" to (File(path).name).toString(), "reason" to (it.message ?: "error").toString()))) }
             }
             return
         }
@@ -5991,7 +5991,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     lspController.documentClosed(tab.filePath.path)
                     if(moved==null) {
                         tab.editorState?.readOnly=true
-                        emitMessage("${tab.title} moved to Trash/deleted. Open buffer retained read-only; restore the file before saving.")
+                        emitMessage(nativePackages.uiText("message.bufferRetained", mapOf("name" to (tab.title).toString())))
                     } else {
                         val file=File(moved.absolutePath+tab.filePath.absolutePath.removePrefix(old))
                         val updated=tab.copy(filePath=file,title=file.name)
@@ -6084,8 +6084,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (now - lastReloadNoticeAt > RELOAD_NOTICE_THROTTLE_MS) {
                     lastReloadNoticeAt = now
                     emitMessage(
-                        if (reloaded.size == 1) "Reloaded ${reloaded.first()} from disk"
-                        else "Reloaded ${reloaded.size} files from disk"
+                        if (reloaded.size == 1) nativePackages.uiText("message.reloaded", mapOf("name" to (reloaded.first()).toString()))
+                        else nativePackages.uiText("message.reloadedMany", mapOf("count" to (reloaded.size).toString()))
                     )
                 }
             }
@@ -6103,7 +6103,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun saveAllTabs() {
         val dirty = _editorGroup.value.tabs.filter { it.isDirty && it.editorState != null }
         if (dirty.isEmpty()) {
-            viewModelScope.launch { emitMessage("No unsaved changes") }
+            viewModelScope.launch { emitMessage(nativePackages.uiText("message.Nounsavedchanges")) }
             return
         }
         dirty.forEach { saveTab(it) }
@@ -6127,19 +6127,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if(state.readOnly) return
         val file=tab.filePath
         if (file.path.isBlank()) {
-            viewModelScope.launch { emitMessage("Can't discard \"${tab.title}\": unsupported file source") }
+            viewModelScope.launch { emitMessage(nativePackages.uiText("message.cannotDiscard", mapOf("name" to (tab.title).toString()))) }
             return
         }
         viewModelScope.launch {
             val bytes = runCatching {
                 withContext(Dispatchers.IO) { workspaceManager.fsFor(FsPath.Local(file)).read(FsPath.Local(file)) }
             }.getOrElse {
-                emitMessage("Failed to discard ${tab.title}: ${it.message ?: "error"}")
+                emitMessage(nativePackages.uiText("message.discardFailed", mapOf("name" to (tab.title).toString(), "reason" to (it.message ?: "error").toString())))
                 return@launch
             }
             state.replaceAll(bytes.toString(Charsets.UTF_8)) // force: discard intentionally drops edits
             withContext(Dispatchers.IO) { file.diskSignatureOrNull() }?.let { diskSignatures[tab.id] = it }
-            emitMessage("Discarded changes in ${tab.title}")
+            emitMessage(nativePackages.uiText("message.discarded", mapOf("name" to (tab.title).toString())))
         }
     }
 
@@ -6150,28 +6150,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun formatActiveTab() {
         val tab = _editorGroup.value.activeTab ?: return
         val state = tab.editorState ?: run {
-            viewModelScope.launch { emitMessage("Nothing to format") }
+            viewModelScope.launch { emitMessage(nativePackages.uiText("message.Nothingtoformat")) }
             return
         }
         val name = tab.filePath.name
         val lang = activeLanguageExtensions.value.firstNotNullOfOrNull { ext -> ext.languageFor(name) }
         viewModelScope.launch {
             if (formatWithLanguageServer(tab)) {
-                emitMessage("Formatted ${tab.title}")
+                emitMessage(nativePackages.uiText("message.formatted", mapOf("name" to (tab.title).toString())))
                 return@launch
             }
             val snap = state.snapshot.value
             val original = snap.readRangeAsUtf16(0, snap.byteLength)
             val formatted = dev.blamspot.jcode.editor.CodeFormatter.format(original, lang)
             if (formatted == original) {
-                emitMessage("Already formatted")
+                emitMessage(nativePackages.uiText("message.Alreadyformatted"))
                 return@launch
             }
             state.applyEdit(EditTx.replace(0, snap.byteLength, formatted))
             val newLen = state.snapshot.value.byteLength
             val caret = (state.carets.value.firstOrNull()?.head ?: 0).coerceIn(0, newLen)
             state.setSelection(listOf(Caret(caret, caret)))
-            emitMessage("Formatted ${tab.title}")
+            emitMessage(nativePackages.uiText("message.formatted", mapOf("name" to (tab.title).toString())))
         }
     }
 
@@ -6184,7 +6184,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val before=state.snapshot.value
         val edits = lspController.formatting(path, editor.tabSize, editor.insertSpaces)
         if (edits.isEmpty()) return false
-        if(state.snapshot.value !== before) { emitMessage("Formatting reply discarded because the file changed");return false }
+        if(state.snapshot.value !== before) { emitMessage(nativePackages.uiText("message.Formattingreplydiscardedbecausethefilechanged"));return false }
         applyEditsToBuffer(state, edits)
         return true
     }
@@ -6216,7 +6216,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun saveTab(tab: EditorTab) {
         if (tab.editorState == null) return // page tab: nothing to persist
-        viewModelScope.launch { if (saveTabAwait(tab)) emitMessage("Saved ${tab.title}") }
+        viewModelScope.launch { if (saveTabAwait(tab)) emitMessage(nativePackages.uiText("message.saved", mapOf("name" to (tab.title).toString()))) }
     }
 
     /**
@@ -6225,12 +6225,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     private suspend fun saveTabAwait(tab: EditorTab): Boolean {
         val state = tab.editorState ?: return false // page tab: nothing to persist
-        if(state.readOnly) { emitMessage("${tab.title} is read-only. Restore a removed file or export the buffer before saving.");return false }
+        if(state.readOnly) { emitMessage(nativePackages.uiText("message.readOnly", mapOf("name" to (tab.title).toString())));return false }
         dev.blamspot.jcode.fs.FileMutations.awaitEditor()
         val file = _editorGroup.value.tabs.firstOrNull { it.id==tab.id }?.filePath ?: return false
-        if(state.readOnly) { emitMessage("Restore the removed file before saving; open edits retained.");return false }
+        if(state.readOnly) { emitMessage(nativePackages.uiText("message.Restoretheremovedfilebeforesavingopenedits"));return false }
         if (file.path.isBlank()) {
-            emitMessage("Can't save \"${tab.title}\": unsupported file source")
+            emitMessage(nativePackages.uiText("message.cannotSave", mapOf("name" to (tab.title).toString())))
             return false
         }
         // `editor.formatOnSave` — a documented .jcode key that until 1.6.2 parsed, merged and
@@ -6265,7 +6265,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             notifyWorkspaceFilesChanged()
             clean
         }.getOrElse {
-            emitMessage("Failed to save ${tab.title}: ${it.message ?: "error"}")
+            emitMessage(nativePackages.uiText("message.saveFailed", mapOf("name" to (tab.title).toString(), "reason" to (it.message ?: "error").toString())))
             false
         }
     }
@@ -6281,7 +6281,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (dirty.isEmpty()) return true
         var saved = 0
         dirty.forEach { if (saveTabAwait(it)) saved++ }
-        if (saved > 0) emitMessage(if (saved == 1) "Saved 1 file" else "Saved $saved files")
+        if (saved > 0) emitMessage(if (saved == 1) nativePackages.uiText("message.Saved1file") else nativePackages.uiText("message.savedMany", mapOf("count" to (saved).toString())))
         return saved == dirty.size
     }
 
@@ -6310,7 +6310,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         when (prep) {
-            OpenPrep.Missing -> emitMessage("File no longer exists: ${file.name}")
+            OpenPrep.Missing -> emitMessage(nativePackages.uiText("message.fileGone", mapOf("name" to (file.name).toString())))
             OpenPrep.Image -> _editorGroup.value = _editorGroup.value.withTabAdded(
                 EditorTab.page(stableId, file.name, EditorPageKind.ImageViewer),
             )
@@ -6526,7 +6526,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val project = selectedProject.value
         val hasLocalProject = project?.fsPath is FsPath.Local
         if (!hasLocalProject) {
-            emitMessage("Project overrides require a local project root.")
+            emitMessage(nativePackages.uiText("message.Projectoverridesrequirealocalprojectroot"))
         }
         return hasLocalProject
     }

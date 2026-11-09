@@ -29,6 +29,8 @@ fun NativeLocalizationProvider(host: NativePackageHost,content: @Composable ()->
 
 @Composable
 fun NativeLanguageSelection(host: NativePackageHost) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val bundles by host.localizations.collectAsState()
     val selection by host.selectedUiLanguage.collectAsState()
     var expanded by remember { mutableStateOf(false) }
@@ -36,7 +38,7 @@ fun NativeLanguageSelection(host: NativePackageHost) {
     Box {
         OutlinedButton(onClick={expanded=true}) { Text(bundles.singleOrNull { it.selectionId==selection }?.let { "${it.displayName} (${it.locale})" } ?: uiText("ui.english")) }
         DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
-            DropdownMenuItem(text={Text("English (default)")},onClick={host.selectUiLanguage(null);expanded=false})
+            DropdownMenuItem(text={Text(strings.text("ui.english"))},onClick={host.selectUiLanguage(null);expanded=false})
             bundles.forEach { bundle -> DropdownMenuItem(text={Text("${bundle.displayName} (${bundle.locale})\n${bundle.packageId}")},onClick={host.selectUiLanguage(bundle.selectionId);expanded=false}) }
         }
     }

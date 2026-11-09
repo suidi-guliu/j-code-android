@@ -85,6 +85,8 @@ internal fun TaskManagerSidebarContent(
     onStopRun: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val debug = LocalDebugSession.current
     val backgroundActions = LocalTaskManagerBackgroundActions.current
     // The virtual device's process, named the way /proc reports it — see the kill below.
@@ -134,7 +136,7 @@ internal fun TaskManagerSidebarContent(
         TaskSectionLabel("Sessions")
         if (!hasSessions) {
             Text(
-                "Nothing running — terminals, Build & Run, and debug sessions appear here.",
+                strings.text("ui.nothingRunningTerminalsBuildRunAndDebugSessionsAppear"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = Space.xs),
@@ -289,6 +291,8 @@ private fun BackgroundExtensionRow(
     onStop: () -> Unit,
     onStart: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val subtitle = if (info.suspended) {
         "stopped"
     } else {
@@ -329,22 +333,22 @@ private fun BackgroundExtensionRow(
                 )
             }
             if (info.suspended) {
-                JcTooltip("Start extension") {
+                JcTooltip(strings.text("ui.startExtension")) {
                     IconButton(onClick = onStart) {
                         Icon(
                             painter = jcIcon(JCodeIcon.Run),
-                            contentDescription = "Start extension",
+                            contentDescription = strings.text("ui.startExtension"),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(IconSize.lg),
                         )
                     }
                 }
             } else {
-                JcTooltip("Stop extension") {
+                JcTooltip(strings.text("ui.stopExtension")) {
                     IconButton(onClick = onStop) {
                         Icon(
                             painter = jcIcon(JCodeIcon.Stop),
-                            contentDescription = "Stop extension",
+                            contentDescription = strings.text("ui.stopExtension"),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(IconSize.lg),
                         )
@@ -358,6 +362,8 @@ private fun BackgroundExtensionRow(
 /** Host device RAM overview: available (free) memory prominent, with a used-memory gauge. */
 @Composable
 private fun HostMemoryRow(mem: HostMemory) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val usedKb = (mem.totalKb - mem.availKb).coerceAtLeast(0)
     val usedFraction = if (mem.totalKb > 0) (usedKb.toFloat() / mem.totalKb).coerceIn(0f, 1f) else 0f
     val availGb = mem.availKb / 1_048_576.0
@@ -378,7 +384,7 @@ private fun HostMemoryRow(mem: HostMemory) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Device memory",
+                    text = strings.text("ui.deviceMemory"),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
@@ -400,6 +406,8 @@ private fun HostMemoryRow(mem: HostMemory) {
 
 @Composable
 private fun ProcessRow(proc: AppProcesses.Process, isSelf: Boolean, onKill: () -> Unit) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -438,11 +446,11 @@ private fun ProcessRow(proc: AppProcesses.Process, isSelf: Boolean, onKill: () -
                 )
             }
         } else {
-            JcTooltip("Kill process") {
+            JcTooltip(strings.text("ui.killProcess")) {
                 IconButton(onClick = onKill) {
                     Icon(
                         painter = jcIcon(JCodeIcon.Stop),
-                        contentDescription = "Kill process",
+                        contentDescription = strings.text("ui.killProcess"),
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(IconSize.md),
                     )

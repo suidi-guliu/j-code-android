@@ -1,0 +1,6 @@
+{
+  "locale": "zh-Hans",
+  "displayName": "简体中文",
+  "fallback": "en",
+  "resource": "resources/i18n/zh-Hans.json"
+}

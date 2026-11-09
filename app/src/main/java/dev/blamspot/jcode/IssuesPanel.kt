@@ -51,6 +51,8 @@ import dev.blamspot.jcode.workbench.LocalIssueActions
  */
 @Composable
 internal fun IssuesSidebarContent(modifier: Modifier = Modifier) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val all by LspModule.diagnosticsBus.allDiagnostics.collectAsStateWithLifecycle()
     val noticesBySource by WorkbenchNotices.notices.collectAsStateWithLifecycle()
     val actions = LocalIssueActions.current
@@ -60,12 +62,12 @@ internal fun IssuesSidebarContent(modifier: Modifier = Modifier) {
     if (files.isEmpty() && notices.isEmpty()) {
         Column(modifier = modifier.fillMaxSize().padding(Space.md)) {
             Text(
-                "No issues detected.",
+                strings.text("ui.noIssuesDetected"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Configuration errors and on-save syntax checks appear here.",
+                strings.text("ui.configurationErrorsAndOnSaveSyntaxChecksAppearHere"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = Space.xs),
@@ -160,7 +162,7 @@ internal fun IssuesSidebarContent(modifier: Modifier = Modifier) {
                     )
                     // Diagnostics count from 0; editors (and the status bar) count from 1.
                     Text(
-                        text = "Ln ${d.startLine + 1}, Col ${d.startCol + 1}",
+                        text = strings.text("issues.position", mapOf("line" to (d.startLine + 1).toString(), "column" to (d.startCol + 1).toString())),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -180,6 +182,8 @@ internal fun IssuesSidebarContent(modifier: Modifier = Modifier) {
  */
 @Composable
 private fun NoticeRow(notice: WorkbenchNotices.Notice) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     var expanded by rememberSaveable(notice.message) { mutableStateOf(false) }
     val hasDetail = notice.detail.isNotEmpty()
 
@@ -206,7 +210,7 @@ private fun NoticeRow(notice: WorkbenchNotices.Notice) {
             if (hasDetail) {
                 Icon(
                     painter = jcIcon(if (expanded) JCodeIcon.ChevronUp else JCodeIcon.ChevronDown),
-                    contentDescription = if (expanded) "Hide details" else "Show details",
+                    contentDescription = if (expanded) strings.text("ui.hideDetails") else strings.text("ui.showDetails"),
                     modifier = Modifier.padding(top = Space.xxs).size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

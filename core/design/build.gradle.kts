@@ -27,7 +27,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":core:native-packages"))
+    api(project(":core:native-packages"))
     testImplementation(libs.junit)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

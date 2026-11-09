@@ -3,7 +3,7 @@
   "type": "object",
   "additionalProperties": false,
   "minProperties": 1,
-  "maxProperties": 34,
+  "maxProperties": 732,
   "properties": {
     "nav.files": {
       "type": "string",
@@ -171,6 +171,3496 @@
       "maxLength": 2048
     },
     "ui.fallback": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.empty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.aTermuxStyleKeyRowEscTabCtrlArrows": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.actionButton": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.addProject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.addToWorkspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.addVariable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.addsJCodeSLogcatOutputIncludingProotAndThe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.addsAnExtDevTabToTheRightPanel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.advancedEnvironmentAndServerControls": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.advancedTasksJcodeRunYaml": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.allowJCodeToInstallAppsThenTapUpdateAgain": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.android12KillsAnAppSForkedProcessesOnce": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.androidCapsHowManyProcessesAnAppMayFork": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.androidDevice": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.androidStoppedTheLinuxEnvironmentBackgroundProcessLimit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.appVersionAndUpdatesFromGitHubReleases": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.appearance": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.appendF1F12ChipsToTheRowWhileA": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.appendTheStackTraceWhenTheAppCrashesSo": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.autoSetupEnvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.autoCloseIdleTerminals": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.automaticallyCloseTerminalsLeftIdleAtThePromptNo": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.back": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.backUpTarGz": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.backUpTheWholeLinuxEnvironment25GB": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.backgroundProcessLimit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.backupRestore": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.basicRunSetup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.bottomStatusBar": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.browserBack": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.browserForward": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.browserReloadPage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.browserStopLoading": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.buildLogsAndToolOutputWillAppearHere": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.builtInRuleBasedFormatter": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.callStack": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.cancel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.cancelInstallationSafely": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.cancelSafely": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.changeTabColor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.changeManagedJDK": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.checkForUpdates": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.checkTrustedSourceUpdates": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.checking": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.chooseFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.chooseHowTheFileExplorerIsLaidOutApplies": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.chooseProvider": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.chooseWhichBuiltInCommandsThePaletteOffersContext": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.cleanUpAndUninstall": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.clear": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.clearOutput": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.clearSearch": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.close": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeSaved": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeUnbusy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeAll": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeAnyway": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeAppFullyOnSwipeAway": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeOthers": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeProject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeProjectText2c6af4": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeSavedProjectGroup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeTab": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeToTheRight": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.closeWorkspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.collapse": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.collapseAll": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.colorSearchPickFromScreen": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.colorPaletteAppliedAcrossTheApp": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.colorCodeEditorFileTabsLongPressAFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.commandPalette": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.completeUbuntuSetupBeforeInstallingJava": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.completeUbuntuSetupFirstExistingInstallationsAndJavaData": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.configurationErrorsAndOnSaveSyntaxChecksAppearHere": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.configureThisProjectThenCreateIt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.confirm": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.confirmAndOpenTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.copy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.copyCommands": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.couldNotReadTheFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.create": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.current": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.cursorDragSpeedHorizontal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.cursorDragSpeedVertical": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.cut": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.cutMove": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.databases": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.debugSession": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.decreaseEditorFontSize": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.defaultFontSizeAndWordWrapForTheCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.delete": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.deleteForever": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.deleteProjectFilesToTrash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.deleteProjectFiles": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.deletingAFileOrFolderOrDiscardingAChange": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.detail": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.details": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.devServerDidnTStartInTimeCheckThe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.developerOptions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.developmentToolsCheckingWhenAKitIsInstalled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.deviceMemory": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.diagnosticLogExported": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.diagnosticLogging": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.disable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.discard": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.dismiss": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.displayCutout": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.distro": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.downloadAndReview": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.dragAFingerOnTheEditorToMoveThe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.dragTheDividerOrUseThisKeyboardAccessibleSlider": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.dragToMoveCursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.eNVVAR": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.edit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.editVariable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.editorBehavior": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.editorDefaults": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.editorFont": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.editorGestures": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.emptyTextc6c094": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.emptyTrash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.emptyTheTrash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.enable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.enableDeveloperOptions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.enterFullscreen": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.environment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.environmentSetupProotDistroBootstrapAndTheFinalSmoke": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.environmentVariables": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.environmentWarning": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.excludeFilesFolders": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.excludeFilesAndFoldersAtTheProjectRootIn": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.exitFullscreen": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.exitJCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.expand": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.explorer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.exportForMigration": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.exportSettings": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.exportToStorage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.exportedFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.exportedIntoEveryTerminalAndBuildRunSessionE": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.export": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.extensions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.extraKeysRow": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.fILES": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.fallBackToTheAppWideDefault": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.fileIcons": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.fileProperties": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.filesRemainRecoverableFromTrashRegisteredProjectRootsCannot": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.findText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.finishDistroSetupFirstThenOpenTheTerminalAgain": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.finishEnvironmentSetupBeforeBuilding": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.finishEnvironmentSetupBeforeOpeningTheTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.finishEnvironmentSetupBeforeRunning": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.focusExplorer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.folderExportSupportsLocalFoldersOnly": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.fontSize": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.fonts": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.formatDocument": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.formatter": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.formatterExtension": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.functionKeys": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.gLOBAL": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.getLatestWebView": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.gitSubmodule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.goToLine": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.goToLineText77922d": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.goodDefaultsAre24Or8SpacesDepending": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.hardwareAcceleration": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.header": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.hideHeaderAndTabs": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.hideDetails": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.hideInstallationLog": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.hideLeftSidebar": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.hideRecentProjects": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.hideTabCloseButton": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.howJCodeDrawsTheUIEditorAndTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.howEditorAndTerminalTabsBehaveAppliesAppWide": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.howLongAToolchainInstallSDKLanguageServerDebugger": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.howTheRenderedMarkdownPreviewLaysOut": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.howTouchInputBehavesInTheEditorAppliesApp": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.iconSetUsedForFilesAndFoldersInThe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.iconSetUsedForTheAppSOwnToolbars": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.idleTimeout": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.ifTheProjectIsUnderGitYouCanRestore": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.importSuicSuik": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.importAnExtension": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.importFiles": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.importFilesTextc98b4f": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.importFromPreviousInstall": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.importSettings": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.importingFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.includeTheSystemLog": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.increaseEditorFontSize": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.install": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.installJavaBasicPluginFromTheSuiCodePlugin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.installUpdate": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.installAnyway": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.installTheBasicLanguagePluginFromPluginCenterIDE": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.installationLog": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.installedJDKs": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.installingNowGivesYouTheNewVersionWithNothing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.installing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.itWasAddedToThisWorkspaceOpenItNow": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.jCodeSOwnFolderAndFileGlyphsFromThe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.jCodeSOwnInEditorBrowserWithDevTools": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.javaLatestGA": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.keepAwakeTurnOff": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.keepAwakeTurnOn": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.keepDeletedFilesFor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.keepEnabledForTheEditorSurfaceButLetUsers": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.keepForNow": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.keepTheLinuxRuntimeLeanByStoppingWorkYou": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.keepTheAppClearOfTheCameraNotchOr": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.kill": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.killProcess": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.kitCancellationRequestedSetupStaysOpenUntilTheCurrent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.landscape": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.layOutTheAppInsideTheCutoutSSafe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.legacyKitReviewUpdatedPrerequisites": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.lettersDigitsAndUnderscoreOnlyCanTStartWith": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.ligatures": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.linuxProcesses": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.location": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.lockScreenOrientation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.manageDevice": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.manageEnvironments": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.markdownPreview": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.maxTerminalInstances": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.mode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.modernSitesCanRenderBlankOrBrokenOnThis": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.monospaceTypefacesForTheCodeEditorAndTheTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.moreActions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.moveDeletedFilesToTrash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.moveProjectToTrash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.moveToTrash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.movingToADifferentlyNamedBuildWriteTheEnvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.nativeUbuntuEnvironmentSignedDistributionPackages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.nativeLanguageEnvironmentEclipseTemurinOpenJDK": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.newProject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.newFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.newFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.newTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.next": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noFileOpen": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noFilesYetUseTheNewFileNewFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noIssuesDetected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noNativePackagesInstalledChooseALibraryOrImport": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noProjectYetAddOneWithAboveOrOpen": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noRecentProjectsYet": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noTerminalSessions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noVariablesYetTapAddVariableToCreateOne": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.noVirtualDevice": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.notNow": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.nothingRecordedYet": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.nothingRunningTerminalsBuildRunAndDebugSessionsAppear": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.oK": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.offUnlessYouTurnItOnWhenSomethingMisbehaves": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.offAPortraitPreviewLaysOutAtLandscapeWidth": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.olderItemsAreRemovedWhenJCodeStartsAndWhen": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.open": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openBrowser": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openExplorer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openProject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openProjectYAML": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openSettings": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openVirtualDevice": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openWorkspaceYAML": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openAFileToStartEditing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openASourceFileForLanguageActionsProjectWorkflows": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openFolderText6a9084": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openFolderAsProject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openProjectYAMLText26247e": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openSavedProjectGroup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openSetup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openSharedFolderYAMLAdvanced": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openTheBackingConfigFilesDirectlyWhenYouWant": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.openWebPreviewsIn": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.outdated": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.overridesTheAppLevelDefaultForThisScope": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.pROJECT": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.pROJECTS": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.packageCancellationRequestedSetupStaysOpenUntilAptDpkg": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.pairJCodeWithThisPhoneSOwnAdbSo": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.paste": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.pasteImage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.pickUpWhereYouLeftOffAfterClosingThe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.pin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.pinned": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.portrait": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.prerequisitesNotCheckedThisSession": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.pressBackAgainToExit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.preview": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.project": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.projectYAMLWarning": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.projectActions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.projectFiles": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.projectName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.projectSettings": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.projectRootFoldersMustBeManagedThroughProjects": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.projectsOptionalContext": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.propertiesFullName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.propertiesFullNames": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.provider": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.queryUbuntuVersionsRetry": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.queryLatestGARetryQuery": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.queryLatestOfficialPythonStableVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.quickRunOpenAJavaFileInTheEditorAnd": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.readingContents": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.readingTheTrash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.readyRuntimeAndAllRequiredToolsDetected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.recentDiagnostics": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.recentProjectActions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.reconnectTheVirtualDeviceToAdb": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.recordCrashes": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.recordDiagnostics": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.recorded": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.redo": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.refreshChecks": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.refreshInstalledJDKs": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.refreshPackageListsAndUpgradeInstalledPackagesAptGet": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.refreshReadiness": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.reload": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.remapTheHardwareVolumeButtonsToEditorTerminalActions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.remove": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.removeFromListKeepFiles": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.removeInactiveJDK": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.removeInactiveJDKText012cf8": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.removeOnlyClearsTheRecentListFilesStayIntact": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.removeTheBundle": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.removesTheOnEditorAndTerminalTabsToAvoid": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.rename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.renderTheUIEditorAndTerminalOnTheGPU": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.rendering": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.reopenTheLastWorkspaceProjectAndEditorTabsIncluding": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.resizeEditorAndPanel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.resourceManagement": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.respectDeviceCutout": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.restart": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.restore": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.restoreLastSession": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.restoreLastSessionOnLaunch": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.restoreText8ff034": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.reviewRepairDependencies": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.reviewUbuntuPackageUpdates": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.reviewAndInstallRetry": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.reviewDependenciesRepair": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.reviewUpdateReinstall": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.rollback": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.runInBackground": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.runningProcess": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.runningProcesses": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.save": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.saveUnsavedChanges": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.saveAll": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.saveYourAppPreferencesToAFileThenRestore": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.scanningFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.searchSettings": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.select": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.selectText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.selectAll": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.selectAllVisible": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.selected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.selectionActions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.serial": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.setUpADB": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.setUpCompleteIDEKit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.settingsExported": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.setupLog": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.sharedFolderYAMLWarning": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.show": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.showHeaderAndTabs": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.showSearchPlaceholder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.showDetails": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.showHeaderAndTabsText2f5a6b": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.showLeftSidebar": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.showTheAndroidAppChooserEachTime": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.smokeTest": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.sourceControl": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.specifiedOnePatternPerLine": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.startADebugSessionToSeeItsConsoleOutput": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.startDebugging": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.startExtension": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.stepInto": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.stepOut": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.stepOver": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.stop": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.stopExtension": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.subShellsOpenInTheirOwnTab": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.switchEnvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.systemFollowsYourDeviceSLightDarkSetting": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.tabColoring": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.tabSize": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.tabWidth": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.tabs": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.tapToStartANewTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.template": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.terminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.terminalFont": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.terminalPanel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.terminalUnavailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.terminalOutputIssuesAndDebuggingShareTheBottomPanel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.terminateExit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.textSizeForTerminalSessionsAppliesToEveryOpen": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.textSizeInsideImportedVsixExtensionsAScaleRather": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theChromiumEngineBehindJCodeSBuiltInBrowser": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theBarAcrossTheTopOfTheWorkbenchWith": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theBarAtTheBottomOfTheWorkbenchShowing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theBrowserThisProjectUsesWhenYouOpenA": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theBrowserUsedWhenYouOpenARunningDev": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theButtonBesideRunHidingItLeavesTheTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theDeviceSDefaultBrowserApp": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theMostAnEditorOrTerminalTabWidensBefore": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theRootFolderIsPermanentManageProjectNamesThrough": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.themeBundle": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theseControlsWriteBackToYAMLAndUpdateThe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theseSettingsPreserveTheSharedFolderJcodeConfigurationAnd": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.theseSettingsSaveToTheProjectJcodeAndOnly": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.toggleRightSidebar": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.toolchain": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.toolchainInstallTimeout": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.toolsForBuildingAndTestingJCodeExtensions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.trash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.trashRestore": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.treeShowsTheWholeProjectHierarchyListIsA": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.tryAShorterOrDifferentTermLikeFontOr": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.uIIcons": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.uILanguageResourcesNoLanguageEnvironmentRequired": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.unavailableThisMilestoneRequiresALinuxARM64Environment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.undo": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.uninstall": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.uninstallPackage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.unlockScreenOrientation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.unpin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.unsavedChanges": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.upOneLevel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.upToDate": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.update": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.updateSystemPackages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.updateWithoutYourEnvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.updatedKitAvailableReviewItsSignedDependencyPlanTo": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.updatingPackages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.value": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.variables": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.verifyAndSelect": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.verifySelectedEnvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.view": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.viewMode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.virtualMachines": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.volumeDown": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.volumeKeys": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.volumeUp": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.warnBeforeClosingRunningProcesses": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.webEngine": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.whenClosingAProjectOrWorkspaceWithARunning": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.whenExcluded": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.whenYouStartAnInteractiveShellBashZshInside": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.whenYouSwipeJCodeOffTheAndroidRecentsScreen": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.whereDeletedFilesGoBeforeTheyAreGoneCovers": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.whichFormatterTheEditorUsesBuiltInIsRule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.wordWrap": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.wordWrapInPortrait": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.wrapLongLinesToTheEditorWidthInsteadOf": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.writesAppEventsToALogFileOnThis": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.yAMLFiles": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.previewTruncatedTheWholeFileIsRestoredIntact": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.languageReadiness": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.enabled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.disabled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.notInstalled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.optionalNotInstalled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "common.version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "common.source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "common.file": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "common.download": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "common.installLocation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "common.environment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "common.architecture": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.imported": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.importFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.exportFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.exportedFrom": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.copied": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.cut": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.created": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.createFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.renamed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.renameFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.deleteFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.movedToTrash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.deleted": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.doneSelection": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.sort": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.trashSelected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.deleteNamed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.pasted": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.trashPaused": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.pasteStopped": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "debug.target": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "debug.console": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "debug.missing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "issues.position": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.deleteDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.openDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.importProgress": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.cloned": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "languages.context": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "languages.basicStatus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "languages.kitStatus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "languages.partial": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.sourceContext": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.metadata": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.dependencies": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.installedStatus": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.record": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.removeDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.panelHeight": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.running": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.updateVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.downloading": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.noMatches": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.collapse": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.expand": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.icons": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.variableExists": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Input": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Startup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Performance": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Webpreview": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.About": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Diagnostics": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Editor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Developer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.SpecifiedByInjected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.ByInjectedonly": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Off": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Greyout": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Hide": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Hidden": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Withkeyboard": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Always": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.HideonSoftKeyboard": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.AlwaysShow": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Randomifnotexistthenremember": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Random": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Directorybasedthenremember": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Disabled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.KeyLeft": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.KeyRight": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.KeyUp": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.KeyDown": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.ScrollUp": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.ScrollDown": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.System": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Light": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Dark": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Ready": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Notinstalled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Unknown": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Notready": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Passed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Failed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Notrun": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Starting": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Running": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Paused": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Error": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.disconnected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.terminated": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Tree": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.List": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.PluginLibrary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.IDEKitLibrary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Installed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Output": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Issues": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Tasks": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Modified": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "option.Size": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "settings.systemVolume": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.placeholderContent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.placeholderNames": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.placeholderCurrent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.openCurrent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.minimum": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.searching": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.none": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.namesSummary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.contentSummary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "find.failed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.trashDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.deleteDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "trash.untilEmpty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "trash.days": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.serverMissing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.updateAvailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.updateFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.updateInstalled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "status.importedSettings": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.unsavedNamed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.unsavedList": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.finishSetup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "run.kitMissing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.properties": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.kindDirectory": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "files.kindFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.checking": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.installingResources": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "packages.resourcesReady": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "trash.emptyDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.createFolderHint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.saveFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.templateUnavailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Debugcancelledfilescouldnotbesaved": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Putthecursoronasymboltorename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Renamefailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Languageserverreturnednoformattingedits": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Saveorcloseopenfilesbeforeimportinga": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Theimportedfolderisnolongeravailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.RemovedfromtheprojectlistFilesremainin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.ProjectfilesmovedtoTrashRestorefromFiles": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Projectclosed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Renamefaileddestinationexistsortheprojectis": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Cantcolorafileoutsidetheproject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Workspaceconfigisunavailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Projectoverridesrequirealocalproject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Finishorsafelycancelpackageinstallationbeforerestarting": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Restartpostponedwaitforaptdpkgtoreach": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Nounsavedchanges": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Nothingtoformat": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Alreadyformatted": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Formattingreplydiscardedbecausethefilechanged": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Restoretheremovedfilebeforesavingopenedits": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Saved1file": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.Projectoverridesrequirealocalprojectroot": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.noDefinition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.noReferences": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.cannotRename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.sourceLoadFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.fileMissing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.applyEditsFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.formatted": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.templateFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.opened": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.readFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.emptyImport": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.importFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.importedFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.projectDeleteStopped": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.renamed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.renameRejected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.exportNotLocal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.exporting": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.exported": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.exportFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.writeFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.bufferRetained": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.reloaded": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.reloadedMany": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.cannotDiscard": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.discardFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.discarded": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.saved": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.readOnly": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.cannotSave": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.saveFailed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.savedMany": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "message.fileGone": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.created": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Search": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Use": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Reinstall": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Working": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Resetthissetting": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Tabcolor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Environmentsetup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.PickaLinuxdistroandJCodeconfigurestherestautomatically": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Import": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Setupfreshinstead": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Done": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Browserengineisoutdated": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Addanenvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Installanotherdistro": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Installedenvironments": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Removeenvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Waitingforprogress": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.Continuewithoutenvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.GotoDefinition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.FindReferences": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ui.RenameSymbol": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "manager.installed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "manager.problems": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "manager.oneProblem": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "languages.basicTitle": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "project.blankDescription": {
       "type": "string",
       "minLength": 1,
       "maxLength": 2048

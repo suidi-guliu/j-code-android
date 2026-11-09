@@ -136,6 +136,8 @@ fun ExplorerView(
     onFileSelected: ((FsNode) -> Unit)? = null,
     onSnackbar: ((String) -> Unit)? = null,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // Key only on project + fs (not the workspace object, which gets a new identity on every
     // roster mutation). Otherwise the view model is rebuilt but LaunchedEffect(project) — keyed on
     // the data-equal project — doesn't re-fire, leaving the tree stuck on "No files yet".
@@ -289,8 +291,8 @@ fun ExplorerView(
             // Refresh either way: a partial failure may have landed some files already.
             viewModel.refresh()
             scmUi.onFsActivity?.invoke()
-            result.onSuccess { names -> onSnackbar?.invoke("Imported ${names.size} file(s)") }
-                .onFailure { onSnackbar?.invoke("Import failed: ${it.message}") }
+            result.onSuccess { names -> onSnackbar?.invoke(strings.text("status.imported", mapOf("count" to (names.size).toString()))) }
+                .onFailure { onSnackbar?.invoke(strings.text("status.importFailed", mapOf("reason" to (it.message ?: "").toString()))) }
         }
     }
     var exportFileSource by rememberSaveable { mutableStateOf<String?>(null) }
@@ -301,8 +303,8 @@ fun ExplorerView(
         exportFileSource = null
         if (source != null && uri != null) fileOpScope.launch {
             runCatching { exportFileToUri(context, source, uri) }
-                .onSuccess { onSnackbar?.invoke("Exported file") }
-                .onFailure { onSnackbar?.invoke("Export failed: ${it.message}") }
+                .onSuccess { onSnackbar?.invoke(strings.text("ui.exportedFile")) }
+                .onFailure { onSnackbar?.invoke(strings.text("status.exportFailed", mapOf("reason" to (it.message ?: "").toString()))) }
         }
     }
     var exportDirSource by rememberSaveable { mutableStateOf<String?>(null) }
@@ -313,8 +315,8 @@ fun ExplorerView(
         exportDirSource = null
         if (source != null && uri != null) fileOpScope.launch {
             runCatching { copyLocalTreeToDocumentTree(context, source, uri, source.name) }
-                .onSuccess { n -> onSnackbar?.invoke("Exported $n file(s) from '${source.name}'") }
-                .onFailure { onSnackbar?.invoke("Export failed: ${it.message}") }
+                .onSuccess { n -> onSnackbar?.invoke(strings.text("status.exportedFrom", mapOf("count" to (n).toString(), "name" to (source.name).toString()))) }
+                .onFailure { onSnackbar?.invoke(strings.text("status.exportFailed", mapOf("reason" to (it.message ?: "").toString()))) }
         }
     }
 
@@ -335,7 +337,7 @@ fun ExplorerView(
         (path as? FsPath.Local)?.let { dev.blamspot.jcode.fs.InternalFiles.protectsProject(it.file, protectedProjects) } == true
     fun runRowAction(row: TreeRow, action: RowAction) {
         if (isProtectedPath(row.node.path) && action in setOf(RowAction.Rename, RowAction.Cut, RowAction.Delete)) {
-            onSnackbar?.invoke("The root folder is permanent. Manage project names through Project management.")
+            onSnackbar?.invoke(strings.text("ui.theRootFolderIsPermanentManageProjectNamesThrough"))
             return
         }
         when (action) {
@@ -346,11 +348,11 @@ fun ExplorerView(
             RowAction.Rename -> showRenameDialog = RenameTarget(row.node.path, row.node.name)
             RowAction.Copy -> {
                 clipboard = listOf(ClipboardEntry(row.node.path, row.node.name, isCut = false))
-                onSnackbar?.invoke("Copied '${row.node.name}'")
+                onSnackbar?.invoke(strings.text("status.copied", mapOf("name" to (row.node.name).toString())))
             }
             RowAction.Cut -> {
                 clipboard = listOf(ClipboardEntry(row.node.path, row.node.name, isCut = true))
-                onSnackbar?.invoke("Cut '${row.node.name}'")
+                onSnackbar?.invoke(strings.text("status.cut", mapOf("name" to (row.node.name).toString())))
             }
             RowAction.Delete -> showDeleteConfirm = row
             RowAction.ImportHere -> {
@@ -368,7 +370,7 @@ fun ExplorerView(
                         exportDirSource = path.file.absolutePath
                         exportDirLauncher.launch(null)
                     }
-                    else -> onSnackbar?.invoke("Folder export supports local folders only")
+                    else -> onSnackbar?.invoke(strings.text("ui.folderExportSupportsLocalFoldersOnly"))
                 }
             }
         }
@@ -382,19 +384,19 @@ fun ExplorerView(
         Text(uiText("files.filterHint"),style=MaterialTheme.typography.bodySmall)
         if(searchNote.isNotBlank()) Text(searchNote,style=MaterialTheme.typography.bodySmall)
         FlowRow(Modifier.fillMaxWidth()) {
-            TextButton(onClick={multi=!multi;selectionState.clear()}) { Text(if(multi) "Done (${selectedIds.size})" else "Select") }
-            TextButton(onClick={sort=TreeViewModel.Sort.entries[(sort.ordinal+1)%TreeViewModel.Sort.entries.size];scope.launch { viewModel.setSort(sort) }}) { Text("Sort: ${sort.name}") }
+            TextButton(onClick={multi=!multi;selectionState.clear()}) { Text(if(multi) strings.text("files.doneSelection", mapOf("count" to (selectedIds.size).toString())) else strings.text("ui.select")) }
+            TextButton(onClick={sort=TreeViewModel.Sort.entries[(sort.ordinal+1)%TreeViewModel.Sort.entries.size];scope.launch { viewModel.setSort(sort) }}) { Text(strings.text("files.sort", mapOf("sort" to (strings.text(when(sort) { TreeViewModel.Sort.Name -> "ui.name";TreeViewModel.Sort.Modified -> "option.Modified";TreeViewModel.Sort.Size -> "option.Size" })).toString()))) }
             var actionsExpanded by remember { mutableStateOf(false) }
             Box {
-                TextButton(onClick={actionsExpanded=true}) { Text("Selection actions ▾") }
+                TextButton(onClick={actionsExpanded=true}) { Text(strings.text("ui.selectionActions")) }
                 CompactContextMenu(expanded=actionsExpanded,onDismissRequest={actionsExpanded=false},listActions=buildList {
                     if(multi) {
-                        add(ContextAction(JCodeIcon.SelectAll,"Select all visible") { (if(query.isNotBlank()) searchRows else if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.id!=project.fsPath.stableId }.forEach { if(it.id !in selectedIds) selectionState.toggle(it.id) } })
-                        add(ContextAction(JCodeIcon.Copy,"Copy",enabled=batchRows.isNotEmpty()) { clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,false) } })
-                        add(ContextAction(JCodeIcon.Cut,"Cut / move",enabled=batchRows.isNotEmpty()) { if(batchRows.any { isProtectedPath(it.node.path) }) onSnackbar?.invoke("Project/root folders must be managed through Projects") else clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,true) } })
-                        add(ContextAction(JCodeIcon.Trash,"Move to Trash",enabled=batchRows.isNotEmpty()) { batchDelete=true })
+                        add(ContextAction(JCodeIcon.SelectAll,strings.text("ui.selectAllVisible")) { (if(query.isNotBlank()) searchRows else if(activeViewMode==ExplorerViewMode.Tree) treeRows else listRows).filter { !it.isPlaceholder && it.id!=project.fsPath.stableId }.forEach { if(it.id !in selectedIds) selectionState.toggle(it.id) } })
+                        add(ContextAction(JCodeIcon.Copy,strings.text("ui.copy"),enabled=batchRows.isNotEmpty()) { clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,false) } })
+                        add(ContextAction(JCodeIcon.Cut,strings.text("ui.cutMove"),enabled=batchRows.isNotEmpty()) { if(batchRows.any { isProtectedPath(it.node.path) }) onSnackbar?.invoke(strings.text("ui.projectRootFoldersMustBeManagedThroughProjects")) else clipboard=batchRows.map { ClipboardEntry(it.node.path,it.node.name,true) } })
+                        add(ContextAction(JCodeIcon.Trash,strings.text("ui.moveToTrash"),enabled=batchRows.isNotEmpty()) { batchDelete=true })
                     }
-                    add(ContextAction(JCodeIcon.Settings,"Properties / full names",enabled=selectedRows.isNotEmpty()) { properties=selectedRows.joinToString("\n\n") { "${it.node.name}\n${it.node.path.stableId}\n${it.node.kind} · ${it.node.sizeBytes} bytes\nModified: ${java.util.Date(it.node.modifiedAtMillis)}" } })
+                    add(ContextAction(JCodeIcon.Settings,strings.text("ui.propertiesFullNames"),enabled=selectedRows.isNotEmpty()) { properties=selectedRows.joinToString("\n\n") { strings.text("files.properties", mapOf("name" to (it.node.name).toString(), "path" to (it.node.path.stableId).toString(), "kind" to (strings.text(if(it.node.kind==FsKind.Directory) "files.kindDirectory" else "files.kindFile")).toString(), "bytes" to (it.node.sizeBytes).toString(), "modified" to (java.util.Date(it.node.modifiedAtMillis)).toString())) } })
                 })
             }
         }
@@ -422,12 +424,12 @@ fun ExplorerView(
                                 moveFileOrDir(fs,context,entry.sourcePath,parent)
                             } else copyFileOrDir(fs,context,entry.sourcePath,parent)
                         } catch(e: Exception) {
-                            onSnackbar?.invoke("Paste stopped at '${entry.name}': ${e.message}. Conflicting files were not overwritten; remaining clipboard entries retained.")
+                            onSnackbar?.invoke(strings.text("files.pasteStopped", mapOf("name" to (entry.name).toString(), "reason" to (e.message ?: "").toString())))
                             clipboard=entries.dropWhile { it!=entry };viewModel.refresh();return@launch
                         }
                     }
                     clipboard=emptyList();viewModel.refresh();scmUi.onFsActivity?.invoke()
-                    onSnackbar?.invoke("Pasted ${entries.size} item(s)")
+                    onSnackbar?.invoke(strings.text("files.pasted", mapOf("count" to (entries.size).toString())))
                 }
             },
             canPaste = clipboard.isNotEmpty(),
@@ -488,21 +490,21 @@ fun ExplorerView(
     }
     }
 
-    properties?.let { value -> AlertDialog(onDismissRequest={properties=null},title={Text("File properties")},text={Text(value,Modifier.verticalScroll(rememberScrollState()))},confirmButton={TextButton(onClick={properties=null}) { Text("Close") }}) }
-    if(batchDelete) AlertDialog(onDismissRequest={batchDelete=false},title={Text("Move ${batchRows.size} selected items to Trash?")},text={Text("Files remain recoverable from Trash. Registered project roots cannot be removed here.")},confirmButton={TextButton(onClick={
+    properties?.let { value -> AlertDialog(onDismissRequest={properties=null},title={Text(strings.text("ui.fileProperties"))},text={Text(value,Modifier.verticalScroll(rememberScrollState()))},confirmButton={TextButton(onClick={properties=null}) { Text(strings.text("ui.close")) }}) }
+    if(batchDelete) AlertDialog(onDismissRequest={batchDelete=false},title={Text(strings.text("files.trashSelected", mapOf("count" to (batchRows.size).toString())))},text={Text(strings.text("ui.filesRemainRecoverableFromTrashRegisteredProjectRootsCannot"))},confirmButton={TextButton(onClick={
         batchDelete=false
         fileOpScope.launch {
             try {
                 check(batchRows.none { isProtectedPath(it.node.path) }) { "Manage project roots through Projects" }
                 batchRows.forEach { trash.put(context,it.node.path,project.name,(project.fsPath as? FsPath.Local)?.file?.path,TrashSource.Explorer) }
                 selectionState.clear();trashRevision++;viewModel.refresh()
-            } catch(e: Exception) { onSnackbar?.invoke("Trash operation paused: ${e.message}");viewModel.refresh() }
+            } catch(e: Exception) { onSnackbar?.invoke(strings.text("files.trashPaused", mapOf("reason" to (e.message ?: "").toString())));viewModel.refresh() }
         }
-    }) { Text("Move to Trash") }},dismissButton={TextButton(onClick={batchDelete=false}) { Text("Cancel") }})
+    }) { Text(strings.text("ui.moveToTrash")) }},dismissButton={TextButton(onClick={batchDelete=false}) { Text(strings.text("ui.cancel")) }})
     // Create dialog
     showCreateDialog?.let { target ->
         CreateRenameDialog(
-            title = if (target.isDirectory) "New Folder" else "New File",
+            title = if (target.isDirectory) strings.text("files.newFolder") else strings.text("files.newFile"),
             initialName = if (target.isDirectory) "new-folder" else "new-file.txt",
             onDismiss = { showCreateDialog = null },
             onConfirm = { name ->
@@ -515,9 +517,9 @@ fun ExplorerView(
                         }
                         viewModel.refresh()
                         scmUi.onFsActivity?.invoke()
-                        onSnackbar?.invoke("Created '$name'")
+                        onSnackbar?.invoke(strings.text("status.created", mapOf("name" to (name).toString())))
                     }.onFailure {
-                        onSnackbar?.invoke("Create failed: ${it.message}")
+                        onSnackbar?.invoke(strings.text("status.createFailed", mapOf("reason" to (it.message ?: "").toString())))
                     }
                 }
                 showCreateDialog = null
@@ -528,7 +530,7 @@ fun ExplorerView(
     // Rename dialog
     showRenameDialog?.let { target ->
         CreateRenameDialog(
-            title = "Rename",
+            title = strings.text("ui.rename"),
             initialName = target.currentName,
             onDismiss = { showRenameDialog = null },
             onConfirm = { newName ->
@@ -538,9 +540,9 @@ fun ExplorerView(
                         renameFile(fs, context, target.path, newName)
                         viewModel.refresh()
                         scmUi.onFsActivity?.invoke()
-                        onSnackbar?.invoke("Renamed to '$newName'")
+                        onSnackbar?.invoke(strings.text("status.renamed", mapOf("name" to (newName).toString())))
                     }.onFailure {
-                        onSnackbar?.invoke("Rename failed: ${it.message}")
+                        onSnackbar?.invoke(strings.text("status.renameFailed", mapOf("reason" to (it.message ?: "").toString())))
                     }
                 }
                 showRenameDialog = null
@@ -557,17 +559,10 @@ fun ExplorerView(
         val toTrash = trashSettings.enabled
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete '${target.node.name}'?") },
+            title = { Text(strings.text("files.deleteNamed", mapOf("name" to (target.node.name).toString()))) },
             text = {
                 Text(
-                    if (toTrash) {
-                        "$subject moves to the Trash, where it is kept for " +
-                            trashRetentionLabel(trashSettings.retentionDays).lowercase() +
-                            " and can be restored."
-                    } else {
-                        "This permanently deletes the $what. " +
-                            "If the project is under git, you can restore it there."
-                    },
+                    if (toTrash) strings.text("files.trashDescription", mapOf("retention" to (if(trashSettings.retentionDays==0) strings.text("trash.untilEmpty") else strings.text("trash.days",mapOf("count" to trashSettings.retentionDays.toString()))).toString())) else strings.text("files.deleteDescription")
                 )
             },
             // Emphasis follows the consequence: a move to the Trash is recoverable and gets the
@@ -594,19 +589,19 @@ fun ExplorerView(
                             viewModel.refresh()
                             scmUi.onFsActivity?.invoke()
                             onSnackbar?.invoke(
-                                if (toTrash) "Moved '${node.name}' to Trash" else "Deleted '${node.name}'",
+                                if (toTrash) strings.text("status.movedToTrash", mapOf("name" to (node.name).toString())) else strings.text("status.deleted", mapOf("name" to (node.name).toString())),
                             )
-                        }.onFailure { onSnackbar?.invoke("Delete failed: ${it.message}") }
+                        }.onFailure { onSnackbar?.invoke(strings.text("status.deleteFailed", mapOf("reason" to (it.message ?: "").toString()))) }
                     }
                 }
                 if (toTrash) {
-                    CompactFilledButton(text = "Move to Trash", onClick = confirmAction)
+                    CompactFilledButton(text = strings.text("ui.moveToTrash"), onClick = confirmAction)
                 } else {
-                    CompactDestructiveButton(text = "Delete", onClick = confirmAction)
+                    CompactDestructiveButton(text = strings.text("ui.delete"), onClick = confirmAction)
                 }
             },
             dismissButton = {
-                CompactOutlinedButton(text = "Cancel", onClick = { showDeleteConfirm = null })
+                CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = { showDeleteConfirm = null })
             },
         )
     }
@@ -652,20 +647,22 @@ private fun RowOverflowMenu(
     onExpandedChange: (Boolean) -> Unit,
     onAction: (TreeRow, RowAction) -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val isDir = row.node.kind == FsKind.Directory
     val scmUi = LocalExplorerScmUi.current
     // The project root must not be moved or deleted from the tree, so Cut/Delete are hidden on it.
     val protectedProjects = LocalProtectedProjectRoots.current
     val isProjectRoot = LocalProjectRootId.current == row.node.path.stableId || (row.node.path as? FsPath.Local)?.let { dev.blamspot.jcode.fs.InternalFiles.protectsProject(it.file, protectedProjects) } == true
     Box {
-        JcTooltip("More actions") {
+        JcTooltip(strings.text("ui.moreActions")) {
             IconButton(
                 onClick = { onExpandedChange(true) },
                 modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     painter = jcIcon(JCodeIcon.MoreVert),
-                    contentDescription = "More actions",
+                    contentDescription = strings.text("ui.moreActions"),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(IconSize.md),
                 )
@@ -675,22 +672,22 @@ private fun RowOverflowMenu(
             expanded = expanded,
             onDismissRequest = { onExpandedChange(false) },
             quickActions = buildList {
-                add(ContextAction(JCodeIcon.Copy, "Copy") { onAction(row, RowAction.Copy) })
-                if (!isProjectRoot) add(ContextAction(JCodeIcon.Cut, "Cut") { onAction(row, RowAction.Cut) })
-                if (!isProjectRoot) add(ContextAction(JCodeIcon.Rename, "Rename") { onAction(row, RowAction.Rename) })
+                add(ContextAction(JCodeIcon.Copy, strings.text("ui.copy")) { onAction(row, RowAction.Copy) })
+                if (!isProjectRoot) add(ContextAction(JCodeIcon.Cut, strings.text("ui.cut")) { onAction(row, RowAction.Cut) })
+                if (!isProjectRoot) add(ContextAction(JCodeIcon.Rename, strings.text("ui.rename")) { onAction(row, RowAction.Rename) })
                 if (!isProjectRoot) {
-                    add(ContextAction(JCodeIcon.Delete, "Delete", destructive = true) { onAction(row, RowAction.Delete) })
+                    add(ContextAction(JCodeIcon.Delete, strings.text("ui.delete"), destructive = true) { onAction(row, RowAction.Delete) })
                 }
             },
             listActions = buildList {
-                if (!isDir) add(ContextAction(JCodeIcon.Open, "Open") { onAction(row, RowAction.Open) })
+                if (!isDir) add(ContextAction(JCodeIcon.Open, strings.text("ui.open")) { onAction(row, RowAction.Open) })
                 if (isDir) {
-                    add(ContextAction(JCodeIcon.NewFile, "New file") { onAction(row, RowAction.NewFile) })
-                    add(ContextAction(JCodeIcon.NewFolder, "New folder") { onAction(row, RowAction.NewFolder) })
-                    add(ContextAction(JCodeIcon.Add, "Import files…") { onAction(row, RowAction.ImportHere) })
+                    add(ContextAction(JCodeIcon.NewFile, strings.text("ui.newFile")) { onAction(row, RowAction.NewFile) })
+                    add(ContextAction(JCodeIcon.NewFolder, strings.text("ui.newFolder")) { onAction(row, RowAction.NewFolder) })
+                    add(ContextAction(JCodeIcon.Add, strings.text("ui.importFilesTextc98b4f")) { onAction(row, RowAction.ImportHere) })
                 }
-                add(ContextAction(JCodeIcon.Settings, "Properties / full name") { onAction(row, RowAction.Properties) })
-                add(ContextAction(JCodeIcon.Save, "Export…") { onAction(row, RowAction.Export) })
+                add(ContextAction(JCodeIcon.Settings, strings.text("ui.propertiesFullName")) { onAction(row, RowAction.Properties) })
+                add(ContextAction(JCodeIcon.Save, strings.text("ui.export")) { onAction(row, RowAction.Export) })
                 // Extension-contributed actions (e.g. "Add to .gitignore") target a path inside the
                 // repo — the project root isn't a valid target, so omit them there.
                 if (!isProjectRoot) {
@@ -713,6 +710,8 @@ private fun ExplorerBreadcrumb(
     onNavigate: (TreeViewModel.BreadcrumbEntry) -> Unit,
     onNavigateUp: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val scrollState = rememberScrollState()
     Row(
         modifier = Modifier
@@ -722,11 +721,11 @@ private fun ExplorerBreadcrumb(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (entries.size > 1) {
-            JcTooltip("Up one level") {
+            JcTooltip(strings.text("ui.upOneLevel")) {
                 IconButton(onClick = onNavigateUp, modifier = Modifier.size(48.dp)) {
                     Icon(
                         painter = jcIcon(JCodeIcon.ArrowUp),
-                        contentDescription = "Up one level",
+                        contentDescription = strings.text("ui.upOneLevel"),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(IconSize.md),
                     )
@@ -802,9 +801,11 @@ private fun TreeViewContent(
 
 @Composable
 private fun EmptyExplorerHint() {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Box(modifier = Modifier.fillMaxSize().padding(Space.xxl), contentAlignment = Alignment.Center) {
         Text(
-            text = "No files yet.\nUse the New File / New Folder buttons above.",
+            text = strings.text("ui.noFilesYetUseTheNewFileNewFolder"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -831,6 +832,8 @@ private fun TreeRowItem(
     onClick: () -> Unit,
     onAction: (TreeRow, RowAction) -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val iconSize = IconSize.md
     val indent = (row.depth.coerceAtMost(4) * 16).dp
 
@@ -879,7 +882,7 @@ private fun TreeRowItem(
                     ) {
                         Icon(
                             painter = if (row.isExpanded) jcIcon(JCodeIcon.ChevronDown) else jcIcon(JCodeIcon.ChevronRight),
-                            contentDescription = if (row.isExpanded) "Collapse" else "Expand",
+                            contentDescription = if (row.isExpanded) strings.text("ui.collapse") else strings.text("ui.expand"),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(iconSize),
                         )
@@ -1047,6 +1050,8 @@ private fun ExplorerToolbar(
     showTrash: Boolean,
     onOpenTrash: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Row(Modifier.fillMaxWidth().padding(horizontal=Space.xs),verticalAlignment=Alignment.CenterVertically) {
         ToolbarIcon(jcIcon(JCodeIcon.NewFile),uiText("files.newFile"),onCreateFile)
         ToolbarIcon(jcIcon(JCodeIcon.NewFolder),uiText("files.newFolder"),onCreateFolder)
@@ -1056,10 +1061,10 @@ private fun ExplorerToolbar(
         Box {
             ToolbarIcon(jcIcon(JCodeIcon.MoreVert),uiText("files.more"),{more=true})
             CompactContextMenu(expanded=more,onDismissRequest={more=false},listActions=buildList {
-                add(ContextAction(JCodeIcon.Add,"Import files",onClick=onImport))
-                if(canPaste) add(ContextAction(JCodeIcon.Paste,"Paste",onClick=onPaste))
-                if(viewMode==ExplorerViewMode.Tree) add(ContextAction(JCodeIcon.Collapse,"Collapse all",onClick=onCollapseAll))
-                if(showTrash) add(ContextAction(JCodeIcon.Trash,"Trash / restore",onClick=onOpenTrash))
+                add(ContextAction(JCodeIcon.Add,strings.text("ui.importFiles"),onClick=onImport))
+                if(canPaste) add(ContextAction(JCodeIcon.Paste,strings.text("ui.paste"),onClick=onPaste))
+                if(viewMode==ExplorerViewMode.Tree) add(ContextAction(JCodeIcon.Collapse,strings.text("ui.collapseAll"),onClick=onCollapseAll))
+                if(showTrash) add(ContextAction(JCodeIcon.Trash,strings.text("ui.trashRestore"),onClick=onOpenTrash))
             })
         }
     }
@@ -1093,6 +1098,8 @@ private fun CreateRenameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     var textState by remember { mutableStateOf(TextFieldValue(initialName, TextRange(initialName.length))) }
 
     AlertDialog(
@@ -1114,7 +1121,7 @@ private fun CreateRenameDialog(
         },
         confirmButton = {
             CompactFilledButton(
-                text = "OK",
+                text = strings.text("ui.oK"),
                 onClick = {
                     if (textState.text.isNotBlank()) {
                         onConfirm(textState.text)
@@ -1124,7 +1131,7 @@ private fun CreateRenameDialog(
             )
         },
         dismissButton = {
-            CompactOutlinedButton(text = "Cancel", onClick = onDismiss)
+            CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = onDismiss)
         },
     )
 }
@@ -1134,8 +1141,10 @@ private fun CreateRenameDialog(
 /** Trailing VCS chips for a row: an "S" submodule marker and/or the status letter. */
 @Composable
 private fun RowVcsBadges(row: TreeRow) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     if (row.isSubmodule) {
-        JcTooltip("Git submodule") {
+        JcTooltip(strings.text("ui.gitSubmodule")) {
             Text(
                 text = "S",
                 color = MaterialTheme.colorScheme.tertiary,

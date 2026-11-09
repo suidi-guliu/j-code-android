@@ -16,6 +16,8 @@ import kotlinx.serialization.json.*
 /** Kit widgets inherit native tokens and stay inside one owned dialog surface. */
 @Composable
 fun NativeKitPanel(host: NativePackageHost,panel: PanelState) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val inputs=remember(panel) { mutableStateMapOf<String,String>() }
     val results=remember(panel) { mutableStateMapOf<String,String>() }
     val scope=rememberCoroutineScope()
@@ -41,10 +43,10 @@ fun NativeKitPanel(host: NativePackageHost,panel: PanelState) {
                 Text(panel.title,style=MaterialTheme.typography.titleLarge)
                 if(panel.text.isNotEmpty()) Text(panel.text)
                 if(panel.status=="loading" || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                if(panel.status=="empty") Text("No results")
+                if(panel.status=="empty") Text(strings.text("find.none"))
                 panel.nodes.forEach { element -> NativeNode(element.jsonObject,inputs,::bind,!busy,::invoke) }
                 message?.let { Text(it,color=MaterialTheme.colorScheme.primary) }
-                TextButton(onClick=host::dismissPanel) { Text("Close") }
+                TextButton(onClick=host::dismissPanel) { Text(strings.text("ui.close")) }
             }
         }
     }

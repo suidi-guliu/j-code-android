@@ -1,5 +1,6 @@
 package dev.blamspot.jcode.workbench
 
+import dev.blamspot.jcode.feature.editor.pane.localizedTitle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -74,6 +75,8 @@ internal fun WorkspaceHeader(
     onCloseProject: () -> Unit,
     onCollapseSidebar: (() -> Unit)? = null,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -90,7 +93,7 @@ internal fun WorkspaceHeader(
             onCollapseSidebar?.let { collapse ->
                 WorkbenchIconActionButton(
                     icon = jcIcon(JCodeIcon.MenuToggle),
-                    contentDescription = "Hide left sidebar",
+                    contentDescription = strings.text("ui.hideLeftSidebar"),
                     onClick = collapse,
                     active = true,
                 )
@@ -133,7 +136,7 @@ internal fun WorkspaceHeader(
                         }
                     }
                     Text(
-                        text = selectedProject?.name ?: "Internal Files",
+                        text = selectedProject?.name ?: strings.text("files.internal"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -146,7 +149,7 @@ internal fun WorkspaceHeader(
                     listActions = listOf(
                         ContextAction(
                             JCodeIcon.Close,
-                            if (inUserWorkspace) "Close saved project group" else "Close project",
+                            if (inUserWorkspace) strings.text("ui.closeSavedProjectGroup") else strings.text("ui.closeProject"),
                         ) { if (inUserWorkspace) onCloseWorkspace() else onCloseProject() },
                     ),
                 )
@@ -154,14 +157,14 @@ internal fun WorkspaceHeader(
 
             WorkbenchIconActionButton(
                 icon = jcIcon(JCodeIcon.Add),
-                contentDescription = "Add project",
+                contentDescription = strings.text("ui.addProject"),
                 onClick = onCreateProject,
             )
             Box {
                 var openFolderMenu by remember { mutableStateOf(false) }
                 WorkbenchIconActionButton(
                     icon = jcIcon(JCodeIcon.OpenFolder),
-                    contentDescription = "Open folder",
+                    contentDescription = strings.text("ui.openFolderText6a9084"),
                     onClick = { if (contributedDrawerActions.isEmpty()) onOpenExternalFolder() else openFolderMenu = true },
                 )
                 if (contributedDrawerActions.isNotEmpty()) {
@@ -169,7 +172,7 @@ internal fun WorkspaceHeader(
                         expanded = openFolderMenu,
                         onDismissRequest = { openFolderMenu = false },
                         listActions = buildList {
-                            add(ContextAction(JCodeIcon.OpenFolder, "Open Folder") { onOpenExternalFolder() })
+                            add(ContextAction(JCodeIcon.OpenFolder, strings.text("ui.openFolder")) { onOpenExternalFolder() })
                             contributedDrawerActions.forEach { a ->
                                 add(ContextAction(contributedActionIcon(a.id), a.label) { onDrawerAction(a) })
                             }
@@ -184,10 +187,10 @@ internal fun WorkspaceHeader(
         Box {
             WorkbenchIconActionButton(jcIcon(JCodeIcon.MoreVert),"More tools",{more=true})
             CompactContextMenu(expanded=more,onDismissRequest={more=false},listActions=buildList {
-                add(ContextAction(JCodeIcon.Tasks,"Advanced tasks (.jcode/run.yaml)") { onSelectTool(WorkbenchTool.RunDebug) })
-                if(scmAvailable) add(ContextAction(JCodeIcon.Scm,"Source control") { onSelectTool(WorkbenchTool.Scm) })
-                if(dbManagerAvailable) add(ContextAction(JCodeIcon.Database,"Databases") { onSelectTool(WorkbenchTool.DbManager) })
-                if(vmManagerAvailable) add(ContextAction(JCodeIcon.Vm,"Virtual machines") { onSelectTool(WorkbenchTool.VmManager) })
+                add(ContextAction(JCodeIcon.Tasks,strings.text("ui.advancedTasksJcodeRunYaml")) { onSelectTool(WorkbenchTool.RunDebug) })
+                if(scmAvailable) add(ContextAction(JCodeIcon.Scm,strings.text("ui.sourceControl")) { onSelectTool(WorkbenchTool.Scm) })
+                if(dbManagerAvailable) add(ContextAction(JCodeIcon.Database,strings.text("ui.databases")) { onSelectTool(WorkbenchTool.DbManager) })
+                if(vmManagerAvailable) add(ContextAction(JCodeIcon.Vm,strings.text("ui.virtualMachines")) { onSelectTool(WorkbenchTool.VmManager) })
             })
         }
     }
@@ -217,6 +220,8 @@ internal fun WorkbenchTopBar(
     onOpenTerminalSession: (String) -> Unit,
     onSave: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // Single row: navigation + title + quick actions. Per-file metrics (cursor, language, distro)
     // live in the bottom status bar, so this header no longer carries a redundant second chip row.
     Surface(
@@ -233,7 +238,7 @@ internal fun WorkbenchTopBar(
         ) {
             WorkbenchIconActionButton(
                 icon = jcIcon(JCodeIcon.MenuToggle),
-                contentDescription = if (leftSidebarExpanded) "Hide left sidebar" else "Show left sidebar",
+                contentDescription = if (leftSidebarExpanded) strings.text("ui.hideLeftSidebar") else strings.text("ui.showLeftSidebar"),
                 onClick = onToggleLeftSidebar,
                 active = leftSidebarExpanded,
             )
@@ -242,7 +247,7 @@ internal fun WorkbenchTopBar(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(Space.hairline),
             ) {
-                val heading = activeTab?.title ?: selectedProject?.name ?: "sui-code"
+                val heading = activeTab?.localizedTitle() ?: selectedProject?.name ?: "sui-code"
                 Text(
                     text = heading,
                     maxLines = 1,
@@ -263,7 +268,7 @@ internal fun WorkbenchTopBar(
                         activeTab?.title,
                     ).let { if (it.lastOrNull() == heading) it.dropLast(1) else it }
                         .joinToString(" / ")
-                        .ifBlank { "Internal Files" },
+                        .ifBlank { strings.text("files.internal") },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -277,7 +282,7 @@ internal fun WorkbenchTopBar(
                 Box {
                     WorkbenchIconActionButton(
                         icon = jcIcon(JCodeIcon.Save),
-                        contentDescription = if (activeTab.isDirty) "Save (unsaved changes)" else "Save",
+                        contentDescription = if (activeTab.isDirty) strings.text("ui.saveUnsavedChanges") else strings.text("ui.save"),
                         onClick = onSave,
                         active = activeTab.isDirty,
                         onLongClick = { saveMenuOpen = true },
@@ -286,10 +291,10 @@ internal fun WorkbenchTopBar(
                         expanded = saveMenuOpen,
                         onDismissRequest = { saveMenuOpen = false },
                         quickActions = listOf(
-                            ContextAction(JCodeIcon.Undo, "Undo") { saveActions.onUndo() },
-                            ContextAction(JCodeIcon.Redo, "Redo") { saveActions.onRedo() },
-                            ContextAction(JCodeIcon.Discard, "Discard", destructive = true) { saveActions.onDiscard() },
-                            ContextAction(JCodeIcon.Save, "Save all") { saveActions.onSaveAll() },
+                            ContextAction(JCodeIcon.Undo, strings.text("ui.undo")) { saveActions.onUndo() },
+                            ContextAction(JCodeIcon.Redo, strings.text("ui.redo")) { saveActions.onRedo() },
+                            ContextAction(JCodeIcon.Discard, strings.text("ui.discard"), destructive = true) { saveActions.onDiscard() },
+                            ContextAction(JCodeIcon.Save, strings.text("ui.saveAll")) { saveActions.onSaveAll() },
                         ),
                     )
                 }
@@ -305,7 +310,7 @@ internal fun WorkbenchTopBar(
                     Box {
                         WorkbenchIconActionButton(
                             icon = jcIcon(JCodeIcon.Terminal),
-                            contentDescription = "Terminal",
+                            contentDescription = strings.text("ui.terminal"),
                             onClick = onShowTerminal,
                             shimmer = terminalBusy,
                             badge = terminalHasUnseen,
@@ -325,7 +330,7 @@ internal fun WorkbenchTopBar(
                     val launcher = LocalCommandPaletteLauncher.current
                     WorkbenchIconActionButton(
                         icon = jcIcon(JCodeIcon.CommandPalette),
-                        contentDescription = "Command Palette",
+                        contentDescription = strings.text("ui.commandPalette"),
                         onClick = launcher.onOpen,
                     )
                 }
@@ -338,7 +343,7 @@ internal fun WorkbenchTopBar(
             if (!(rightSidebarDocked && canShowRightSidebar && rightSidebarVisible)) {
                 WorkbenchIconActionButton(
                     icon = jcIcon(JCodeIcon.Logs),
-                    contentDescription = "Toggle right sidebar",
+                    contentDescription = strings.text("ui.toggleRightSidebar"),
                     onClick = onToggleRightSidebar,
                     active = canShowRightSidebar && rightSidebarVisible,
                 )

@@ -21,7 +21,18 @@ class StartupRuntimeTest {
         catch(expected: PatternSyntaxException) { android.util.Log.i("SuiStartupTest","Former v0.5.1 expression rejected by actual Android ICU",expected) }
         val ui=UiTranslations()
         for((key,english) in UiTextKeys.english) {
-            val args=when { "{count}" in english -> mapOf("count" to "1");"{scope}" in english -> mapOf("scope" to "test");else -> emptyMap() }
+            // Literal parameter enumeration: never reintroduce the old ICU-sensitive regex.
+            val args=buildMap<String,String> {
+                var from=0
+                while(true) {
+                    val open=english.indexOf('{',from)
+                    if(open<0) break
+                    val close=english.indexOf('}',open+1)
+                    check(close>open)
+                    put(english.substring(open+1,close),"1")
+                    from=close+1
+                }
+            }
             assertTrue(ui.text(key,args).isNotBlank())
         }
     }

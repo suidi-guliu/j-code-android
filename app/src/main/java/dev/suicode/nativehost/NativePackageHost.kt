@@ -97,6 +97,8 @@ class NativePackageHost private constructor(private val context: Context) {
     }
     private val mutableSource=MutableStateFlow<String?>(null)
     val source=mutableSource.asStateFlow()
+    /** Pure snapshot lookup: no archive, runtime or preference IO for UI event messages. */
+    fun uiText(key: String,arguments: Map<String,String> = emptyMap()): String = UiTranslations(localizations.value,selectedUiLanguage.value).text(key,arguments)
     fun setSource(path: String?) { mutableSource.value=path }
     fun templates(): List<NativeProjectTemplate> = mutableRows.value.filter { it.record.enabled && it.pack.kind==PackKind.KIT && Capability.PROJECT in it.record.grants && Capability.FILE_WRITE in it.record.grants }.flatMap { row ->
         row.pack.declarations().filter { it.type=="project" }.mapNotNull { component ->

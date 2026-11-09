@@ -53,6 +53,8 @@ internal val DebugSessionUi.active: Boolean
  */
 @Composable
 internal fun DebugSessionPanel(ui: DebugSessionUi, modifier: Modifier = Modifier) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
         Row(
             modifier = Modifier.padding(start = Space.xxs),
@@ -62,7 +64,7 @@ internal fun DebugSessionPanel(ui: DebugSessionUi, modifier: Modifier = Modifier
             Icon(jcIcon(JCodeIcon.Debug), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             // "Debug session", not "Debug": beside a row of run configs each carrying their own Debug
             // button, a section called Debug reads as a second, different Debug command.
-            Text("Debug session", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(strings.text("ui.debugSession"), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             DebugStateChip(ui.state)
         }
@@ -83,6 +85,8 @@ internal fun DebugSessionPanel(ui: DebugSessionUi, modifier: Modifier = Modifier
  */
 @Composable
 internal fun DebugLaunchRow(ui: DebugSessionUi) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val target = ui.debugTargetName
     when {
         target != null && ui.canDebug -> {
@@ -96,18 +100,18 @@ internal fun DebugLaunchRow(ui: DebugSessionUi) {
                     horizontalArrangement = Arrangement.spacedBy(Space.xs),
                 ) {
                     Text(
-                        text = "Debug $target",
+                        text = strings.text("debug.target", mapOf("target" to (target).toString())),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    JcTooltip("Start debugging") {
+                    JcTooltip(strings.text("ui.startDebugging")) {
                         IconButton(onClick = ui.onDebug) {
                             Icon(
                                 painter = jcIcon(JCodeIcon.Debug),
-                                contentDescription = "Start debugging",
+                                contentDescription = strings.text("ui.startDebugging"),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(22.dp),
                             )
@@ -119,7 +123,7 @@ internal fun DebugLaunchRow(ui: DebugSessionUi) {
         // Kept, because it is a diagnosis rather than an empty state: it names the engine that is
         // missing and where to install it.
         target != null -> Text(
-            "No debug engine installed for $target. Install one in Debug Engines (DBG).",
+            strings.text("debug.missing", mapOf("target" to (target).toString())),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -128,18 +132,20 @@ internal fun DebugLaunchRow(ui: DebugSessionUi) {
 
 @Composable
 private fun DebugToolbar(ui: DebugSessionUi) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val stopped = ui.state == DebugState.STOPPED
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = Space.xxs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.xxs),
     ) {
-        DebugAction(JCodeIcon.Continue, "Continue", enabled = stopped, tint = MaterialTheme.colorScheme.primary, onClick = ui.onContinue)
-        DebugAction(JCodeIcon.StepOver, "Step over", enabled = stopped, onClick = ui.onStepOver)
-        DebugAction(JCodeIcon.StepInto, "Step into", enabled = stopped, onClick = ui.onStepInto)
-        DebugAction(JCodeIcon.StepOut, "Step out", enabled = stopped, onClick = ui.onStepOut)
+        DebugAction(JCodeIcon.Continue, strings.text("run.continue"), enabled = stopped, tint = MaterialTheme.colorScheme.primary, onClick = ui.onContinue)
+        DebugAction(JCodeIcon.StepOver, strings.text("ui.stepOver"), enabled = stopped, onClick = ui.onStepOver)
+        DebugAction(JCodeIcon.StepInto, strings.text("ui.stepInto"), enabled = stopped, onClick = ui.onStepInto)
+        DebugAction(JCodeIcon.StepOut, strings.text("ui.stepOut"), enabled = stopped, onClick = ui.onStepOut)
         Spacer(Modifier.weight(1f))
-        DebugAction(JCodeIcon.Stop, "Stop", enabled = true, tint = MaterialTheme.colorScheme.error, onClick = ui.onStop)
+        DebugAction(JCodeIcon.Stop, strings.text("ui.stop"), enabled = true, tint = MaterialTheme.colorScheme.error, onClick = ui.onStop)
     }
 }
 
@@ -170,7 +176,9 @@ private fun SectionLabel(text: String) {
 
 @Composable
 private fun CallStackList(ui: DebugSessionUi) {
-    SectionLabel("Call stack")
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
+    SectionLabel(strings.text("ui.callStack"))
     Column(
         modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp).verticalScroll(rememberScrollState()),
     ) {
@@ -203,7 +211,9 @@ private fun CallStackList(ui: DebugSessionUi) {
 
 @Composable
 private fun VariablesList(ui: DebugSessionUi) {
-    SectionLabel("Variables")
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
+    SectionLabel(strings.text("ui.variables"))
     Column(
         modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()),
     ) {
@@ -278,12 +288,14 @@ internal fun DebugConsoleLines(
  */
 @Composable
 internal fun DebugConsoleSidebarContent(modifier: Modifier = Modifier) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val ui = dev.blamspot.jcode.workbench.LocalDebugSession.current
     val active = ui.active
     Column(modifier = modifier.fillMaxSize().padding(horizontal = Space.sm, vertical = Space.s)) {
         if (!active && ui.output.isEmpty()) {
             Text(
-                "Start a debug session to see its console output here.",
+                strings.text("ui.startADebugSessionToSeeItsConsoleOutput"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(Space.s),
@@ -292,7 +304,7 @@ internal fun DebugConsoleSidebarContent(modifier: Modifier = Modifier) {
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             Text(
-                text = ui.debugTargetName?.let { "Debug: $it" } ?: "Debug",
+                text = ui.debugTargetName?.let { strings.text("debug.console", mapOf("target" to (it).toString())) } ?: strings.text("run.debug"),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -308,12 +320,13 @@ internal fun DebugConsoleSidebarContent(modifier: Modifier = Modifier) {
 
 @Composable
 private fun DebugStateChip(state: DebugState) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
     val (label, active) = when (state) {
-        DebugState.STARTING, DebugState.INITIALIZING -> "Starting…" to false
-        DebugState.RUNNING -> "Running" to true
-        DebugState.STOPPED -> "Paused" to true
-        DebugState.ERROR -> "Error" to false
-        else -> state.name.lowercase() to false
+        DebugState.STARTING, DebugState.INITIALIZING -> strings.text("option.Starting") to false
+        DebugState.RUNNING -> strings.text("option.Running") to true
+        DebugState.STOPPED -> strings.text("option.Paused") to true
+        DebugState.ERROR -> strings.text("option.Error") to false
+        else -> strings.text(if(state==DebugState.TERMINATED) "option.terminated" else "option.disconnected") to false
     }
     Surface(
         color = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)

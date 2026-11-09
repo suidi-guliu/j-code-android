@@ -1,4 +1,5 @@
 package dev.blamspot.jcode
+import dev.blamspot.jcode.feature.editor.pane.localizedTitle
 import androidx.compose.foundation.isSystemInDarkTheme
 import dev.blamspot.jcode.core.editor.EditorLanguageAction
 import dev.blamspot.jcode.core.editor.decor.Layer
@@ -441,6 +442,8 @@ fun JCodeApp(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val windowInfo by rememberJCodeWindowInfo()
     val workspace by viewModel.currentWorkspace.collectAsStateWithLifecycle()
     val breadcrumb by viewModel.breadcrumb.collectAsStateWithLifecycle()
@@ -772,7 +775,7 @@ fun JCodeApp(
         }
         AlertDialog(
             onDismissRequest = { showImportInfo = false },
-            title = { Text("Import an extension") },
+            title = { Text(strings.text("ui.importAnExtension")) },
             text = {
                 // Scrollable: this is the longest dialog in the app and it must stay readable in
                 // landscape, where there is far less height to work with.
@@ -794,12 +797,12 @@ fun JCodeApp(
             },
             confirmButton = {
                 CompactFilledButton(
-                    text = "Choose file",
+                    text = strings.text("ui.chooseFile"),
                     onClick = { showImportInfo = false; extensionPicker.launch("*/*") },
                 )
             },
             dismissButton = {
-                CompactOutlinedButton(text = "Cancel", onClick = { showImportInfo = false })
+                CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = { showImportInfo = false })
             },
         )
     }
@@ -828,13 +831,13 @@ fun JCodeApp(
             },
             confirmButton = {
                 CompactFilledButton(
-                    text = if (cleanup.oldAppInstalled) "Clean up and uninstall" else "Remove the bundle",
+                    text = if (cleanup.oldAppInstalled) strings.text("ui.cleanUpAndUninstall") else strings.text("ui.removeTheBundle"),
                     onClick = { viewModel.cleanUpAfterMigration() },
                 )
             },
             dismissButton = {
                 CompactOutlinedButton(
-                    text = "Keep for now",
+                    text = strings.text("ui.keepForNow"),
                     onClick = { viewModel.dismissMigrationCleanup() },
                 )
             },
@@ -846,19 +849,18 @@ fun JCodeApp(
     (updateInstallState as? AppUpdateInstaller.State.MigrationUnavailable)?.let { blocked ->
         AlertDialog(
             onDismissRequest = { viewModel.resetUpdateInstall() },
-            title = { Text("Update without your environment?") },
+            title = { Text(strings.text("ui.updateWithoutYourEnvironment")) },
             text = {
                 Text(
                     "This update installs as a new app, so your Linux environment, projects, " +
                         "extensions and settings have to be copied across first — and " +
                         "${blocked.reason}.\n\n" +
-                        "Installing now gives you the new version with nothing in it. This one is " +
-                        "left as it is, so you can free up space and update again instead.",
+                        strings.text("ui.installingNowGivesYouTheNewVersionWithNothing"),
                 )
             },
             confirmButton = {
                 CompactFilledButton(
-                    text = "Install anyway",
+                    text = strings.text("ui.installAnyway"),
                     onClick = {
                         viewModel.resetUpdateInstall()
                         viewModel.installUpdateWithoutMigration(blocked.apkPath)
@@ -866,7 +868,7 @@ fun JCodeApp(
                 )
             },
             dismissButton = {
-                CompactOutlinedButton(text = "Not now", onClick = { viewModel.resetUpdateInstall() })
+                CompactOutlinedButton(text = strings.text("ui.notNow"), onClick = { viewModel.resetUpdateInstall() })
             },
         )
     }
@@ -1144,7 +1146,7 @@ fun JCodeApp(
                 is WorkbenchPrompt.RestartApp -> {
                     val result = snackbarHostState.showSnackbar(
                         message = prompt.message,
-                        actionLabel = "Restart",
+                        actionLabel = strings.text("ui.restart"),
                         duration = SnackbarDuration.Long,
                     )
                     if (result == SnackbarResult.ActionPerformed) viewModel.restartApp()
@@ -1152,20 +1154,20 @@ fun JCodeApp(
                 is WorkbenchPrompt.ReloadExtension -> {
                     val result = snackbarHostState.showSnackbar(
                         message = prompt.message,
-                        actionLabel = "Reload",
+                        actionLabel = strings.text("ui.reload"),
                         duration = SnackbarDuration.Long,
                     )
                     if (result == SnackbarResult.ActionPerformed) viewModel.unloadRemovedExtension(prompt.id)
                 }
                 WorkbenchPrompt.ProcessLimit -> {
                     val result = snackbarHostState.showSnackbar(
-                        message = "Android stopped the Linux environment (background process limit).",
-                        actionLabel = "Details",
+                        message = strings.text("ui.androidStoppedTheLinuxEnvironmentBackgroundProcessLimit"),
+                        actionLabel = strings.text("ui.details"),
                         duration = SnackbarDuration.Long,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
                         viewModel.openSettingsPage()
-                        SettingsFeature.revealGroup("Environment")
+                        SettingsFeature.revealGroup("ui.environment")
                     }
                 }
                 is WorkbenchPrompt.StaleTerminalDistro -> {
@@ -1186,8 +1188,8 @@ fun JCodeApp(
     LaunchedEffect(viewModel) {
         viewModel.lspMissingServer.collect { entry ->
             val result = snackbarHostState.showSnackbar(
-                message = "${entry.name} isn't installed — code intelligence is off for these files.",
-                actionLabel = "Install",
+                message = strings.text("status.serverMissing", mapOf("name" to (entry.name).toString())),
+                actionLabel = strings.text("ui.install"),
                 duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) viewModel.installLspCatalogEntry(entry.id)
@@ -1202,8 +1204,8 @@ fun JCodeApp(
         if (info?.updateAvailable == true && !updateToastShown) {
             updateToastShown = true
             val result = snackbarHostState.showSnackbar(
-                message = "Update available: v${info.latestVersion}",
-                actionLabel = "Update",
+                message = strings.text("status.updateAvailable", mapOf("version" to (info.latestVersion).toString())),
+                actionLabel = strings.text("ui.update"),
                 duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) {
@@ -1211,7 +1213,7 @@ fun JCodeApp(
                 // Settings > About button, so installing from the toast alone looked like nothing
                 // happened. Open Settings and reveal that group, then kick the install off.
                 viewModel.openSettingsPage()
-                SettingsFeature.revealGroup("About")
+                SettingsFeature.revealGroup("option.About")
                 appUpdateSetting.onInstallUpdate()
             }
         }
@@ -1224,15 +1226,15 @@ fun JCodeApp(
             is AppUpdateInstaller.State.NeedsUnknownSourcePermission -> {
                 viewModel.resetUpdateInstall()
                 AppUpdateInstaller.openUnknownSourceSettings(updateContext)
-                snackbarHostState.showSnackbar("Allow JCode to install apps, then tap Update again.")
+                snackbarHostState.showSnackbar(strings.text("ui.allowJCodeToInstallAppsThenTapUpdateAgain"))
             }
             is AppUpdateInstaller.State.Failed -> {
                 viewModel.resetUpdateInstall()
-                snackbarHostState.showSnackbar("Update failed: ${s.message}")
+                snackbarHostState.showSnackbar(strings.text("status.updateFailed", mapOf("reason" to (s.message).toString())))
             }
             is AppUpdateInstaller.State.Success -> {
                 viewModel.resetUpdateInstall()
-                snackbarHostState.showSnackbar("Update installed — v${updateInfo?.latestVersion ?: ""}.")
+                snackbarHostState.showSnackbar(strings.text("status.updateInstalled", mapOf("version" to (updateInfo?.latestVersion ?: "").toString())))
             }
             else -> Unit
         }
@@ -1290,7 +1292,7 @@ fun JCodeApp(
     // whether an extension claims it, and installing the Android pack must light the toggle up
     // without reopening the file.
     val editorMenuExtras = remember(
-        viewModel, menuTabId, menuIsFileTab, menuFileName, contributedContextActions, installedExtensions,
+        strings, viewModel, menuTabId, menuIsFileTab, menuFileName, contributedContextActions, installedExtensions,
     ) {
         val fileExt = menuFileName.substringAfterLast('.', "").lowercase()
         // Markdown renders itself; anything else needs an extension that says it can draw this file.
@@ -1307,7 +1309,7 @@ fun JCodeApp(
             } else {
                 null
             },
-            previewLabel = nativeClaim?.previewLabel ?: "Preview",
+            previewLabel = nativeClaim?.previewLabel ?: strings.text("ui.preview"),
             previewIcon = nativeClaim?.previewIcon
                 ?.let { contributedMenuIcon(it) }
                 ?: JCodeIcon.Preview,
@@ -1453,7 +1455,7 @@ fun JCodeApp(
                 }
             }
             snackbarHostState.showSnackbar(
-                outcome.fold({ "Settings exported" }, { "Export failed: ${it.message}" }),
+                outcome.fold({ strings.text("ui.settingsExported") }, { strings.text("status.exportFailed", mapOf("reason" to (it.message ?: "").toString())) }),
             )
         }
     }
@@ -1464,12 +1466,12 @@ fun JCodeApp(
             val outcome = runCatching {
                 val text = withContext(Dispatchers.IO) {
                     updateContext.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
-                        ?: error("Could not read the file")
+                        ?: error(strings.text("ui.couldNotReadTheFile"))
                 }
                 viewModel.importSettingsJson(text)
             }
             snackbarHostState.showSnackbar(
-                outcome.fold({ "Imported $it settings" }, { "Import failed: ${it.message}" }),
+                outcome.fold({ strings.text("status.importedSettings", mapOf("count" to (it).toString())) }, { strings.text("status.importFailed", mapOf("reason" to (it.message ?: "").toString())) }),
             )
         }
     }
@@ -1498,7 +1500,7 @@ fun JCodeApp(
                 }
             }
             snackbarHostState.showSnackbar(
-                outcome.fold({ "Diagnostic log exported" }, { "Export failed: ${it.message}" }),
+                outcome.fold({ strings.text("ui.diagnosticLogExported") }, { strings.text("status.exportFailed", mapOf("reason" to (it.message ?: "").toString())) }),
             )
         }
     }
@@ -1606,7 +1608,7 @@ fun JCodeApp(
         AlertDialog(
             onDismissRequest = {},
             confirmButton = {},
-            title = { Text("Environment") },
+            title = { Text(strings.text("ui.environment")) },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(modifier = Modifier.size(22.dp))
@@ -1929,7 +1931,7 @@ fun JCodeApp(
         val canCloseSaved = pending.savedCount > 0
         UnsavedChangesDialog(
             titles = pending.dirtyTitles,
-            thirdLabel = "Close Saved".takeIf { canCloseSaved },
+            thirdLabel = strings.text("ui.closeSaved").takeIf { canCloseSaved },
             onSave = { viewModel.resolveEditorClose(EditorCloseChoice.SAVE) },
             onDiscard = { viewModel.resolveEditorClose(EditorCloseChoice.DISCARD) },
             onThird = { viewModel.resolveEditorClose(EditorCloseChoice.CLOSE_SAVED) }.takeIf { canCloseSaved },
@@ -1943,7 +1945,7 @@ fun JCodeApp(
     pendingEnvironmentSwitch?.let { pending ->
         AlertDialog(
             onDismissRequest = { viewModel.cancelEnvironmentSwitch() },
-            title = { Text("Switch environment?") },
+            title = { Text(strings.text("ui.switchEnvironment")) },
             text = {
                 Text(
                     "JCode restarts to switch to ${pending.environmentId}. Editors and unsaved changes " +
@@ -1957,10 +1959,10 @@ fun JCodeApp(
             // rightmost (reflexive-tap) position, "Cancel" is the safe default at the end.
             confirmButton = {
                 CompactDestructiveButton(
-                    text = "Restart",
+                    text = strings.text("ui.restart"),
                     onClick = { viewModel.confirmEnvironmentSwitch() },
                 )
-                CompactFilledButton(text = "Cancel", onClick = { viewModel.cancelEnvironmentSwitch() })
+                CompactFilledButton(text = strings.text("ui.cancel"), onClick = { viewModel.cancelEnvironmentSwitch() })
             },
             dismissButton = {},
         )
@@ -2075,11 +2077,13 @@ private fun VirtualDevicePage(
  */
 @Composable
 private fun NoVirtualDeviceNotice(modifier: Modifier = Modifier) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Column(
         modifier = modifier.fillMaxSize().padding(Space.lg),
         verticalArrangement = Arrangement.spacedBy(Space.s),
     ) {
-        Text("No virtual device", style = MaterialTheme.typography.titleSmall)
+        Text(strings.text("ui.noVirtualDevice"), style = MaterialTheme.typography.titleSmall)
         Text(
             text = "Running an APK inside JCode comes from the Android Dev Pack. " +
                 "Install it from the Marketplace and open this again.",
@@ -2168,6 +2172,8 @@ private fun JCodeShell(
     runTerminalCompletions: SharedFlow<Pair<String, Int>>,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val scope = rememberCoroutineScope()
     // Resolve the VCS actions here (under the CompositionLocal provider) and capture into closures below;
     // the editor-page dispatch is invoked in a subcomposition where the local would fall back to default.
@@ -2595,7 +2601,7 @@ private fun JCodeShell(
     fun spawnTerminalSession(label: String? = null): dev.blamspot.jcode.core.term.TerminalSessionManager.Session? {
         if (!terminalReady) {
             scope.launch {
-                snackbarHostState.showSnackbar("Finish environment setup before opening the terminal.")
+                snackbarHostState.showSnackbar(strings.text("ui.finishEnvironmentSetupBeforeOpeningTheTerminal"))
             }
             return null
         }
@@ -2825,7 +2831,7 @@ private fun JCodeShell(
     // compile/run output into it, then open the device browser once the server is reachable.
     fun handleRun(project: Project, config: RunConfig, saved: Boolean = false) {
         if (!terminalReady) {
-            scope.launch { snackbarHostState.showSnackbar("Finish environment setup before running.") }
+            scope.launch { snackbarHostState.showSnackbar(strings.text("ui.finishEnvironmentSetupBeforeRunning")) }
             return
         }
         val plan = ProjectRunner.runConfigToPlan(config)
@@ -2910,7 +2916,7 @@ private fun JCodeShell(
                     else ProjectRunner.openInBrowser(appContext, plan.url, choice)
                 } else {
                     OutputLog.append("✗ Dev server didn't start in time; check the run terminals.", OutputKind.Error)
-                    snackbarHostState.showSnackbar("Dev server didn't start in time; check the run terminals.")
+                    snackbarHostState.showSnackbar(strings.text("ui.devServerDidnTStartInTimeCheckThe"))
                 }
             }
         } else {
@@ -2936,7 +2942,7 @@ private fun JCodeShell(
     /** Run a build task in its own terminal (fire-and-forget — not tracked as a run). */
     fun handleBuild(project: Project, config: RunBuildConfig, saved: Boolean = false) {
         if (!terminalReady) {
-            scope.launch { snackbarHostState.showSnackbar("Finish environment setup before building.") }
+            scope.launch { snackbarHostState.showSnackbar(strings.text("ui.finishEnvironmentSetupBeforeBuilding")) }
             return
         }
         if (config.command.isBlank()) {
@@ -2983,12 +2989,12 @@ private fun JCodeShell(
     fun closeTerminalSession(sessionId: String) {
         if(sessionId==setupTerminalSessionId && dev.suicode.nativehost.NativePackageHost.get(appContext).setup.state.value.installing) {
             dev.suicode.nativehost.NativePackageHost.get(appContext).setup.cancel()
-            scope.launch { snackbarHostState.showSnackbar("Kit cancellation requested. Setup stays open until the current package operation finishes safely.") }
+            scope.launch { snackbarHostState.showSnackbar(strings.text("ui.kitCancellationRequestedSetupStaysOpenUntilTheCurrent")) }
             return
         }
         if (sessionId == setupTerminalSessionId && nativeEnvironmentManager.state.value.installing) {
             nativeEnvironmentManager.cancel()
-            scope.launch { snackbarHostState.showSnackbar("Package cancellation requested. Setup stays open until apt/dpkg reaches a safe boundary.") }
+            scope.launch { snackbarHostState.showSnackbar(strings.text("ui.packageCancellationRequestedSetupStaysOpenUntilAptDpkg")) }
             return
         }
         val parentId = terminalSessionManager.relocationParentOf(sessionId)
@@ -3143,7 +3149,7 @@ private fun JCodeShell(
         val items = runningItems()
         AlertDialog(
             onDismissRequest = { pendingCloseTarget = null },
-            title = { Text(if (target == CloseTarget.Workspace) "Close workspace?" else "Close project?") },
+            title = { Text(if (target == CloseTarget.Workspace) strings.text("ui.closeWorkspace") else strings.text("ui.closeProjectText2c6af4")) },
             text = {
                 Text(
                     "Still running — closing will stop:\n" +
@@ -3152,12 +3158,12 @@ private fun JCodeShell(
             },
             confirmButton = {
                 CompactFilledButton(
-                    text = "Close anyway",
+                    text = strings.text("ui.closeAnyway"),
                     onClick = { pendingCloseTarget = null; performClose(target) },
                 )
             },
             dismissButton = {
-                CompactOutlinedButton(text = "Cancel", onClick = { pendingCloseTarget = null })
+                CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = { pendingCloseTarget = null })
             },
         )
     }
@@ -3169,7 +3175,7 @@ private fun JCodeShell(
         val titles = editorGroup.tabs.filter { !it.isPage && it.isDirty }.map { it.title }
         UnsavedChangesDialog(
             titles = titles,
-            thirdLabel = "Cancel",
+            thirdLabel = strings.text("ui.cancel"),
             onSave = {
                 pendingUnsavedSwitch = null
                 scope.launch {
@@ -3278,60 +3284,60 @@ private fun JCodeShell(
         }
         registerConfigurable(
             id = "view.orientationLock",
-            title = if (orientationLockedMode) "Unlock Screen Orientation" else "Lock Screen Orientation",
+            title = if (orientationLockedMode) strings.text("ui.unlockScreenOrientation") else strings.text("ui.lockScreenOrientation"),
             group = "View",
             icon = JCodeIcon.ScreenRotation,
         ) { WindowModeState.orientationLocked.value = !orientationLockedMode }
         registerConfigurable(
             id = "view.fullscreen",
-            title = if (fullscreenMode) "Exit Fullscreen" else "Enter Fullscreen",
+            title = if (fullscreenMode) strings.text("ui.exitFullscreen") else strings.text("ui.enterFullscreen"),
             group = "View",
             icon = JCodeIcon.Fullscreen,
         ) { WindowModeState.fullscreen.value = !fullscreenMode }
         registerConfigurable(
             id = "view.keepAwake",
-            title = if (keepAwakeMode) "Keep Awake: Turn Off" else "Keep Awake: Turn On",
+            title = if (keepAwakeMode) strings.text("ui.keepAwakeTurnOff") else strings.text("ui.keepAwakeTurnOn"),
             group = "View",
             icon = JCodeIcon.KeepAwake,
         ) { WindowModeState.keepAwake.value = !keepAwakeMode }
         registerConfigurable(
             id = "view.hideChrome",
-            title = if (chromeHidden) "Show Header and Tabs" else "Hide Header and Tabs",
+            title = if (chromeHidden) strings.text("ui.showHeaderAndTabs") else strings.text("ui.hideHeaderAndTabs"),
             group = "View",
             icon = JCodeIcon.Collapse,
             visible = paletteHasTabs,
         ) { chromeHidden = !chromeHidden }
         registerConfigurable(
             id = "editor.goToLine",
-            title = "Go to Line…",
+            title = strings.text("ui.goToLine"),
             group = "Editor",
             icon = JCodeIcon.Cursor,
             visible = paletteEditorActive,
         ) { goToLineVisible = true }
         registerConfigurable(
             id = "editor.formatDocument",
-            title = "Format Document",
+            title = strings.text("ui.formatDocument"),
             group = "Editor",
             icon = JCodeIcon.Format,
             visible = paletteEditorActive && paletteLanguageIdentified,
         ) { paletteSaveActions.onFormat() }
         registerConfigurable(
             id = "editor.fontSizeIncrease",
-            title = "Increase Editor Font Size",
+            title = strings.text("ui.increaseEditorFontSize"),
             group = "Editor",
             icon = JCodeIcon.TextIncrease,
             visible = paletteEditorActive,
         ) { onUpdateEditorFontSize(paletteFontScope, (paletteFontSize + 1f).coerceIn(8f, 72f)) }
         registerConfigurable(
             id = "editor.fontSizeDecrease",
-            title = "Decrease Editor Font Size",
+            title = strings.text("ui.decreaseEditorFontSize"),
             group = "Editor",
             icon = JCodeIcon.TextDecrease,
             visible = paletteEditorActive,
         ) { onUpdateEditorFontSize(paletteFontScope, (paletteFontSize - 1f).coerceIn(8f, 72f)) }
         registerConfigurable(
             id = "tools.colorSearch",
-            title = "Color Search (pick from screen)",
+            title = strings.text("ui.colorSearchPickFromScreen"),
             group = "Tools",
             icon = JCodeIcon.Palette,
         ) { colorPickActive = true }
@@ -3340,7 +3346,7 @@ private fun JCodeShell(
         // apps already installed on it — or at the screen `adb` is driving.
         registerConfigurable(
             id = "tools.virtualDevice",
-            title = "Open Virtual Device",
+            title = strings.text("ui.openVirtualDevice"),
             group = "Tools",
             icon = JCodeIcon.Destinations,
         ) { VirtualDeviceBridge.requestOpen(null) }
@@ -3350,13 +3356,13 @@ private fun JCodeShell(
         // editor's are: a command anybody can find beats a button only the right screen has.
         registerConfigurable(
             id = "browser.open",
-            title = "Open Browser",
+            title = strings.text("ui.openBrowser"),
             group = "Tools",
             icon = JCodeIcon.Browser,
         ) { BuiltinBrowser.requestOpen() }
         registerConfigurable(
             id = "browser.back",
-            title = "Browser: Back",
+            title = strings.text("ui.browserBack"),
             group = "Browser",
             icon = JCodeIcon.ArrowBack,
             // Not merely "the browser exists": a Back with nowhere to go is a command that answers a
@@ -3365,7 +3371,7 @@ private fun JCodeShell(
         ) { BuiltinBrowser.controller?.goBack() }
         registerConfigurable(
             id = "browser.forward",
-            title = "Browser: Forward",
+            title = strings.text("ui.browserForward"),
             group = "Browser",
             icon = JCodeIcon.ArrowForward,
             visible = paletteBrowserActive && paletteBrowserForward,
@@ -3375,7 +3381,7 @@ private fun JCodeShell(
             // One command wearing the state, the way the browser's own button does — and the way
             // Fullscreen above does. A page is either loading or it is not, so the two are never both
             // worth offering.
-            title = if (paletteBrowserLoading) "Browser: Stop Loading" else "Browser: Reload Page",
+            title = if (paletteBrowserLoading) strings.text("ui.browserStopLoading") else strings.text("ui.browserReloadPage"),
             group = "Browser",
             icon = if (paletteBrowserLoading) JCodeIcon.Stop else JCodeIcon.Refresh,
             visible = paletteBrowserActive,
@@ -3385,42 +3391,42 @@ private fun JCodeShell(
         }
         CommandRegistry.register(
             id = "workspace.newFolder",
-            title = "New Project",
+            title = strings.text("ui.newProject"),
             group = "Files",
             action = onCreateProject,
             icon = JCodeIcon.NewFolder,
         )
         CommandRegistry.register(
             id = "workspace.openFolder",
-            title = "Open Folder",
+            title = strings.text("ui.openFolder"),
             group = "Files",
             action = { openFolderLauncher.launch(null) },
             icon = JCodeIcon.Files,
         )
         CommandRegistry.register(
             id = "workspace.autoSetupEnvironment",
-            title = "Auto-Setup Environment",
+            title = strings.text("ui.autoSetupEnvironment"),
             group = "Files",
             action = onAutoSetup,
             icon = JCodeIcon.Sdk,
         )
         CommandRegistry.register(
             id = "workbench.focusExplorer",
-            title = "Focus Explorer",
+            title = strings.text("ui.focusExplorer"),
             group = "Workbench",
             action = { selectedTool = WorkbenchTool.Explorer },
             icon = JCodeIcon.Files,
         )
         CommandRegistry.register(
             id = "workbench.showSearch",
-            title = "Show Search Placeholder",
+            title = strings.text("ui.showSearchPlaceholder"),
             group = "Workbench",
             action = { selectedTool = WorkbenchTool.Search },
             icon = JCodeIcon.Search,
         )
         CommandRegistry.register(
             id = "vdevice.reconnectAdb",
-            title = "Reconnect the virtual device to adb",
+            title = strings.text("ui.reconnectTheVirtualDeviceToAdb"),
             group = "Virtual device",
             // The pack's settings screen names this command; the palette offers it too. Both
             // reach the same place, and neither has to know that the daemon is JCode's.
@@ -3430,21 +3436,21 @@ private fun JCodeShell(
         )
         CommandRegistry.register(
             id = "settings.openPage",
-            title = "Open Settings",
+            title = strings.text("ui.openSettings"),
             group = "Settings",
             action = onOpenSettingsPage,
             icon = JCodeIcon.Settings,
         )
         CommandRegistry.register(
             id = "settings.openWorkspaceYaml",
-            title = "Open Workspace YAML",
+            title = strings.text("ui.openWorkspaceYAML"),
             group = "Settings",
             action = onOpenWorkspaceConfig,
             icon = JCodeIcon.Code,
         )
         CommandRegistry.register(
             id = "settings.openProjectYaml",
-            title = "Open Project YAML",
+            title = strings.text("ui.openProjectYAML"),
             group = "Settings",
             action = onOpenProjectConfig,
             whenPredicate = { selectedProject?.fsPath is FsPath.Local },
@@ -3957,7 +3963,7 @@ private fun JCodeShell(
                                     // recreates the WebView instead of reusing the previous image.
                                     ImageViewerPage(
                                         source = tab.id,
-                                        name = tab.title,
+                                        name = tab.localizedTitle(),
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
@@ -4382,6 +4388,8 @@ private fun WorkspacePanel(
     explorerAutoRefresh: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val context = LocalContext.current
     val protectedProjectRoots by workspaceManager.registeredLocalRoots.collectAsStateWithLifecycle()
     var browseInternalFiles by rememberSaveable { mutableStateOf(true) }
@@ -4452,15 +4460,15 @@ private fun WorkspacePanel(
                         Column(modifier = Modifier.fillMaxSize()) {
                             val recentActions=LocalEditorEmptyActions.current
                             var showProjects by remember { mutableStateOf(false) }
-                            TextButton(onClick={showProjects=!showProjects}) { Text(if(showProjects) "Hide recent projects" else "Projects · optional context") }
+                            TextButton(onClick={showProjects=!showProjects}) { Text(if(showProjects) strings.text("ui.hideRecentProjects") else strings.text("ui.projectsOptionalContext")) }
                             if(showProjects) Column(Modifier.heightIn(max=180.dp).verticalScroll(rememberScrollState())) {
                                 recentActions.recents.forEach { recent ->
                                     Row(Modifier.fillMaxWidth()) {
                                         TextButton(onClick={recentActions.onOpenRecent(recent)},modifier=Modifier.weight(1f)) { Text(recentDisplayName(recent),maxLines=1,overflow=TextOverflow.Ellipsis) }
-                                        TextButton(onClick={recentActions.onRemoveRecent(recent.uri)}) { Text("Remove") }
+                                        TextButton(onClick={recentActions.onRemoveRecent(recent.uri)}) { Text(strings.text("ui.remove")) }
                                     }
                                 }
-                                Text("Remove only clears the recent list; files stay intact.",style=MaterialTheme.typography.bodySmall)
+                                Text(strings.text("ui.removeOnlyClearsTheRecentListFilesStayIntact"),style=MaterialTheme.typography.bodySmall)
                             }
                             if (rosterProjects.isNotEmpty()) {
                                 ProjectRoster(
@@ -4476,8 +4484,8 @@ private fun WorkspacePanel(
                             }
 
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                                TextButton(onClick={revealDirectory=null;browseInternalFiles=true}) { Text("Internal Files") }
-                                if(selectedProject!=null) TextButton(onClick={revealDirectory=null;browseInternalFiles=false}) { Text("Project files") }
+                                TextButton(onClick={revealDirectory=null;browseInternalFiles=true}) { Text(strings.text("files.internal")) }
+                                if(selectedProject!=null) TextButton(onClick={revealDirectory=null;browseInternalFiles=false}) { Text(strings.text("ui.projectFiles")) }
                             }
                             when {
                                 selectedProject == null || browseInternalFiles -> {
@@ -4654,6 +4662,8 @@ private fun EditorWorkspace(
     editorPageContent: @Composable (EditorTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val chrome = LocalChromeControls.current
     Surface(
         modifier = modifier.fillMaxHeight(),
@@ -4770,7 +4780,7 @@ private fun EditorWorkspace(
         if (chrome.chromeHidden) {
             FloatingRestorePill(
                 icon = jcIcon(JCodeIcon.ChevronDown),
-                contentDescription = "Show header and tabs",
+                contentDescription = strings.text("ui.showHeaderAndTabsText2f5a6b"),
                 onClick = { chrome.onSetChromeHidden(false) },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -4841,11 +4851,13 @@ private fun EditorEmptyState(
     onOpenFileRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     if (hasProject) {
         EditorEmptyHint(
-            title = "No file open",
+            title = strings.text("ui.noFileOpen"),
             message = "Pick a file from the Explorer to start editing.",
-            actionLabel = "Open Explorer",
+            actionLabel = strings.text("ui.openExplorer"),
             onAction = onOpenFileRequest,
             modifier = modifier,
         )
@@ -4895,6 +4907,8 @@ private fun EditorEmptyHint(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EditorRecents(actions: EditorEmptyActions, modifier: Modifier = Modifier) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
         Column(
             modifier = Modifier
@@ -4908,8 +4922,8 @@ private fun EditorRecents(actions: EditorEmptyActions, modifier: Modifier = Modi
             Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
                 StartSectionLabel("Start")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    WorkbenchActionButton(text = "New Folder", onClick = actions.onNewProject, active = true)
-                    WorkbenchActionButton(text = "Open Folder", onClick = actions.onOpenFolder)
+                    WorkbenchActionButton(text = strings.text("files.newFolder"), onClick = actions.onNewProject, active = true)
+                    WorkbenchActionButton(text = strings.text("ui.openFolder"), onClick = actions.onOpenFolder)
                     actions.startActions.forEach { action ->
                         WorkbenchActionButton(text = action.label, onClick = { actions.onAction(action) })
                     }
@@ -4918,7 +4932,7 @@ private fun EditorRecents(actions: EditorEmptyActions, modifier: Modifier = Modi
             if (actions.recents.isEmpty()) {
                 // No "open or create a folder to get started": that is the row of buttons directly above.
                 Text(
-                    text = "No recent projects yet.",
+                    text = strings.text("ui.noRecentProjectsYet"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -4954,6 +4968,8 @@ private fun EditorRecents(actions: EditorEmptyActions, modifier: Modifier = Modi
  */
 @Composable
 private fun EditorStartHeader() {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val context = LocalContext.current
     val markSize = 64.dp
     val markPx = with(LocalDensity.current) { markSize.roundToPx() }
@@ -4986,7 +5002,7 @@ private fun EditorStartHeader() {
         Column {
             Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                text = "Version ${BuildConfig.VERSION_NAME}",
+                text = strings.text("common.version", mapOf("version" to (BuildConfig.VERSION_NAME).toString())),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -5006,6 +5022,8 @@ private fun StartSectionLabel(text: String) {
 
 @Composable
 private fun RecentRow(recent: RecentEntity, onOpen: () -> Unit, onExport: () -> Unit) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     var menuOpen by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier
@@ -5057,7 +5075,7 @@ private fun RecentRow(recent: RecentEntity, onOpen: () -> Unit, onExport: () -> 
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(32.dp)) {
                         Icon(
                             painter = jcIcon(JCodeIcon.MoreVert),
-                            contentDescription = "Recent project actions",
+                            contentDescription = strings.text("ui.recentProjectActions"),
                             modifier = Modifier.size(IconSize.md),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -5066,7 +5084,7 @@ private fun RecentRow(recent: RecentEntity, onOpen: () -> Unit, onExport: () -> 
                         expanded = menuOpen,
                         onDismissRequest = { menuOpen = false },
                         listActions = listOf(
-                            ContextAction(JCodeIcon.Save, "Export to storage") { onExport() },
+                            ContextAction(JCodeIcon.Save, strings.text("ui.exportToStorage")) { onExport() },
                         ),
                     )
                 }
@@ -5127,6 +5145,8 @@ private fun WorkbenchRightSidebar(
     onStopRun: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // Fully opaque: any translucency lets bright editor text ghost through the panel content
     // (clearly visible on OLED), and every tab's text then sits on an unstable background.
     Surface(
@@ -5166,7 +5186,7 @@ private fun WorkbenchRightSidebar(
                         }
                         .forEach { tab ->
                             RightPanelTabItem(
-                                label = tab.label,
+                                label = strings.text(when(tab) { RightPanelTab.Terminal -> "ui.terminal"; RightPanelTab.Output -> "option.Output"; RightPanelTab.Problems -> "option.Issues"; RightPanelTab.DebugConsole -> "run.debug"; RightPanelTab.Tasks -> "option.Tasks"; else -> "ui.view" }).takeIf { tab in setOf(RightPanelTab.Terminal,RightPanelTab.Output,RightPanelTab.Problems,RightPanelTab.DebugConsole,RightPanelTab.Tasks) } ?: tab.label,
                                 icon = tab.icon,
                                 selected = selected == RightPanelSelection.Builtin(tab),
                                 onClick = { onSelected(RightPanelSelection.Builtin(tab)) },
@@ -5192,7 +5212,7 @@ private fun WorkbenchRightSidebar(
                 }
                 WorkbenchIconActionButton(
                     icon = jcIcon(JCodeIcon.Close),
-                    contentDescription = "Close",
+                    contentDescription = strings.text("ui.close"),
                     onClick = onHide,
                 )
             }
@@ -5255,6 +5275,8 @@ private val SPLIT_HANDLE_WIDTH = 12.dp
  */
 @Composable
 private fun WorkspaceSplitHandle(onDrag: (Float) -> Unit, onDragStopped: () -> Unit) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val onDragState = rememberUpdatedState(onDrag)
     Box(
         modifier = Modifier
@@ -5266,7 +5288,7 @@ private fun WorkspaceSplitHandle(onDrag: (Float) -> Unit, onDragStopped: () -> U
                 state = rememberDraggableState { delta -> onDragState.value(delta) },
                 onDragStopped = { onDragStopped() },
             )
-            .semantics { contentDescription = "Resize editor and panel" },
+            .semantics { contentDescription = strings.text("ui.resizeEditorAndPanel") },
         contentAlignment = Alignment.Center,
     ) {
         // A short bar at the midpoint, so the strip reads as something to grab rather than a border.
@@ -5336,6 +5358,8 @@ private fun RightPanelTabItem(
  */
 @Composable
 private fun VsixTitleActionsMenu(extension: dev.blamspot.jcode.feature.marketplace.InstalledExtension) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val actions = VsixViewHolder.titleActions[extension.id].orEmpty()
     val session = VsixViewHolder.get(extension.id) ?: return
     val context = LocalContext.current
@@ -5363,7 +5387,7 @@ private fun VsixTitleActionsMenu(extension: dev.blamspot.jcode.feature.marketpla
                 // Ctrl+V covers a hardware keyboard; this is the same paste for touch, where
                 // Chromium's own menu offers nothing for an image on the clipboard.
                 if (canPasteImage) {
-                    add(ContextAction(JCodeIcon.Paste, "Paste image") { session.pasteClipboardImage() })
+                    add(ContextAction(JCodeIcon.Paste, strings.text("ui.pasteImage")) { session.pasteClipboardImage() })
                 }
                 actions.forEach { action ->
                     add(ContextAction(contributedMenuIcon(action.codicon), action.title) { session.execute(action.id) })
@@ -5473,12 +5497,14 @@ private fun UnsavedChangesDialog(
     // third button already serves as Cancel, so the row never shows two cancels.
     onCancel: (() -> Unit)? = null,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Unsaved changes") },
+        title = { Text(strings.text("ui.unsavedChanges")) },
         text = {
             Text(
-                if (titles.size == 1) "\"${titles.first()}\" has unsaved changes."
+                if (titles.size == 1) strings.text("files.unsavedNamed", mapOf("name" to (titles.first()).toString()))
                 else "These files have unsaved changes:\n" + titles.joinToString("\n") { "•  $it" },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -5487,15 +5513,15 @@ private fun UnsavedChangesDialog(
         // Destructive "Discard" is kept out of the rightmost (reflexive-tap) slot; "Save" is the safe
         // primary at the end.
         confirmButton = {
-            CompactDestructiveButton(text = "Discard", onClick = onDiscard)
+            CompactDestructiveButton(text = strings.text("ui.discard"), onClick = onDiscard)
             if (thirdLabel != null && onThird != null) {
                 CompactOutlinedButton(text = thirdLabel, onClick = onThird)
             }
-            CompactFilledButton(text = "Save", onClick = onSave)
+            CompactFilledButton(text = strings.text("ui.save"), onClick = onSave)
         },
         dismissButton = {
             onCancel?.let { cancel ->
-                CompactOutlinedButton(text = "Cancel", onClick = cancel)
+                CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = cancel)
             }
         },
     )
@@ -5514,9 +5540,11 @@ private fun TerminalRunningDialog(
     onCloseUnbusy: () -> Unit,
     onCancel: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(if (runningNames.size == 1) "Running process" else "Running processes") },
+        title = { Text(if (runningNames.size == 1) strings.text("ui.runningProcess") else strings.text("ui.runningProcesses")) },
         text = {
             Text(
                 "Still running:\n" + runningNames.joinToString("\n") { "•  $it" },
@@ -5527,13 +5555,13 @@ private fun TerminalRunningDialog(
         // Destructive "Kill" is kept out of the rightmost (reflexive-tap) slot; "Cancel" is the safe
         // default at the end.
         confirmButton = {
-            CompactDestructiveButton(text = "Kill", onClick = onKill)
+            CompactDestructiveButton(text = strings.text("ui.kill"), onClick = onKill)
             CompactOutlinedButton(
-                text = "Close Unbusy",
+                text = strings.text("ui.closeUnbusy"),
                 onClick = onCloseUnbusy,
                 enabled = closeUnbusyEnabled,
             )
-            CompactFilledButton(text = "Cancel", onClick = onCancel)
+            CompactFilledButton(text = strings.text("ui.cancel"), onClick = onCancel)
         },
         dismissButton = {},
     )
@@ -5556,6 +5584,8 @@ private fun TerminalSidebarContent(
     onRemoveTerminalSession: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Column(modifier = modifier.fillMaxSize()) {
         var menuForId by remember { mutableStateOf<String?>(null) }
         val orderedSessionIds = terminalSessionIds.sortedBy { it !in pinnedTerminalIds }
@@ -5623,7 +5653,7 @@ private fun TerminalSidebarContent(
                             if (isPinned) {
                                 Icon(
                                     painter = jcIcon(JCodeIcon.Pin),
-                                    contentDescription = "Pinned",
+                                    contentDescription = strings.text("ui.pinned"),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(IconSize.xxs),
                                 )
@@ -5651,7 +5681,7 @@ private fun TerminalSidebarContent(
                             // tab to switch can't close it). A plain clickable Box keeps the touch target
                             // tight (18dp) — an IconButton's 48dp minimum would spill over the title.
                             if (isActive && !isPinned && !LocalTabCloseButtonSetting.current.hidden) {
-                                JcTooltip("Close terminal") {
+                                JcTooltip(strings.text("ui.closeTerminal")) {
                                     Box(
                                         modifier = Modifier
                                             .size(18.dp)
@@ -5672,28 +5702,28 @@ private fun TerminalSidebarContent(
                             expanded = menuForId == sessionId,
                             onDismissRequest = { menuForId = null },
                             quickActions = listOf(
-                                ContextAction(JCodeIcon.Close, "Close") { requestCloseTerminals(listOf(sessionId)) },
+                                ContextAction(JCodeIcon.Close, strings.text("ui.close")) { requestCloseTerminals(listOf(sessionId)) },
                             ),
                             listActions = buildList {
                                 if (!isRelocated) {
-                                    add(ContextAction(JCodeIcon.Pin, if (isPinned) "Unpin" else "Pin") {
+                                    add(ContextAction(JCodeIcon.Pin, if (isPinned) strings.text("ui.unpin") else strings.text("ui.pin")) {
                                         onSetTerminalPinned(sessionId, !isPinned)
                                     })
                                 }
-                                add(ContextAction(JCodeIcon.Clear, "Clear") {
+                                add(ContextAction(JCodeIcon.Clear, strings.text("ui.clear")) {
                                     terminalSessionFor(sessionId)?.pty?.write(byteArrayOf(0x0C))
                                 })
-                                add(ContextAction(JCodeIcon.Close, "Close others") {
+                                add(ContextAction(JCodeIcon.Close, strings.text("ui.closeOthers")) {
                                     requestCloseTerminals(terminalSessionIds.filter { it != sessionId && it !in pinnedTerminalIds })
                                 })
-                                add(ContextAction(JCodeIcon.Close, "Close all") {
+                                add(ContextAction(JCodeIcon.Close, strings.text("ui.closeAll")) {
                                     requestCloseTerminals(terminalSessionIds.filter { it !in pinnedTerminalIds })
                                 })
                             },
                         )
                     }
                 }
-                JcTooltip("New terminal") {
+                JcTooltip(strings.text("ui.newTerminal")) {
                     IconButton(
                         onClick = onAddTerminalSession,
                         modifier = Modifier.size(width = 32.dp, height = 30.dp),
@@ -5726,20 +5756,20 @@ private fun TerminalSidebarContent(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Terminal unavailable",
+                    text = strings.text("ui.terminalUnavailable"),
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Finish distro setup first, then open the terminal again.",
+                    text = strings.text("ui.finishDistroSetupFirstThenOpenTheTerminalAgain"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     textAlign = TextAlign.Center,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 FilledTonalButton(onClick = onOpenEnvironmentWizard) {
-                    Text("Open setup")
+                    Text(strings.text("ui.openSetup"))
                 }
             }
         } else if (terminalSessionIds.isNotEmpty() && activeTerminalPty != null) {
@@ -5823,14 +5853,14 @@ private fun TerminalSidebarContent(
                         offset = menuOffset,
                         quickActions = buildList {
                             if (req.view.hasSelection()) {
-                                add(ContextAction(JCodeIcon.Copy, "Copy") { req.view.contextCopy() })
+                                add(ContextAction(JCodeIcon.Copy, strings.text("ui.copy")) { req.view.contextCopy() })
                             }
-                            add(ContextAction(JCodeIcon.Paste, "Paste") { req.view.contextPaste() })
+                            add(ContextAction(JCodeIcon.Paste, strings.text("ui.paste")) { req.view.contextPaste() })
                         },
                         listActions = listOf(
-                            ContextAction(JCodeIcon.Cursor, "Select Text") { req.view.beginTextSelection() },
-                            ContextAction(JCodeIcon.SelectAll, "Select all") { req.view.contextSelectAll() },
-                            ContextAction(JCodeIcon.Clear, "Clear") { req.view.contextClear() },
+                            ContextAction(JCodeIcon.Cursor, strings.text("ui.selectText")) { req.view.beginTextSelection() },
+                            ContextAction(JCodeIcon.SelectAll, strings.text("ui.selectAll")) { req.view.contextSelectAll() },
+                            ContextAction(JCodeIcon.Clear, strings.text("ui.clear")) { req.view.contextClear() },
                         ),
                     )
                 }
@@ -5852,12 +5882,12 @@ private fun TerminalSidebarContent(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                     )
                     Text(
-                        text = "No terminal sessions",
+                        text = strings.text("ui.noTerminalSessions"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     )
                     Text(
-                        text = "Tap + to start a new terminal",
+                        text = strings.text("ui.tapToStartANewTerminal"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                     )
@@ -5878,11 +5908,13 @@ private fun TerminalSidebarContent(
 private fun OutputSidebarContent(
     modifier: Modifier = Modifier,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val lines by OutputLog.lines.collectAsStateWithLifecycle()
     Box(modifier = modifier.fillMaxSize()) {
         if (lines.isEmpty()) {
             Text(
-                text = "Build logs and tool output will appear here.",
+                text = strings.text("ui.buildLogsAndToolOutputWillAppearHere"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(Space.md),
@@ -5920,7 +5952,7 @@ private fun OutputSidebarContent(
             Box(modifier = Modifier.align(Alignment.TopEnd).padding(Space.xs)) {
                 WorkbenchIconActionButton(
                     icon = jcIcon(JCodeIcon.Clear),
-                    contentDescription = "Clear output",
+                    contentDescription = strings.text("ui.clearOutput"),
                     onClick = { OutputLog.clear() },
                 )
             }
@@ -5967,6 +5999,8 @@ private fun WorkbenchBackHandler(
     onTerminateAll: () -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val activity = LocalContext.current.findActivity()
     val scope = rememberCoroutineScope()
     var lastBackAt by remember { mutableStateOf(0L) }
@@ -5989,7 +6023,7 @@ private fun WorkbenchBackHandler(
                     }
                 } else {
                     lastBackAt = now
-                    scope.launch { snackbarHostState.showSnackbar("Press back again to exit") }
+                    scope.launch { snackbarHostState.showSnackbar(strings.text("ui.pressBackAgainToExit")) }
                 }
             }
         }
@@ -5997,7 +6031,7 @@ private fun WorkbenchBackHandler(
     exitPromptItems?.let { items ->
         AlertDialog(
             onDismissRequest = { exitPromptItems = null },
-            title = { Text("Exit JCode?") },
+            title = { Text(strings.text("ui.exitJCode")) },
             text = {
                 Text("Still running:\n" + items.joinToString("\n") { "•  $it" })
             },
@@ -6005,7 +6039,7 @@ private fun WorkbenchBackHandler(
             // same way the unsaved-changes and running-process prompts order theirs.
             confirmButton = {
                 CompactDestructiveButton(
-                    text = "Terminate & exit",
+                    text = strings.text("ui.terminateExit"),
                     onClick = {
                         exitPromptItems = null
                         onTerminateAll()
@@ -6013,12 +6047,12 @@ private fun WorkbenchBackHandler(
                     },
                 )
                 CompactFilledButton(
-                    text = "Run in background",
+                    text = strings.text("ui.runInBackground"),
                     onClick = { exitPromptItems = null; activity?.moveTaskToBack(true) },
                 )
             },
             dismissButton = {
-                CompactOutlinedButton(text = "Cancel", onClick = { exitPromptItems = null })
+                CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = { exitPromptItems = null })
             },
         )
     }

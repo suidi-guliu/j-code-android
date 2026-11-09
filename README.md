@@ -8,6 +8,10 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开�
 - 自有签名扩展库、本地导入、权限审阅、启停/更新/回滚；无 JCode 或 VS Code 市场替代入口。
 - sui-code 原生 Light/Dark 设计系统及尺寸驱动的文件栏、编辑器、底部 Terminal。
 
+## v0.5.3 简体中文语言包
+
+常用界面通过独立、可启停的 `.suik` 提供简体中文。英文仍为默认回退，中文不内置到APK；原有环境、图标与语言Kit保留。[安装与开发说明](localization/README.md) · [实际覆盖及缺口](docs/localization/locale-key-audit.md) · [交付报告](docs/localization/report-v0.5.3.md)。需要先覆盖升级主程序，再独立导入语言包；来源和权限确认仍显示宿主受保护英文。
+
 ## v0.5.2 启动修复
 
 修复Android ICU导致默认英文首屏崩溃的表达式，保留UI与全部用户环境。[启动修复报告](docs/sui-code-startup-recovery-0.5.2.md)。独立Android16 AVD的保留数据升级、全新启动和8例回归及2例Project验证已通过。[下载修复APK及证据](https://github.com/suidi-guliu/j-code-android/actions/runs/42557387384/artifacts/13647164754) · [Actions运行日志](https://github.com/suidi-guliu/j-code-android/actions/runs/42557387384)。不宣称ARM64平板已验收。

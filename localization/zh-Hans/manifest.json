@@ -1,0 +1,23 @@
+{
+  "id": "dev.suicode.localization.zh-hans",
+  "name": "sui-code Simplified Chinese",
+  "author": "sui-code contributors",
+  "description": "Simplified Chinese interface resources for sui-code 0.5.3 and later. No language runtime or development tools required. Unsigned; review the source and permissions before installing.",
+  "version": "1.0.0",
+  "kind": "suik",
+  "api": {
+    "min": 4,
+    "max": 4
+  },
+  "permissions": [
+    "ui.localization"
+  ],
+  "dependencies": [],
+  "components": [
+    {
+      "id": "strings",
+      "type": "localization",
+      "entry": "ide/strings.json"
+    }
+  ]
+}

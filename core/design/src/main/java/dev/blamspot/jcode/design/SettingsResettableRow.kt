@@ -37,6 +37,8 @@ fun SettingsResettableRow(
     onReset: (() -> Unit)?,
     content: @Composable () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     if (onReset == null) {
         content()
         return
@@ -83,7 +85,7 @@ fun SettingsResettableRow(
                 onDismissRequest = { menuAt = null },
                 offset = at,
                 listActions = listOf(
-                    ContextAction(JCodeIcon.Discard, "Reset this setting", enabled = modified) { onReset() },
+                    ContextAction(JCodeIcon.Discard, strings.text("ui.Resetthissetting"), enabled = modified) { onReset() },
                 ),
             )
         }

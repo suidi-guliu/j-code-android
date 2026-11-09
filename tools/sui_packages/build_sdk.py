@@ -6,8 +6,8 @@ def main(destination):
  dst=pathlib.Path(destination).resolve()
  if dst.exists() and any(dst.iterdir()):raise ValueError('Destination must be empty')
  dst.mkdir(parents=True,exist_ok=True)
- for rel in ['core/native-packages/src/main/java','docs/specifications','native-library']:
-  shutil.copytree(ROOT/rel,dst/rel,dirs_exist_ok=True)
+ for rel in ['core/native-packages/src/main/java','docs/specifications','native-library','localization','tools/localization']:
+  shutil.copytree(ROOT/rel,dst/rel,dirs_exist_ok=True,ignore=shutil.ignore_patterns("__pycache__","*.pyc"))
  for rel in ['LICENSE','gradlew','gradlew.bat','gradle/wrapper/gradle-wrapper.jar','gradle/wrapper/gradle-wrapper.properties']:
   target=dst/rel;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/rel,target)
  (dst/'tools/sui_packages').mkdir(parents=True,exist_ok=True)
@@ -29,7 +29,7 @@ application { mainClass.set("dev.suicode.packages.PackageTool") }
   rel=p.relative_to(ROOT);assert p.read_bytes()==(dst/rel).read_bytes()
   sums.append(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+rel.as_posix())
  (dst/'API-SOURCE-SHA256SUMS').write_text('\n'.join(sums)+'\n')
- (dst/'README.md').write_text('''# sui-code Native SDK 0.4 / Core API 4
+ (dst/'README.md').write_text('''# sui-code Native SDK 0.4.1 / Core API 4 · UI catalog 0.5.3
 
 This standalone JVM SDK copies the exact production Kotlin verifier, independent loaders, authorization API, native recipe/dataflow interpreter and design model. API-SOURCE-SHA256SUMS records byte identity. It does not emulate Android services or embed runtimes.
 

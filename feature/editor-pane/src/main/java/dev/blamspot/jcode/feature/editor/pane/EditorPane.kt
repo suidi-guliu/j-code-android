@@ -104,6 +104,8 @@ fun EditorPane(
     onFontSizeStep: ((Int) -> Unit)? = null,
     pageContent: @Composable (EditorTab) -> Unit = {},
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Column(modifier = modifier.clipToBounds()) {
         // Tab strip — explicit fixed height so it's never compressed. Collapses together with the
         // workbench header when the palette's "Hide Header and Tabs" mode is on.
@@ -158,12 +160,12 @@ fun EditorPane(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
                     Text(
-                        text = "No file open",
+                        text = strings.text("ui.noFileOpen"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "Open a file to start editing",
+                        text = strings.text("ui.openAFileToStartEditing"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -183,6 +185,8 @@ private fun TabStrip(
     onTabClosed: (String) -> Unit,
     onOpenFile: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -205,7 +209,7 @@ private fun TabStrip(
             }
 
             // Open file button
-            JcTooltip("Open file") {
+            JcTooltip(strings.text("ui.openFile")) {
                 IconButton(
                     onClick = onOpenFile,
                     modifier = Modifier
@@ -230,6 +234,8 @@ private fun TabItem(
     onSelected: () -> Unit,
     onClosed: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     var menuOpen by remember { mutableStateOf(false) }
     var colorDialogOpen by remember { mutableStateOf(false) }
     val tabActions = LocalEditorTabActions.current
@@ -257,7 +263,7 @@ private fun TabItem(
             if (tab.pinned) {
                 Icon(
                     painter = jcIcon(JCodeIcon.Pin),
-                    contentDescription = "Pinned",
+                    contentDescription = strings.text("ui.pinned"),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(13.dp),
                 )
@@ -274,7 +280,7 @@ private fun TabItem(
                 )
             }
             MiddleEllipsisText(
-                text = tab.title,
+                text = tab.localizedTitle(),
                 maxWidth = LocalTabMaxSize.current.size.titleMaxWidth,
                 style = MaterialTheme.typography.labelMedium,
             )
@@ -289,14 +295,14 @@ private fun TabItem(
                     horizontalArrangement = Arrangement.spacedBy(Space.xxs),
                 ) {
                     if (tab.isDirty) {
-                        JcTooltip("Unsaved changes") {
+                        JcTooltip(strings.text("ui.unsavedChanges")) {
                             Box(modifier = Modifier.size(16.dp), contentAlignment = Alignment.Center) {
                                 ModifiedDot()
                             }
                         }
                     }
                     if (showClose) {
-                        JcTooltip("Close tab") {
+                        JcTooltip(strings.text("ui.closeTab")) {
                             // Plain clickable Box (not IconButton) so the touch target stays a tight 20dp;
                             // an IconButton's enforced 48dp minimum spills over the title and closes the
                             // tab on a title tap.
@@ -322,14 +328,14 @@ private fun TabItem(
             expanded = menuOpen,
             onDismissRequest = { menuOpen = false },
             listActions = buildList {
-                add(ContextAction(JCodeIcon.Pin, if (tab.pinned) "Unpin" else "Pin") { tabActions.onTogglePin(tab.id) })
+                add(ContextAction(JCodeIcon.Pin, if (tab.pinned) strings.text("ui.unpin") else strings.text("ui.pin")) { tabActions.onTogglePin(tab.id) })
                 // Real file tabs only (non-blank path), and hidden when tab coloring is Disabled.
                 if (!tab.isPage && tab.filePath.path.isNotBlank() && tabColors.pickerEnabled) {
-                    add(ContextAction(JCodeIcon.Palette, "Change Tab Color") { colorDialogOpen = true })
+                    add(ContextAction(JCodeIcon.Palette, strings.text("ui.changeTabColor")) { colorDialogOpen = true })
                 }
-                add(ContextAction(JCodeIcon.Close, "Close") { onClosed() })
-                add(ContextAction(JCodeIcon.Close, "Close others") { tabActions.onCloseOthers(tab.id) })
-                add(ContextAction(JCodeIcon.Close, "Close to the right") { tabActions.onCloseToRight(tab.id) })
+                add(ContextAction(JCodeIcon.Close, strings.text("ui.close")) { onClosed() })
+                add(ContextAction(JCodeIcon.Close, strings.text("ui.closeOthers")) { tabActions.onCloseOthers(tab.id) })
+                add(ContextAction(JCodeIcon.Close, strings.text("ui.closeToTheRight")) { tabActions.onCloseToRight(tab.id) })
             },
         )
         if (colorDialogOpen) {
@@ -377,6 +383,8 @@ fun EditorViewHost(
     /** Ctrl and the wheel: +1 a step bigger, -1 smaller. Null leaves the editor un-zoomable. */
     onFontSizeStep: ((Int) -> Unit)? = null,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val density = LocalDensity.current
     var view by remember { mutableStateOf<EditorView?>(null) }
     var menu by remember { mutableStateOf<EditorContextRequest?>(null) }
@@ -603,25 +611,25 @@ fun EditorViewHost(
                     }
                 },
                 quickActions = listOf(
-                    ContextAction(JCodeIcon.Copy, "Copy") { view?.copySelection() },
-                    ContextAction(JCodeIcon.Cut, "Cut") { view?.cutSelection() },
-                    ContextAction(JCodeIcon.Paste, "Paste") { view?.pasteClipboard() },
+                    ContextAction(JCodeIcon.Copy, strings.text("ui.copy")) { view?.copySelection() },
+                    ContextAction(JCodeIcon.Cut, strings.text("ui.cut")) { view?.cutSelection() },
+                    ContextAction(JCodeIcon.Paste, strings.text("ui.paste")) { view?.pasteClipboard() },
                 ),
                 listActions = buildList {
-                    add(ContextAction(JCodeIcon.Cursor, "Select Text") { view?.beginTextSelection() })
-                    add(ContextAction(JCodeIcon.SelectAll, "Select all") { view?.selectAll() })
+                    add(ContextAction(JCodeIcon.Cursor, strings.text("ui.selectText")) { view?.beginTextSelection() })
+                    add(ContextAction(JCodeIcon.SelectAll, strings.text("ui.selectAll")) { view?.selectAll() })
                     menuExtras.onGoToLine?.let { go ->
-                        add(ContextAction(JCodeIcon.GoToLine, "Go to line") { go() })
+                        add(ContextAction(JCodeIcon.GoToLine, strings.text("ui.goToLineText77922d")) { go() })
                     }
                     menuExtras.onFindText?.let { find ->
-                        add(ContextAction(JCodeIcon.Search, "Find text") { find(req.word) })
+                        add(ContextAction(JCodeIcon.Search, strings.text("ui.findText")) { find(req.word) })
                     }
                     menuExtras.previewToggle?.let { toggle ->
                         add(ContextAction(menuExtras.previewIcon, menuExtras.previewLabel) { toggle() })
                     }
                     if (languageActionsEnabled) {
                         EditorLanguageAction.entries.forEach { action ->
-                            add(ContextAction(action.menuIcon(), action.label) {
+                            add(ContextAction(action.menuIcon(), strings.text(when(action) { EditorLanguageAction.GoToDefinition -> "ui.GotoDefinition";EditorLanguageAction.FindReferences -> "ui.FindReferences";EditorLanguageAction.RenameSymbol -> "ui.RenameSymbol";EditorLanguageAction.FormatDocument -> "ui.formatDocument" })) {
                                 onLanguageAction(action, req.word, req.offset)
                             })
                         }

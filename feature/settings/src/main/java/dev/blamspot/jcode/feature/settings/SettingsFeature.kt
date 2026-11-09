@@ -190,6 +190,8 @@ object SettingsFeature {
         isUserWorkspace: Boolean = false,
         modifier: Modifier = Modifier,
     ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
         val iconSettings = LocalIconSetSettings.current
         val tabCloseSetting = LocalTabCloseButtonSetting.current
         val editorDragSetting = LocalEditorDragMovesCursor.current
@@ -293,9 +295,9 @@ object SettingsFeature {
                             text = {
                                 Text(
                                     text = when (scope) {
-                                        null -> "GLOBAL"
-                                        ConfigScope.Workspace -> "FILES"
-                                        ConfigScope.Project -> "PROJECT"
+                                        null -> strings.text("ui.gLOBAL")
+                                        ConfigScope.Workspace -> strings.text("ui.fILES")
+                                        ConfigScope.Project -> strings.text("ui.pROJECT")
                                     },
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.SemiBold,
@@ -312,7 +314,7 @@ object SettingsFeature {
                         unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         text = {
                             Text(
-                                text = "ENV VAR",
+                                text = strings.text("ui.eNVVAR"),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -331,15 +333,16 @@ object SettingsFeature {
             val showGlobalTab = safeTab == 0
             val showScopedTab = safeTab in 1 until tabScopes.size
             if (showGlobalTab) {
-            SettingsGroup("Appearance") {
+            SettingsGroup("ui.appearance") {
             SettingsCard(
-                title = "Appearance",
-                description = "System follows your device's light/dark setting.",
+                title = strings.text("ui.appearance"),
+                description = strings.text("ui.systemFollowsYourDeviceSLightDarkSetting"),
                 keywords = "appearance theme dark light system color mode scheme",
             ) {
                 SettingsDropdownRow(
-                    label = "Mode",
+                    label = strings.text("ui.mode"),
                     options = ThemeMode.entries.map { it.name },
+                    optionLabel = { strings.text(when(ThemeMode.valueOf(it)) { ThemeMode.System -> "option.System"; ThemeMode.Light -> "option.Light"; ThemeMode.Dark -> "option.Dark" }) },
                     selected = themeMode.name,
                     onSelect = { onUpdateThemeMode(ThemeMode.valueOf(it)) },
                     modified = workspaceConfig?.theme?.id != null || projectConfig?.theme?.id != null,
@@ -348,8 +351,8 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Theme bundle",
-                description = "Color palette applied across the app.",
+                title = strings.text("ui.themeBundle"),
+                description = strings.text("ui.colorPaletteAppliedAcrossTheApp"),
                 keywords = "theme bundle color palette catppuccin dracula midnight oled black scheme appearance",
             ) {
                 val activeBundle = themeBundleId.ifEmpty { ThemeBundleRegistry.default.id }
@@ -370,8 +373,8 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "UI icons",
-                description = "Icon set used for the app's own toolbars, tabs and menus.",
+                title = strings.text("ui.uIIcons"),
+                description = strings.text("ui.iconSetUsedForTheAppSOwnToolbars"),
                 keywords = "icon bundle icons set ui material rounded jcode line appearance " +
                     iconSettings.uiSets.joinToString(" ") { it.name },
             ) {
@@ -389,15 +392,15 @@ object SettingsFeature {
             // extension installed this card would offer exactly one choice — the one already in use.
             if (iconSettings.fileSets.isNotEmpty()) {
                 SettingsCard(
-                    title = "File icons",
-                    description = "Icon set used for files and folders in the Explorer, tabs and search results.",
+                    title = strings.text("ui.fileIcons"),
+                    description = strings.text("ui.iconSetUsedForFilesAndFoldersInThe"),
                     keywords = "icon bundle icons set file files folder explorer appearance " +
                         iconSettings.fileSets.joinToString(" ") { it.name },
                 ) {
                     val activeFiles = iconSettings.activeFileSetId
                     FileIconSetRow(
                         name = "None",
-                        description = "JCode's own folder and file glyphs, from the UI icon set.",
+                        description = strings.text("ui.jCodeSOwnFolderAndFileGlyphsFromThe"),
                         detail = null,
                         selected = activeFiles == FileIconSetRegistry.NONE_ID,
                         onClick = { iconSettings.onSelectFileSet(FileIconSetRegistry.NONE_ID) },
@@ -415,9 +418,8 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Fonts",
-                description = "Monospace typefaces for the code editor and the terminal. More fonts " +
-                    "can be added by extensions.",
+                title = strings.text("ui.fonts"),
+                description = strings.text("ui.monospaceTypefacesForTheCodeEditorAndTheTerminal"),
                 keywords = "font fonts family typeface monospace editor terminal jetbrains mono system code appearance " +
                     fontSettings.options.joinToString(" ") { it.name },
             ) {
@@ -428,7 +430,7 @@ object SettingsFeature {
                 val fontLabel: (String) -> String =
                     { id -> fontSettings.options.firstOrNull { it.id == id }?.name ?: id }
                 SettingsDropdownRow(
-                    label = "Editor font",
+                    label = strings.text("ui.editorFont"),
                     options = fontOptionIds,
                     selected = fontSettings.editorFontId,
                     onSelect = fontSettings.onSelectEditorFont,
@@ -437,7 +439,7 @@ object SettingsFeature {
                     onReset = { fontSettings.onSelectEditorFont(fontSettings.editorDefaultId) },
                 )
                 SettingsDropdownRow(
-                    label = "Terminal font",
+                    label = strings.text("ui.terminalFont"),
                     options = fontOptionIds,
                     selected = fontSettings.terminalFontId,
                     onSelect = fontSettings.onSelectTerminalFont,
@@ -448,13 +450,13 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Terminal",
-                description = "Text size for terminal sessions. Applies to every open terminal.",
+                title = strings.text("ui.terminal"),
+                description = strings.text("ui.textSizeForTerminalSessionsAppliesToEveryOpen"),
                 keywords = "terminal font size text scale sp bigger smaller zoom console shell tty readable",
             ) {
                 val terminalFontSizeSetting = LocalTerminalFontSizeSetting.current
                 StepperRow(
-                    label = "Font size",
+                    label = strings.text("ui.fontSize"),
                     value = "${terminalFontSizeSetting.value.toInt()} sp",
                     onDecrease = { terminalFontSizeSetting.onChange((terminalFontSizeSetting.value - 1f).coerceAtLeast(6f)) },
                     onIncrease = { terminalFontSizeSetting.onChange((terminalFontSizeSetting.value + 1f).coerceAtMost(40f)) },
@@ -464,15 +466,14 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Extensions",
-                description = "Text size inside imported .vsix extensions. A scale rather than a " +
-                    "size, because each extension styles its own page.",
+                title = strings.text("ui.extensions"),
+                description = strings.text("ui.textSizeInsideImportedVsixExtensionsAScaleRather"),
                 keywords = "extension extensions vsix font size text scale zoom bigger smaller " +
                     "readable webview marketplace imported",
             ) {
                 val extensionFontSize = LocalExtensionFontSizeSetting.current
                 StepperRow(
-                    label = "Font size",
+                    label = strings.text("ui.fontSize"),
                     value = "${extensionFontSize.percent}%",
                     onDecrease = { extensionFontSize.onChange((extensionFontSize.percent - 10).coerceAtLeast(50)) },
                     onIncrease = { extensionFontSize.onChange((extensionFontSize.percent + 10).coerceAtMost(300)) },
@@ -484,14 +485,13 @@ object SettingsFeature {
             // Hidden on displays without a cutout (desktop mode, external display, notchless devices).
             if (cutoutSetting.hasCutout) {
                 SettingsCard(
-                    title = "Display cutout",
-                    description = "Keep the app clear of the camera notch or punch-hole. When off, the " +
-                        "app draws into the cutout area for a full-screen layout.",
+                    title = strings.text("ui.displayCutout"),
+                    description = strings.text("ui.keepTheAppClearOfTheCameraNotchOr"),
                     keywords = "cutout notch punch hole camera display safe area letterbox fullscreen screen edge insets",
                 ) {
                     ToggleRow(
-                        label = "Respect device cutout",
-                        supporting = "Lay out the app inside the cutout's safe area instead of drawing behind it.",
+                        label = strings.text("ui.respectDeviceCutout"),
+                        supporting = strings.text("ui.layOutTheAppInsideTheCutoutSSafe"),
                         checked = cutoutSetting.respect,
                         onCheckedChange = cutoutSetting.onChange,
                         modified = cutoutSetting.respect != SettingsDefaults.RESPECT_DEVICE_CUTOUT,
@@ -501,82 +501,76 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Terminal panel",
-                description = "Terminal, output, issues and debugging share the bottom panel.",
+                title = strings.text("ui.terminalPanel"),
+                description = strings.text("ui.terminalOutputIssuesAndDebuggingShareTheBottomPanel"),
                 keywords = "terminal panel height split resize bottom output debug",
             ) {
                 val setting=LocalRightDrawerSetting.current
-                Text("Panel height: ${(setting.widthFraction.coerceIn(0.20f,0.55f)*100).toInt()}% of the available area")
+                Text(strings.text("settings.panelHeight", mapOf("percent" to ((setting.widthFraction.coerceIn(0.20f,0.55f)*100).toInt()).toString())))
                 androidx.compose.material3.Slider(value=setting.widthFraction.coerceIn(0.20f,0.55f),onValueChange=setting.onSetWidthFraction,valueRange=0.20f..0.55f,steps=6)
-                Text("Drag the divider or use this keyboard-accessible slider. The panel always leaves room for the editor.")
+                Text(strings.text("ui.dragTheDividerOrUseThisKeyboardAccessibleSlider"))
             }
 
             SettingsCard(
-                title = "Header",
-                description = "The bar across the top of the workbench, with the project name and " +
-                    "quick actions.",
+                title = strings.text("ui.header"),
+                description = strings.text("ui.theBarAcrossTheTopOfTheWorkbenchWith"),
                 keywords = "header top bar app bar terminal command palette button action hide disable remove",
             ) {
                 val headerActionSetting = LocalHeaderActionSetting.current
                 SettingsDropdownRow(
-                    label = "Action button",
-                    supporting = "The button beside Run. Hiding it leaves the terminal reachable " +
-                        "from the right drawer.",
+                    label = strings.text("ui.actionButton"),
+                    supporting = strings.text("ui.theButtonBesideRunHidingItLeavesTheTerminal"),
                     options = HeaderActionButton.entries.map { it.name },
                     selected = headerActionSetting.button.name,
                     onSelect = { headerActionSetting.onChange(HeaderActionButton.valueOf(it)) },
-                    optionLabel = { headerActionButtonLabel(HeaderActionButton.valueOf(it)) },
+                    optionLabel = { headerActionButtonLabel(strings, HeaderActionButton.valueOf(it)) },
                     modified = headerActionSetting.button != SettingsDefaults.HEADER_ACTION_BUTTON,
                     onReset = { headerActionSetting.onChange(SettingsDefaults.HEADER_ACTION_BUTTON) },
                 )
             }
 
             SettingsCard(
-                title = "Bottom status bar",
-                description = "The bar at the bottom of the workbench showing branch, distro, and " +
-                    "cursor position.",
+                title = strings.text("ui.bottomStatusBar"),
+                description = strings.text("ui.theBarAtTheBottomOfTheWorkbenchShowing"),
                 keywords = "bottom status bar branch distro cursor position hide always show soft keyboard chrome space",
             ) {
                 SettingsDropdownRow(
-                    label = "Show",
+                    label = strings.text("ui.show"),
                     options = BottomBarVisibility.entries.map { it.name },
                     selected = bottomBarSetting.visibility.name,
                     onSelect = { bottomBarSetting.onChange(BottomBarVisibility.valueOf(it)) },
-                    optionLabel = { bottomBarVisibilityLabel(BottomBarVisibility.valueOf(it)) },
+                    optionLabel = { bottomBarVisibilityLabel(strings, BottomBarVisibility.valueOf(it)) },
                     modified = bottomBarSetting.visibility != SettingsDefaults.BOTTOM_STATUS_BAR,
                     onReset = { bottomBarSetting.onChange(SettingsDefaults.BOTTOM_STATUS_BAR) },
                 )
             }
 
             SettingsCard(
-                title = "Extra keys row",
-                description = "A Termux-style key row (Esc, Tab, Ctrl, arrows and more) shown above " +
-                    "the keyboard while typing in the terminal or editor. Choose when it appears in " +
-                    "each orientation.",
+                title = strings.text("ui.extraKeysRow"),
+                description = strings.text("ui.aTermuxStyleKeyRowEscTabCtrlArrows"),
                 keywords = "extra keys row esc ctrl alt tab arrows home end pgup pgdn page terminal editor keyboard termux orientation portrait landscape hidden always with soft keyboard function keys f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 fn htop midnight commander",
             ) {
                 SettingsDropdownRow(
-                    label = "Portrait",
+                    label = strings.text("ui.portrait"),
                     options = ExtraKeysVisibility.entries.map { it.name },
                     selected = extraKeysSetting.portrait.name,
                     onSelect = { extraKeysSetting.onChangePortrait(ExtraKeysVisibility.valueOf(it)) },
-                    optionLabel = { extraKeysVisibilityLabel(ExtraKeysVisibility.valueOf(it)) },
+                    optionLabel = { extraKeysVisibilityLabel(strings, ExtraKeysVisibility.valueOf(it)) },
                     modified = extraKeysSetting.portrait != SettingsDefaults.EXTRA_KEYS_PORTRAIT,
                     onReset = { extraKeysSetting.onChangePortrait(SettingsDefaults.EXTRA_KEYS_PORTRAIT) },
                 )
                 SettingsDropdownRow(
-                    label = "Landscape",
+                    label = strings.text("ui.landscape"),
                     options = ExtraKeysVisibility.entries.map { it.name },
                     selected = extraKeysSetting.landscape.name,
                     onSelect = { extraKeysSetting.onChangeLandscape(ExtraKeysVisibility.valueOf(it)) },
-                    optionLabel = { extraKeysVisibilityLabel(ExtraKeysVisibility.valueOf(it)) },
+                    optionLabel = { extraKeysVisibilityLabel(strings, ExtraKeysVisibility.valueOf(it)) },
                     modified = extraKeysSetting.landscape != SettingsDefaults.EXTRA_KEYS_LANDSCAPE,
                     onReset = { extraKeysSetting.onChangeLandscape(SettingsDefaults.EXTRA_KEYS_LANDSCAPE) },
                 )
                 ToggleRow(
-                    label = "Function keys",
-                    supporting = "Append F1–F12 chips to the row while a terminal is focused (htop, " +
-                        "midnight commander, and other TUIs use them).",
+                    label = strings.text("ui.functionKeys"),
+                    supporting = strings.text("ui.appendF1F12ChipsToTheRowWhileA"),
                     checked = extraKeysSetting.functionKeys,
                     onCheckedChange = { extraKeysSetting.onChangeFunctionKeys(it) },
                     modified = extraKeysSetting.functionKeys != SettingsDefaults.EXTRA_KEYS_FUNCTION_KEYS,
@@ -586,39 +580,36 @@ object SettingsFeature {
 
             } // end Appearance
 
-            SettingsGroup("Input") {
+            SettingsGroup("option.Input") {
             SettingsCard(
-                title = "Volume keys",
-                description = "Remap the hardware volume buttons to editor/terminal actions. " +
-                    "\"System Default\" keeps normal volume control. Pane actions (arrows, scroll) act on " +
-                    "whichever editor or terminal is focused; hold to repeat arrows and scrolling.",
+                title = strings.text("ui.volumeKeys"),
+                description = strings.text("ui.remapTheHardwareVolumeButtonsToEditorTerminalActions"),
                 keywords = "volume keys button hardware remap bind binding shortcut undo redo arrow scroll " +
                     "command palette input up down page rocker media",
             ) {
                 SettingsDropdownRow(
-                    label = "Volume up",
+                    label = strings.text("ui.volumeUp"),
                     options = VolumeKeyAction.entries.map { it.name },
                     selected = volumeKeysSetting.up.name,
                     onSelect = { volumeKeysSetting.onChangeUp(VolumeKeyAction.valueOf(it)) },
-                    optionLabel = { volumeKeyActionLabel(VolumeKeyAction.valueOf(it), "Vol Up") },
+                    optionLabel = { volumeKeyActionLabel(strings, VolumeKeyAction.valueOf(it), "Vol Up") },
                     modified = volumeKeysSetting.up != SettingsDefaults.VOLUME_UP_ACTION,
                     onReset = { volumeKeysSetting.onChangeUp(SettingsDefaults.VOLUME_UP_ACTION) },
                 )
                 SettingsDropdownRow(
-                    label = "Volume down",
+                    label = strings.text("ui.volumeDown"),
                     options = VolumeKeyAction.entries.map { it.name },
                     selected = volumeKeysSetting.down.name,
                     onSelect = { volumeKeysSetting.onChangeDown(VolumeKeyAction.valueOf(it)) },
-                    optionLabel = { volumeKeyActionLabel(VolumeKeyAction.valueOf(it), "Vol Down") },
+                    optionLabel = { volumeKeyActionLabel(strings, VolumeKeyAction.valueOf(it), "Vol Down") },
                     modified = volumeKeysSetting.down != SettingsDefaults.VOLUME_DOWN_ACTION,
                     onReset = { volumeKeysSetting.onChangeDown(SettingsDefaults.VOLUME_DOWN_ACTION) },
                 )
             }
 
             SettingsCard(
-                title = "Command Palette",
-                description = "Choose which built-in commands the palette offers. Context-dependent " +
-                    "commands only appear when their view is focused (e.g. Go to Line needs an open editor).",
+                title = strings.text("ui.commandPalette"),
+                description = strings.text("ui.chooseWhichBuiltInCommandsThePaletteOffersContext"),
                 keywords = "command palette commands orientation lock fullscreen keep awake screen on " +
                     "hide header tabs zen go to line color search picker eyedropper format document",
             ) {
@@ -638,15 +629,15 @@ object SettingsFeature {
 
             } // end Input
 
-            SettingsGroup("Startup") {
+            SettingsGroup("option.Startup") {
             SettingsCard(
-                title = "Restore last session",
-                description = "Pick up where you left off after closing the app.",
+                title = strings.text("ui.restoreLastSession"),
+                description = strings.text("ui.pickUpWhereYouLeftOffAfterClosingThe"),
                 keywords = "restore session reopen tabs workspace project unsaved recover startup launch",
             ) {
                 ToggleRow(
-                    label = "Restore last session on launch",
-                    supporting = "Reopen the last workspace, project, and editor tabs — including unsaved changes — when JCode starts. Missing files are skipped.",
+                    label = strings.text("ui.restoreLastSessionOnLaunch"),
+                    supporting = strings.text("ui.reopenTheLastWorkspaceProjectAndEditorTabsIncluding"),
                     checked = restoreSessionSetting.enabled,
                     onCheckedChange = restoreSessionSetting.onChange,
                     modified = restoreSessionSetting.enabled != SettingsDefaults.RESTORE_LAST_SESSION,
@@ -659,17 +650,15 @@ object SettingsFeature {
             // Per-extension settings now live on the Extension Settings screen (Extensions list → gear),
             // alongside each extension's permissions — not here in App Settings.
 
-            SettingsGroup("Performance") {
+            SettingsGroup("option.Performance") {
             SettingsCard(
-                title = "Rendering",
-                description = "How JCode draws the UI, editor, and terminal.",
+                title = strings.text("ui.rendering"),
+                description = strings.text("ui.howJCodeDrawsTheUIEditorAndTerminal"),
                 keywords = "performance rendering hardware acceleration gpu software draw graphics lag smooth",
             ) {
                 ToggleRow(
-                    label = "Hardware acceleration",
-                    supporting = "Render the UI, editor, and terminal on the GPU. Turn off only to " +
-                        "troubleshoot rendering glitches on this device — software rendering is much " +
-                        "slower. Takes effect the next time the app starts.",
+                    label = strings.text("ui.hardwareAcceleration"),
+                    supporting = strings.text("ui.renderTheUIEditorAndTerminalOnTheGPU"),
                     checked = perf.hardwareAcceleration,
                     onCheckedChange = perf.onSetHardwareAcceleration,
                     modified = perf.hardwareAcceleration != SettingsDefaults.HARDWARE_ACCELERATION,
@@ -677,33 +666,29 @@ object SettingsFeature {
                 )
             }
             SettingsCard(
-                title = "Resource management",
-                description = "Keep the Linux runtime lean by stopping work you're done with. Each terminal, " +
-                    "run, and debug session holds a proot process tree in memory.",
+                title = strings.text("ui.resourceManagement"),
+                description = strings.text("ui.keepTheLinuxRuntimeLeanByStoppingWorkYou"),
                 keywords = "performance memory cpu battery proot process terminal kill close idle background resource optimize swipe away warn running max instances timeout auto-close nested sub-shell subshell relocate tab bash zsh install toolchain sdk download timeout minutes android",
             ) {
                 ToggleRow(
-                    label = "Warn before closing running processes",
-                    supporting = "When closing a project or workspace with a running terminal command, an active " +
-                        "Build & Run, or a live debug session, ask first before stopping them.",
+                    label = strings.text("ui.warnBeforeClosingRunningProcesses"),
+                    supporting = strings.text("ui.whenClosingAProjectOrWorkspaceWithARunning"),
                     checked = perf.confirmCloseRunning,
                     onCheckedChange = perf.onSetConfirmCloseRunning,
                     modified = perf.confirmCloseRunning != SettingsDefaults.CONFIRM_CLOSE_RUNNING,
                     onReset = { perf.onSetConfirmCloseRunning(SettingsDefaults.CONFIRM_CLOSE_RUNNING) },
                 )
                 ToggleRow(
-                    label = "Close app fully on swipe-away",
-                    supporting = "When you swipe JCode off the Android recents screen, stop the Linux runtime " +
-                        "(terminals, runs, VMs) and exit completely instead of leaving it running in the background.",
+                    label = strings.text("ui.closeAppFullyOnSwipeAway"),
+                    supporting = strings.text("ui.whenYouSwipeJCodeOffTheAndroidRecentsScreen"),
                     checked = perf.exitOnSwipeAway,
                     onCheckedChange = perf.onSetExitOnSwipeAway,
                     modified = perf.exitOnSwipeAway != SettingsDefaults.EXIT_ON_SWIPE_AWAY,
                     onReset = { perf.onSetExitOnSwipeAway(SettingsDefaults.EXIT_ON_SWIPE_AWAY) },
                 )
                 ToggleRow(
-                    label = "Auto-close idle terminals",
-                    supporting = "Automatically close terminals left idle at the prompt (no running program) to " +
-                        "free their process tree and memory. Terminals running a command are never auto-closed.",
+                    label = strings.text("ui.autoCloseIdleTerminals"),
+                    supporting = strings.text("ui.automaticallyCloseTerminalsLeftIdleAtThePromptNo"),
                     checked = perf.autoCloseIdleTerminals,
                     onCheckedChange = perf.onSetAutoCloseIdleTerminals,
                     modified = perf.autoCloseIdleTerminals != SettingsDefaults.AUTO_CLOSE_IDLE_TERMINALS,
@@ -711,7 +696,7 @@ object SettingsFeature {
                 )
                 if (perf.autoCloseIdleTerminals) {
                     StepperRow(
-                        label = "Idle timeout",
+                        label = strings.text("ui.idleTimeout"),
                         value = "${perf.idleTimeoutMinutes} min",
                         onDecrease = { perf.onSetIdleTimeoutMinutes(perf.idleTimeoutMinutes - 5) },
                         onIncrease = { perf.onSetIdleTimeoutMinutes(perf.idleTimeoutMinutes + 5) },
@@ -720,7 +705,7 @@ object SettingsFeature {
                     )
                 }
                 StepperRow(
-                    label = "Max terminal instances",
+                    label = strings.text("ui.maxTerminalInstances"),
                     value = "${perf.maxTerminalSessions}",
                     onDecrease = { perf.onSetMaxTerminalSessions((perf.maxTerminalSessions - 1).coerceAtLeast(1)) },
                     onIncrease = { perf.onSetMaxTerminalSessions((perf.maxTerminalSessions + 1).coerceAtMost(24)) },
@@ -728,9 +713,8 @@ object SettingsFeature {
                     onReset = { perf.onSetMaxTerminalSessions(SettingsDefaults.MAX_TERMINAL_SESSIONS) },
                 )
                 StepperRow(
-                    label = "Toolchain install timeout",
-                    supporting = "How long a toolchain install (SDK, language server, debugger) may run before " +
-                        "it's cancelled. Increase it for large SDKs like the Android SDK on a slow connection.",
+                    label = strings.text("ui.toolchainInstallTimeout"),
+                    supporting = strings.text("ui.howLongAToolchainInstallSDKLanguageServerDebugger"),
                     value = "${perf.installTimeoutMinutes} min",
                     onDecrease = { perf.onSetInstallTimeoutMinutes((perf.installTimeoutMinutes - 5).coerceAtLeast(5)) },
                     onIncrease = { perf.onSetInstallTimeoutMinutes((perf.installTimeoutMinutes + 5).coerceAtMost(180)) },
@@ -738,10 +722,8 @@ object SettingsFeature {
                     onReset = { perf.onSetInstallTimeoutMinutes(SettingsDefaults.INSTALL_TIMEOUT_MINUTES) },
                 )
                 ToggleRow(
-                    label = "Sub-shells open in their own tab",
-                    supporting = "When you start an interactive shell (bash, zsh, …) inside a terminal, open it in a " +
-                        "temporary tab that closes when the sub-shell exits, returning to the parent — like a new " +
-                        "console window. Scripts and piped shells stay in the current tab.",
+                    label = strings.text("ui.subShellsOpenInTheirOwnTab"),
+                    supporting = strings.text("ui.whenYouStartAnInteractiveShellBashZshInside"),
                     checked = perf.nestedShellTabs,
                     onCheckedChange = perf.onSetNestedShellTabs,
                     modified = perf.nestedShellTabs != SettingsDefaults.NESTED_SHELL_TABS,
@@ -760,15 +742,13 @@ object SettingsFeature {
             if (!isEnvVarTab) {
             val projectBrowserScope =
                 tabScopes.getOrNull(safeTab) == ConfigScope.Project && webPreview.currentProjectKey.isNotBlank()
-            SettingsGroup("Web preview") {
+            SettingsGroup("option.Webpreview") {
             SettingsCard(
-                title = "Open web previews in",
+                title = strings.text("ui.openWebPreviewsIn"),
                 description = if (projectBrowserScope) {
-                    "The browser this project uses when you open a running dev server (Build & Run) or " +
-                        "tap a URL in the terminal. \"Use global default\" defers to the app-wide setting."
+                    strings.text("ui.theBrowserThisProjectUsesWhenYouOpenA")
                 } else {
-                    "The browser used when you open a running dev server (Build & Run) or tap a URL in " +
-                        "the terminal. A local project can override this on its Project settings tab."
+                    strings.text("ui.theBrowserUsedWhenYouOpenARunningDev")
                 },
                 keywords = "browser web preview open url chrome firefox default run dev server " +
                     "system always ask chooser built-in builtin inherit global project override " +
@@ -790,10 +770,10 @@ object SettingsFeature {
                     BundleRow(
                         name = webPreview.label(choice),
                         description = when (choice) {
-                            WebPreviewBrowsers.INHERIT -> "Fall back to the app-wide default"
-                            WebPreviewBrowsers.SYSTEM -> "The device's default browser app"
-                            WebPreviewBrowsers.ASK -> "Show the Android app chooser each time"
-                            WebPreviewBrowsers.BUILTIN -> "JCode's own in-editor browser, with DevTools"
+                            WebPreviewBrowsers.INHERIT -> strings.text("ui.fallBackToTheAppWideDefault")
+                            WebPreviewBrowsers.SYSTEM -> strings.text("ui.theDeviceSDefaultBrowserApp")
+                            WebPreviewBrowsers.ASK -> strings.text("ui.showTheAndroidAppChooserEachTime")
+                            WebPreviewBrowsers.BUILTIN -> strings.text("ui.jCodeSOwnInEditorBrowserWithDevTools")
                             else -> choice
                         },
                         selected = selectedChoice == choice,
@@ -810,10 +790,8 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Web engine",
-                description = "The Chromium engine behind JCode's built-in browser and web previews. " +
-                    "It is the device's WebView provider — a system component JCode can read but not " +
-                    "choose; when it can't be updated, JCode falls back to the ROM's engine.",
+                title = strings.text("ui.webEngine"),
+                description = strings.text("ui.theChromiumEngineBehindJCodeSBuiltInBrowser"),
                 keywords = "web engine webview chromium version provider outdated update play store " +
                     "browser render blank dvh modern developer options implementation",
             ) {
@@ -842,7 +820,7 @@ object SettingsFeature {
                             shape = RoundedCornerShape(50),
                         ) {
                             Text(
-                                text = "Outdated",
+                                text = strings.text("ui.outdated"),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.padding(horizontal = Space.ms, vertical = Space.xs),
@@ -850,26 +828,23 @@ object SettingsFeature {
                         }
                     } else if (engineMajor > 0) {
                         Text(
-                            text = "Current",
+                            text = strings.text("ui.current"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                enginePackage?.packageName?.let { SummaryRow(label = "Provider", value = it) }
+                enginePackage?.packageName?.let { SummaryRow(label = strings.text("ui.provider"), value = it) }
                 if (outdated) {
                     Text(
-                        text = "Modern sites can render blank or broken on this engine. Install the " +
-                            "latest Android System WebView, then select it under Developer options → " +
-                            "WebView implementation. Some devices lock the provider; JCode then keeps " +
-                            "using the ROM's engine.",
+                        text = strings.text("ui.modernSitesCanRenderBlankOrBrokenOnThis"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
                 CompactFilledButton(
-                    text = "Get latest WebView",
+                    text = strings.text("ui.getLatestWebView"),
                     onClick = {
                         val play = Intent(
                             Intent.ACTION_VIEW,
@@ -888,7 +863,7 @@ object SettingsFeature {
                     },
                 )
                 CompactOutlinedButton(
-                    text = "Choose provider…",
+                    text = strings.text("ui.chooseProvider"),
                     onClick = {
                         runCatching {
                             ctx.startActivity(
@@ -905,41 +880,40 @@ object SettingsFeature {
             } // end web-preview (hidden on the ENV VAR tab)
 
             if (showGlobalTab) {
-            SettingsGroup("Environment") {
+            SettingsGroup("ui.environment") {
             SettingsCard(
-                title = "Environment",
-                description = "Environment setup: proot, distro bootstrap, and the final smoke test. " +
-                    "Install, switch between, or remove environments from the setup page.",
+                title = strings.text("ui.environment"),
+                description = strings.text("ui.environmentSetupProotDistroBootstrapAndTheFinalSmoke"),
                 keywords = "environment proot distro toolchain smoke test bind runtime setup manage refresh install " +
                     "ready passed failed not installed not run unknown update upgrade packages apt system " +
                     environmentState.runtime.selectedDistro.label,
             ) {
                 SummaryRow(
                     label = "proot",
-                    value = if (environmentState.prootInstalled) "Ready" else "Not installed",
+                    value = if (environmentState.prootInstalled) strings.text("option.Ready") else strings.text("option.Notinstalled"),
                 )
                 SummaryRow(
-                    label = "Distro",
+                    label = strings.text("ui.distro"),
                     value = when (environmentState.distroInstalled) {
                         true -> environmentState.runtime.selectedDistro.label
-                        false -> "Not installed"
-                        null -> "Unknown"
+                        false -> strings.text("option.Notinstalled")
+                        null -> strings.text("option.Unknown")
                     },
                 )
                 SummaryRow(
-                    label = "Toolchain",
+                    label = strings.text("ui.toolchain"),
                     value = when (environmentState.toolchainReady) {
-                        true -> "Ready"
-                        false -> "Not ready"
-                        null -> "Unknown"
+                        true -> strings.text("option.Ready")
+                        false -> strings.text("option.Notready")
+                        null -> strings.text("option.Unknown")
                     },
                 )
                 SummaryRow(
-                    label = "Smoke test",
+                    label = strings.text("ui.smokeTest"),
                     value = when (environmentState.smokeTestPassed) {
-                        true -> "Passed"
-                        false -> "Failed"
-                        null -> "Not run"
+                        true -> strings.text("option.Passed")
+                        false -> strings.text("option.Failed")
+                        null -> strings.text("option.Notrun")
                     },
                 )
                 SummaryRow(
@@ -948,7 +922,7 @@ object SettingsFeature {
                 )
                 environmentState.runningStep?.let { runningStep ->
                     Text(
-                        text = "Running: ${runningStep.key}",
+                        text = strings.text("settings.running", mapOf("step" to (runningStep.key).toString())),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -961,8 +935,8 @@ object SettingsFeature {
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    CompactFilledButton(text = "Manage environments", onClick = onOpenEnvironmentWizard)
-                    CompactOutlinedButton(text = "Refresh checks", onClick = onRefreshEnvironment)
+                    CompactFilledButton(text = strings.text("ui.manageEnvironments"), onClick = onOpenEnvironmentWizard)
+                    CompactOutlinedButton(text = strings.text("ui.refreshChecks"), onClick = onRefreshEnvironment)
                 }
                 LocalEnvironmentBackup.current.migrationSummary?.let { summary ->
                     Text(
@@ -971,44 +945,40 @@ object SettingsFeature {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     CompactFilledButton(
-                        text = "Import from previous install",
+                        text = strings.text("ui.importFromPreviousInstall"),
                         onClick = LocalEnvironmentBackup.current.onImportMigration,
                     )
                 }
                 if (environmentState.distroInstalled == true) {
                     val envBackup = LocalEnvironmentBackup.current
                     Text(
-                        text = "Back up the whole Linux environment (~2.5 GB) to a .tar.gz you can " +
-                            "restore here or on another device.",
+                        text = strings.text("ui.backUpTheWholeLinuxEnvironment25GB"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                        CompactFilledButton(text = "Back up (.tar.gz)", onClick = envBackup.onBackup)
-                        CompactOutlinedButton(text = "Restore…", onClick = envBackup.onRestore)
+                        CompactFilledButton(text = strings.text("ui.backUpTarGz"), onClick = envBackup.onBackup)
+                        CompactOutlinedButton(text = strings.text("ui.restoreText8ff034"), onClick = envBackup.onRestore)
                     }
                     // Moving to an install with a different package name. Android gives that install
                     // its own data directory and no way to read this one's, so everything has to go
                     // out through shared storage first — see MigrationBundle.
                     Text(
-                        text = "Moving to a differently-named build? Write the environment, projects, " +
-                            "extensions and settings to the shared JCode folder, then import them " +
-                            "from the new install.",
+                        text = strings.text("ui.movingToADifferentlyNamedBuildWriteTheEnvironment"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     CompactOutlinedButton(
-                        text = "Export for migration",
+                        text = strings.text("ui.exportForMigration"),
                         onClick = envBackup.onExportMigration,
                     )
                     Text(
-                        text = "Refresh package lists and upgrade installed packages " +
-                            "(apt-get update && upgrade). Runs in the Setup terminal — can be slow and use data.",
+                        text = strings.text("ui.refreshPackageListsAndUpgradeInstalledPackagesAptGet"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     CompactOutlinedButton(
-                        text = if (envBackup.updatingPackages) "Updating packages…" else "Update system packages",
+                        text = if (envBackup.updatingPackages) strings.text("ui.updatingPackages") else strings.text("ui.updateSystemPackages"),
                         onClick = envBackup.onUpdatePackages,
                         enabled = !envBackup.updatingPackages,
                     )
@@ -1016,10 +986,8 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Background process limit",
-                description = "Android caps how many processes an app may fork and kills the rest — " +
-                    "which takes the whole Linux environment down mid-command. Raising the cap needs " +
-                    "one adb command; JCode cannot set it itself.",
+                title = strings.text("ui.backgroundProcessLimit"),
+                description = strings.text("ui.androidCapsHowManyProcessesAnAppMayFork"),
                 keywords = "phantom process limit killed died crashed dies terminal closes distro proot stopped " +
                     "background max_phantom_processes device_config adb activity manager trimming long session " +
                     "claude agent build gradle npm disappears exits by itself",
@@ -1034,17 +1002,12 @@ object SettingsFeature {
                     }
                 }
                 SummaryRow(
-                    label = "Linux processes",
+                    label = strings.text("ui.linuxProcesses"),
                     value = processCount?.let { "$it of ${AppProcesses.DEFAULT_PHANTOM_LIMIT} (default cap)" }
                         ?: "Unknown",
                 )
                 Text(
-                    text = "Android 12+ kills an app's forked processes once they pass the cap — 32 by " +
-                        "default. proot, the shell and everything under it count, so a long build or " +
-                        "coding-agent session goes over it and the terminal dies while JCode keeps " +
-                        "running. Run these from a computer with the device connected (or from this " +
-                        "device's own adb) to lift it; it survives reboots but has to be redone after a " +
-                        "factory reset.",
+                    text = strings.text("ui.android12KillsAnAppSForkedProcessesOnce"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1055,22 +1018,22 @@ object SettingsFeature {
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 CompactOutlinedButton(
-                    text = "Copy commands",
+                    text = strings.text("ui.copyCommands"),
                     onClick = { clipboard.setText(AnnotatedString(AppProcesses.RAISE_LIMIT_COMMANDS)) },
                 )
             }
 
             SettingsCard(
-                title = "Android device",
-                description = "Pair JCode with this phone's own adb so builds install and launch on it.",
+                title = strings.text("ui.androidDevice"),
+                description = strings.text("ui.pairJCodeWithThisPhoneSOwnAdbSo"),
                 keywords = "android device adb bridge wireless debugging pair pairing code relay serial apk " +
                     "install launch logcat gradle installdebug flutter run",
             ) {
                 val androidDevice = LocalAndroidDevice.current
                 SummaryRow(label = "ADB bridge", value = androidDevice.status)
-                androidDevice.serial?.let { SummaryRow(label = "Serial", value = it) }
+                androidDevice.serial?.let { SummaryRow(label = strings.text("ui.serial"), value = it) }
                 CompactFilledButton(
-                    text = if (androidDevice.ready) "Manage device" else "Set up ADB",
+                    text = if (androidDevice.ready) strings.text("ui.manageDevice") else strings.text("ui.setUpADB"),
                     onClick = androidDevice.onOpenPage,
                 )
             }
@@ -1078,10 +1041,10 @@ object SettingsFeature {
 
             } // end Environment
 
-            SettingsGroup("About") {
+            SettingsGroup("option.About") {
             SettingsCard(
                 title = "JCode",
-                description = "App version and updates from GitHub releases.",
+                description = strings.text("ui.appVersionAndUpdatesFromGitHubReleases"),
                 keywords = "about version update check release github changelog build app",
             ) {
                 val appUpdate = LocalAppUpdate.current
@@ -1091,7 +1054,7 @@ object SettingsFeature {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Version ${appUpdate.currentVersion}",
+                        text = strings.text("common.version", mapOf("version" to (appUpdate.currentVersion).toString())),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     if (appUpdate.updateAvailable) {
@@ -1100,7 +1063,7 @@ object SettingsFeature {
                             shape = RoundedCornerShape(50),
                         ) {
                             Text(
-                                text = "Update: v${appUpdate.latestVersion}",
+                                text = strings.text("settings.updateVersion", mapOf("version" to (appUpdate.latestVersion ?: "").toString())),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.padding(horizontal = Space.ms, vertical = Space.xs),
@@ -1108,7 +1071,7 @@ object SettingsFeature {
                         }
                     } else if (appUpdate.latestVersion != null) {
                         Text(
-                            text = "Up to date",
+                            text = strings.text("ui.upToDate"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1119,16 +1082,16 @@ object SettingsFeature {
                 if (appUpdate.updateAvailable) {
                     CompactFilledButton(
                         text = when {
-                            !appUpdate.installing -> "Install Update"
-                            appUpdate.installProgress in 1..99 -> "Downloading… ${appUpdate.installProgress}%"
-                            else -> "Installing…"
+                            !appUpdate.installing -> strings.text("ui.installUpdate")
+                            appUpdate.installProgress in 1..99 -> strings.text("settings.downloading", mapOf("percent" to (appUpdate.installProgress).toString()))
+                            else -> strings.text("ui.installing")
                         },
                         onClick = appUpdate.onInstallUpdate,
                         enabled = !appUpdate.installing,
                     )
                 } else {
                     CompactOutlinedButton(
-                        text = if (appUpdate.checking) "Checking…" else "Check for updates",
+                        text = if (appUpdate.checking) strings.text("ui.checking") else strings.text("ui.checkForUpdates"),
                         onClick = appUpdate.onCheck,
                         enabled = !appUpdate.checking,
                     )
@@ -1136,25 +1099,23 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Backup & restore",
-                description = "Save your app preferences to a file, then restore them here or on " +
-                    "another device. (Theme and editor settings live in the workspace config.)",
+                title = strings.text("ui.backupRestore"),
+                description = strings.text("ui.saveYourAppPreferencesToAFileThenRestore"),
                 keywords = "backup restore export import settings preferences file save load transfer migrate json device",
             ) {
                 val backup = LocalSettingsBackup.current
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    CompactFilledButton(text = "Export settings…", onClick = backup.onExport)
-                    CompactOutlinedButton(text = "Import settings…", onClick = backup.onImport)
+                    CompactFilledButton(text = strings.text("ui.exportSettings"), onClick = backup.onExport)
+                    CompactOutlinedButton(text = strings.text("ui.importSettings"), onClick = backup.onImport)
                 }
             }
 
             } // end About
 
-            SettingsGroup("Diagnostics") {
+            SettingsGroup("option.Diagnostics") {
             SettingsCard(
-                title = "Diagnostic logging",
-                description = "Off unless you turn it on. When something misbehaves, record what the " +
-                    "app is doing to a file you can attach to a bug report, then switch it back off.",
+                title = strings.text("ui.diagnosticLogging"),
+                description = strings.text("ui.offUnlessYouTurnItOnWhenSomethingMisbehaves"),
                 keywords = "diagnostic diagnostics log logging logcat debug trace record capture crash report " +
                     "bug issue troubleshoot export share verbose file",
             ) {
@@ -1168,10 +1129,8 @@ object SettingsFeature {
                     }
                 }
                 ToggleRow(
-                    label = "Record diagnostics",
-                    supporting = "Writes app events to a log file on this device. Nothing is sent anywhere " +
-                        "— you choose when to export it. File paths are replaced with placeholders so the " +
-                        "log is safe to share.",
+                    label = strings.text("ui.recordDiagnostics"),
+                    supporting = strings.text("ui.writesAppEventsToALogFileOnThis"),
                     checked = diagnostics.enabled,
                     onCheckedChange = diagnostics.onSetEnabled,
                     modified = diagnostics.enabled != SettingsDefaults.DIAGNOSTIC_LOGGING,
@@ -1179,7 +1138,7 @@ object SettingsFeature {
                 )
                 if (diagnostics.enabled) {
                     SettingsDropdownRow(
-                        label = "Detail",
+                        label = strings.text("ui.detail"),
                         options = DiagLevel.entries.map { it.name },
                         selected = diagnostics.level.name,
                         onSelect = { diagnostics.onSetLevel(DiagLevel.valueOf(it)) },
@@ -1188,41 +1147,37 @@ object SettingsFeature {
                         onReset = { diagnostics.onSetLevel(SettingsDefaults.DIAGNOSTIC_LEVEL) },
                     )
                     ToggleRow(
-                        label = "Include the system log",
-                        supporting = "Adds JCode's logcat output — including proot and the Linux " +
-                            "environment running under it, which is where most of the detail about " +
-                            "toolchains, extensions and language servers ends up. Only JCode's own " +
-                            "entries are readable; another app's never are.",
+                        label = strings.text("ui.includeTheSystemLog"),
+                        supporting = strings.text("ui.addsJCodeSLogcatOutputIncludingProotAndThe"),
                         checked = diagnostics.captureSystemLog,
                         onCheckedChange = diagnostics.onSetCaptureSystemLog,
                         modified = diagnostics.captureSystemLog != SettingsDefaults.DIAGNOSTIC_SYSTEM_LOG,
                         onReset = { diagnostics.onSetCaptureSystemLog(SettingsDefaults.DIAGNOSTIC_SYSTEM_LOG) },
                     )
                     ToggleRow(
-                        label = "Record crashes",
-                        supporting = "Append the stack trace when the app crashes, so the log covers the " +
-                            "failure itself and not just what led up to it.",
+                        label = strings.text("ui.recordCrashes"),
+                        supporting = strings.text("ui.appendTheStackTraceWhenTheAppCrashesSo"),
                         checked = diagnostics.captureCrashes,
                         onCheckedChange = diagnostics.onSetCaptureCrashes,
                         modified = diagnostics.captureCrashes != SettingsDefaults.DIAGNOSTIC_CRASHES,
                         onReset = { diagnostics.onSetCaptureCrashes(SettingsDefaults.DIAGNOSTIC_CRASHES) },
                     )
-                    SummaryRow(label = "Recorded", value = formatLogSize(diagnostics.sizeBytes))
-                    SummaryRow(label = "Location", value = diagnostics.location.ifBlank { "Starting…" })
+                    SummaryRow(label = strings.text("ui.recorded"), value = formatLogSize(diagnostics.sizeBytes))
+                    SummaryRow(label = strings.text("ui.location"), value = diagnostics.location.ifBlank { "Starting…" })
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
                     CompactFilledButton(
-                        text = "View",
+                        text = strings.text("ui.view"),
                         onClick = { showLog = true },
                         enabled = diagnostics.sizeBytes > 0L,
                     )
                     CompactOutlinedButton(
-                        text = "Export…",
+                        text = strings.text("ui.export"),
                         onClick = diagnostics.onExport,
                         enabled = diagnostics.sizeBytes > 0L,
                     )
                     CompactOutlinedButton(
-                        text = "Clear",
+                        text = strings.text("ui.clear"),
                         onClick = diagnostics.onClear,
                         enabled = diagnostics.sizeBytes > 0L,
                     )
@@ -1234,17 +1189,16 @@ object SettingsFeature {
 
             } // end Diagnostics
 
-            SettingsGroup("Editor") {
+            SettingsGroup("option.Editor") {
             SettingsCard(
-                title = "Editor defaults",
-                description = "Default font size and word wrap for the code editor. A workspace or " +
-                    "project can override the font size on its own settings tab.",
+                title = strings.text("ui.editorDefaults"),
+                description = strings.text("ui.defaultFontSizeAndWordWrapForTheCode"),
                 keywords = "editor font size text scale sp word wrap soft wrap line long lines default global",
             ) {
                 val editorFontSizeSetting = LocalEditorFontSizeSetting.current
                 val editorWordWrapSetting = LocalEditorWordWrapSetting.current
                 StepperRow(
-                    label = "Font size",
+                    label = strings.text("ui.fontSize"),
                     value = "${editorFontSizeSetting.value.toInt()} sp",
                     onDecrease = { editorFontSizeSetting.onChange((editorFontSizeSetting.value - 1f).coerceAtLeast(8f)) },
                     onIncrease = { editorFontSizeSetting.onChange((editorFontSizeSetting.value + 1f).coerceAtMost(72f)) },
@@ -1252,8 +1206,8 @@ object SettingsFeature {
                     onReset = { editorFontSizeSetting.onChange(SettingsDefaults.EDITOR_FONT_SIZE) },
                 )
                 ToggleRow(
-                    label = "Word wrap",
-                    supporting = "Wrap long lines to the editor width instead of scrolling horizontally.",
+                    label = strings.text("ui.wordWrap"),
+                    supporting = strings.text("ui.wrapLongLinesToTheEditorWidthInsteadOf"),
                     checked = editorWordWrapSetting.enabled,
                     onCheckedChange = { editorWordWrapSetting.onChange(it) },
                     modified = editorWordWrapSetting.enabled != SettingsDefaults.EDITOR_WORD_WRAP,
@@ -1261,13 +1215,13 @@ object SettingsFeature {
                 )
             }
             SettingsCard(
-                title = "Editor gestures",
-                description = "How touch input behaves in the editor. Applies app-wide.",
+                title = strings.text("ui.editorGestures"),
+                description = strings.text("ui.howTouchInputBehavesInTheEditorAppliesApp"),
                 keywords = "editor gestures drag move cursor speed vertical horizontal touch scroll",
             ) {
                 ToggleRow(
-                    label = "Drag to move cursor",
-                    supporting = "Drag a finger on the editor to move the text cursor (the view scrolls to follow) instead of scrolling. Long-press still selects text. Applies app-wide.",
+                    label = strings.text("ui.dragToMoveCursor"),
+                    supporting = strings.text("ui.dragAFingerOnTheEditorToMoveThe"),
                     checked = editorDragSetting.enabled,
                     onCheckedChange = editorDragSetting.onChange,
                     modified = editorDragSetting.enabled != SettingsDefaults.EDITOR_DRAG_MOVES_CURSOR,
@@ -1275,7 +1229,7 @@ object SettingsFeature {
                 )
                 if (editorDragSetting.enabled) {
                     StepperRow(
-                        label = "Cursor drag speed — vertical",
+                        label = strings.text("ui.cursorDragSpeedVertical"),
                         value = "${editorDragSetting.verticalLevel} / 5",
                         onDecrease = { editorDragSetting.onVerticalLevelChange((editorDragSetting.verticalLevel - 1).coerceAtLeast(1)) },
                         onIncrease = { editorDragSetting.onVerticalLevelChange((editorDragSetting.verticalLevel + 1).coerceAtMost(5)) },
@@ -1283,7 +1237,7 @@ object SettingsFeature {
                         onReset = { editorDragSetting.onVerticalLevelChange(SettingsDefaults.CURSOR_DRAG_LEVEL) },
                     )
                     StepperRow(
-                        label = "Cursor drag speed — horizontal",
+                        label = strings.text("ui.cursorDragSpeedHorizontal"),
                         value = "${editorDragSetting.horizontalLevel} / 5",
                         onDecrease = { editorDragSetting.onHorizontalLevelChange((editorDragSetting.horizontalLevel - 1).coerceAtLeast(1)) },
                         onIncrease = { editorDragSetting.onHorizontalLevelChange((editorDragSetting.horizontalLevel + 1).coerceAtMost(5)) },
@@ -1294,22 +1248,21 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Tabs",
-                description = "How editor and terminal tabs behave. Applies app-wide.",
+                title = strings.text("ui.tabs"),
+                description = strings.text("ui.howEditorAndTerminalTabsBehaveAppliesAppWide"),
                 keywords = "tabs tab close button hide editor terminal accidental coloring color accent random directory width size small medium large shorten ellipsis truncate",
             ) {
                 ToggleRow(
-                    label = "Hide tab close button",
-                    supporting = "Removes the × on editor and terminal tabs to avoid accidental closes. Close a tab from its long-press menu instead.",
+                    label = strings.text("ui.hideTabCloseButton"),
+                    supporting = strings.text("ui.removesTheOnEditorAndTerminalTabsToAvoid"),
                     checked = tabCloseSetting.hidden,
                     onCheckedChange = tabCloseSetting.onChange,
                     modified = tabCloseSetting.hidden != SettingsDefaults.HIDE_TAB_CLOSE_BUTTON,
                     onReset = { tabCloseSetting.onChange(SettingsDefaults.HIDE_TAB_CLOSE_BUTTON) },
                 )
                 SettingsDropdownRow(
-                    label = "Tab width",
-                    supporting = "The most an editor or terminal tab widens before its name is shortened " +
-                        "in the middle (e.g. \"build.gradle.kts\" → \"build.g…kts\").",
+                    label = strings.text("ui.tabWidth"),
+                    supporting = strings.text("ui.theMostAnEditorOrTerminalTabWidensBefore"),
                     options = TabMaxSize.entries.map { it.name },
                     selected = tabMaxSizeSetting.size.name,
                     onSelect = { tabMaxSizeSetting.onChange(TabMaxSize.valueOf(it)) },
@@ -1317,28 +1270,27 @@ object SettingsFeature {
                     onReset = { tabMaxSizeSetting.onChange(SettingsDefaults.TAB_MAX_SIZE) },
                 )
                 SettingsDropdownRow(
-                    label = "Tab coloring",
-                    supporting = "Color-code editor file tabs. Long-press a file tab to set its color by hand; " +
-                        "colors are remembered in the project's .jcode. A project can override this default.",
+                    label = strings.text("ui.tabColoring"),
+                    supporting = strings.text("ui.colorCodeEditorFileTabsLongPressAFile"),
                     options = TabColoring.entries.map { it.name },
                     selected = tabColoringSetting.mode.name,
                     onSelect = { tabColoringSetting.onChange(TabColoring.valueOf(it)) },
-                    optionLabel = { tabColoringLabel(TabColoring.valueOf(it)) },
+                    optionLabel = { tabColoringLabel(strings, TabColoring.valueOf(it)) },
                     modified = tabColoringSetting.mode != SettingsDefaults.TAB_COLORING,
                     onReset = { tabColoringSetting.onChange(SettingsDefaults.TAB_COLORING) },
                 )
             }
 
             SettingsCard(
-                title = "Formatter",
-                description = "Which formatter the editor uses. Built-in is rule-based; formatter extensions appear here once installed.",
+                title = strings.text("ui.formatter"),
+                description = strings.text("ui.whichFormatterTheEditorUsesBuiltInIsRule"),
                 keywords = "formatter format prettier indent on-save whitespace built-in " +
                     formatterOptions.joinToString(" ") { it.second },
             ) {
                 formatterOptions.forEach { (id, label) ->
                     BundleRow(
                         name = label,
-                        description = if (id == "builtin") "Built-in rule-based formatter" else "Formatter extension",
+                        description = if (id == "builtin") strings.text("ui.builtInRuleBasedFormatter") else strings.text("ui.formatterExtension"),
                         selected = formatterId == id,
                         swatch = emptyList(),
                         onClick = { onSelectFormatter(id) },
@@ -1347,15 +1299,14 @@ object SettingsFeature {
             }
 
             SettingsCard(
-                title = "Markdown preview",
-                description = "How the rendered Markdown preview lays out.",
+                title = strings.text("ui.markdownPreview"),
+                description = strings.text("ui.howTheRenderedMarkdownPreviewLaysOut"),
                 keywords = "markdown preview word wrap portrait landscape width horizontal scroll pan wide tables code",
             ) {
                 val markdownPreviewSetting = LocalMarkdownPreviewSetting.current
                 ToggleRow(
-                    label = "Word wrap in portrait",
-                    supporting = "Off: a portrait preview lays out at landscape width (the screen height, " +
-                        "honoring the device-cutout setting) and pans sideways — wide tables and code stay unbroken.",
+                    label = strings.text("ui.wordWrapInPortrait"),
+                    supporting = strings.text("ui.offAPortraitPreviewLaysOutAtLandscapeWidth"),
                     checked = markdownPreviewSetting.wrapInPortrait,
                     onCheckedChange = { markdownPreviewSetting.onSetWrapInPortrait(it) },
                     modified = markdownPreviewSetting.wrapInPortrait != SettingsDefaults.MARKDOWN_WRAP_PORTRAIT,
@@ -1365,29 +1316,27 @@ object SettingsFeature {
 
             } // end Editor
 
-            SettingsGroup("Explorer") {
+            SettingsGroup("ui.explorer") {
             SettingsCard(
-                title = "Exclude Files/Folders",
-                description = "Exclude files and folders at the project root in the Explorer. \"By-injected\" " +
-                    "comes from each project's .gitignore, kept in sync by the Source Control extension. " +
-                    "Excluded entries are greyed out by default, or hidden from the tree entirely.",
+                title = strings.text("ui.excludeFilesFolders"),
+                description = strings.text("ui.excludeFilesAndFoldersAtTheProjectRootIn"),
                 keywords = "explorer files folder exclude hide hidden grey greyed grey-out dim de-emphasize project root gitignore jcode ignore injected specified show reveal by-line effect",
             ) {
                 SettingsDropdownRow(
-                    label = "Mode",
+                    label = strings.text("ui.mode"),
                     options = ExplorerHiddenMode.entries.map { it.name },
                     selected = explorerHiddenSetting.mode.name,
                     onSelect = { explorerHiddenSetting.onSetMode(ExplorerHiddenMode.valueOf(it)) },
-                    optionLabel = { explorerHiddenModeLabel(ExplorerHiddenMode.valueOf(it)) },
+                    optionLabel = { explorerHiddenModeLabel(strings, ExplorerHiddenMode.valueOf(it)) },
                     modified = explorerHiddenSetting.mode != SettingsDefaults.HIDDEN_ROOT_MODE,
                     onReset = { explorerHiddenSetting.onSetMode(SettingsDefaults.HIDDEN_ROOT_MODE) },
                 )
                 SettingsDropdownRow(
-                    label = "When excluded",
+                    label = strings.text("ui.whenExcluded"),
                     options = ExplorerExcludeEffect.entries.map { it.name },
                     selected = explorerHiddenSetting.effect.name,
                     onSelect = { explorerHiddenSetting.onSetEffect(ExplorerExcludeEffect.valueOf(it)) },
-                    optionLabel = { explorerExcludeEffectLabel(ExplorerExcludeEffect.valueOf(it)) },
+                    optionLabel = { explorerExcludeEffectLabel(strings, ExplorerExcludeEffect.valueOf(it)) },
                     modified = explorerHiddenSetting.effect != SettingsDefaults.EXCLUDE_EFFECT,
                     onReset = { explorerHiddenSetting.onSetEffect(SettingsDefaults.EXCLUDE_EFFECT) },
                 )
@@ -1395,7 +1344,7 @@ object SettingsFeature {
                     mutableStateOf(explorerHiddenSetting.specifiedRaw)
                 }
                 SettingsTextFieldRow(
-                    label = "Specified — one pattern per line",
+                    label = strings.text("ui.specifiedOnePatternPerLine"),
                     value = hidePatterns,
                     onValueChange = { hidePatterns = it },
                     onCommit = { explorerHiddenSetting.onSetSpecifiedRaw(hidePatterns) },
@@ -1405,15 +1354,13 @@ object SettingsFeature {
                 )
             }
             SettingsCard(
-                title = "Trash",
-                description = "Where deleted files go before they are gone. Covers Delete in the Explorer " +
-                    "and Discard in Source Control; the Trash itself opens from the Explorer toolbar.",
+                title = strings.text("ui.trash"),
+                description = strings.text("ui.whereDeletedFilesGoBeforeTheyAreGoneCovers"),
                 keywords = "trash bin recycle delete deleted remove restore recover undelete discard scm source control retention keep days empty permanently",
             ) {
                 ToggleRow(
-                    label = "Move deleted files to Trash",
-                    supporting = "Deleting a file or folder, or discarding a change in Source Control, keeps a " +
-                        "copy that can be restored. Turn this off to delete immediately and permanently.",
+                    label = strings.text("ui.moveDeletedFilesToTrash"),
+                    supporting = strings.text("ui.deletingAFileOrFolderOrDiscardingAChange"),
                     checked = trashSettings.enabled,
                     onCheckedChange = trashSettings.onSetEnabled,
                     modified = trashSettings.enabled != SettingsDefaults.TRASH_ENABLED,
@@ -1421,9 +1368,8 @@ object SettingsFeature {
                 )
                 if (trashSettings.enabled) {
                     SettingsDropdownRow(
-                        label = "Keep deleted files for",
-                        supporting = "Older items are removed when JCode starts and when the Trash is opened. " +
-                            "The Trash is app-private storage, so what is in it counts against the app's size.",
+                        label = strings.text("ui.keepDeletedFilesFor"),
+                        supporting = strings.text("ui.olderItemsAreRemovedWhenJCodeStartsAndWhen"),
                         options = TRASH_RETENTION_CHOICES.map { it.toString() },
                         selected = trashSettings.retentionDays.toString(),
                         onSelect = { trashSettings.onSetRetentionDays(it.toInt()) },
@@ -1436,18 +1382,16 @@ object SettingsFeature {
 
             } // end Explorer
 
-            SettingsGroup("Developer") {
+            SettingsGroup("option.Developer") {
             SettingsCard(
-                title = "Developer options",
-                description = "Tools for building and testing JCode extensions.",
+                title = strings.text("ui.developerOptions"),
+                description = strings.text("ui.toolsForBuildingAndTestingJCodeExtensions"),
                 keywords = "developer options extension sideload unsigned jext debug dev tools inspector validator log console reload make tool third party",
             ) {
                 val developerSetting = LocalDeveloperSetting.current
                 ToggleRow(
-                    label = "Enable developer options",
-                    supporting = "Adds an \"Ext Dev\" tab to the right panel (inspector, manifest validator, " +
-                        "live log) for debugging an unsigned .jext or .vsix. Importing one does not need this; " +
-                        "signed marketplace extensions are unaffected.",
+                    label = strings.text("ui.enableDeveloperOptions"),
+                    supporting = strings.text("ui.addsAnExtDevTabToTheRightPanel"),
                     checked = developerSetting.enabled,
                     onCheckedChange = { developerSetting.onSetEnabled(it) },
                     modified = developerSetting.enabled != SettingsDefaults.DEVELOPER_OPTIONS,
@@ -1474,8 +1418,8 @@ object SettingsFeature {
             if (query.isBlank()) {
                 Text(
                     text = when (selectedScope) {
-                        ConfigScope.Workspace -> "These settings preserve the shared folder .jcode configuration and apply unless a Project overrides them."
-                        ConfigScope.Project -> "These settings save to the project .jcode and only affect the selected local project."
+                        ConfigScope.Workspace -> strings.text("ui.theseSettingsPreserveTheSharedFolderJcodeConfigurationAnd")
+                        ConfigScope.Project -> strings.text("ui.theseSettingsSaveToTheProjectJcodeAndOnly")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1484,27 +1428,27 @@ object SettingsFeature {
             }
 
             workspaceError?.let { message ->
-                WarningCard(title = "Shared folder YAML warning", message = message)
+                WarningCard(title = strings.text("ui.sharedFolderYAMLWarning"), message = message)
             }
 
             if (projectOverridesAvailable) {
                 projectError?.let { message ->
-                    WarningCard(title = "Project YAML warning", message = message)
+                    WarningCard(title = strings.text("ui.projectYAMLWarning"), message = message)
                 }
             }
 
             environmentState.errorMessage?.let { message ->
-                WarningCard(title = "Environment warning", message = message)
+                WarningCard(title = strings.text("ui.environmentWarning"), message = message)
             }
 
-            SettingsGroup("Editor", stateKey = "scoped.Editor") {
+            SettingsGroup("option.Editor", stateKey = "scoped.Editor") {
             SettingsCard(
-                title = "Editor behavior",
-                description = "These controls write back to YAML and update the open editor immediately.",
+                title = strings.text("ui.editorBehavior"),
+                description = strings.text("ui.theseControlsWriteBackToYAMLAndUpdateThe"),
                 keywords = "editor behavior font size tab size ligatures indent tab coloring color accent",
             ) {
                 StepperRow(
-                    label = "Font size",
+                    label = strings.text("ui.fontSize"),
                     value = "${fontSize.toInt()} sp",
                     onDecrease = { onUpdateFontSize(selectedScope, (fontSize - 1f).coerceAtLeast(8f)) },
                     onIncrease = { onUpdateFontSize(selectedScope, (fontSize + 1f).coerceAtMost(72f)) },
@@ -1512,8 +1456,8 @@ object SettingsFeature {
                     onReset = { onUpdateFontSize(selectedScope, null) },
                 )
                 SettingsDropdownRow(
-                    label = "Tab size",
-                    supporting = "Good defaults are 2, 4, or 8 spaces depending on the project.",
+                    label = strings.text("ui.tabSize"),
+                    supporting = strings.text("ui.goodDefaultsAre24Or8SpacesDepending"),
                     options = listOf("2", "4", "8"),
                     selected = tabSize.toString(),
                     onSelect = { onUpdateTabSize(selectedScope, it.toInt()) },
@@ -1522,8 +1466,8 @@ object SettingsFeature {
                     onReset = { onUpdateTabSize(selectedScope, null) },
                 )
                 ToggleRow(
-                    label = "Ligatures",
-                    supporting = "Keep enabled for the editor surface, but let users disable it for long coding sessions.",
+                    label = strings.text("ui.ligatures"),
+                    supporting = strings.text("ui.keepEnabledForTheEditorSurfaceButLetUsers"),
                     checked = ligatures,
                     onCheckedChange = { onUpdateLigatures(selectedScope, it) },
                     modified = scopedEditor?.ligatures != null,
@@ -1536,25 +1480,25 @@ object SettingsFeature {
                     ?.name
                     ?: tabColoringSetting.mode.name
                 SettingsDropdownRow(
-                    label = "Tab coloring",
-                    supporting = "Overrides the app-level default for this scope.",
+                    label = strings.text("ui.tabColoring"),
+                    supporting = strings.text("ui.overridesTheAppLevelDefaultForThisScope"),
                     options = TabColoring.entries.map { it.name },
                     selected = tabColoring,
                     onSelect = { onUpdateTabColoring(selectedScope, it) },
-                    optionLabel = { runCatching { tabColoringLabel(TabColoring.valueOf(it)) }.getOrDefault(it) },
+                    optionLabel = { runCatching { tabColoringLabel(strings, TabColoring.valueOf(it)) }.getOrDefault(it) },
                     modified = scopedEditor?.tabColoring != null,
                     onReset = { onUpdateTabColoring(selectedScope, null) },
                 )
             }
 
             SettingsCard(
-                title = "Explorer",
-                description = "Choose how the file explorer is laid out. Applies to the current edit scope.",
+                title = strings.text("ui.explorer"),
+                description = strings.text("ui.chooseHowTheFileExplorerIsLaidOutApplies"),
                 keywords = "explorer view mode tree list file manager layout breadcrumbs",
             ) {
                 OptionRow(
-                    label = "View mode",
-                    supporting = "Tree shows the whole project hierarchy; List is a one-folder file manager with breadcrumbs.",
+                    label = strings.text("ui.viewMode"),
+                    supporting = strings.text("ui.treeShowsTheWholeProjectHierarchyListIsA"),
                     modified = scopedExplorer?.viewMode != null,
                     onReset = { onUpdateExplorerViewMode(selectedScope, null) },
                 ) {
@@ -1563,13 +1507,13 @@ object SettingsFeature {
                             val selected = explorerViewMode == option
                             if (selected) {
                                 CompactFilledButton(
-                                    text = option,
+                                    text = strings.text(if(option=="Tree") "option.Tree" else "option.List"),
                                     onClick = { onUpdateExplorerViewMode(selectedScope, option) },
                                     modifier = Modifier.weight(1f),
                                 )
                             } else {
                                 CompactOutlinedButton(
-                                    text = option,
+                                    text = strings.text(if(option=="Tree") "option.Tree" else "option.List"),
                                     onClick = { onUpdateExplorerViewMode(selectedScope, option) },
                                     modifier = Modifier.weight(1f),
                                 )
@@ -1581,16 +1525,16 @@ object SettingsFeature {
 
             } // end Editor (scoped)
 
-            SettingsGroup("Files") {
+            SettingsGroup("nav.files") {
             SettingsCard(
-                title = "YAML files",
-                description = "Open the backing config files directly when you want full control.",
+                title = strings.text("ui.yAMLFiles"),
+                description = strings.text("ui.openTheBackingConfigFilesDirectlyWhenYouWant"),
                 keywords = "yaml files config workspace project open backing edit",
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                    CompactFilledButton(text = "Open shared folder YAML (advanced)", onClick = onOpenWorkspaceConfig)
+                    CompactFilledButton(text = strings.text("ui.openSharedFolderYAMLAdvanced"), onClick = onOpenWorkspaceConfig)
                     CompactOutlinedButton(
-                        text = "Open project YAML",
+                        text = strings.text("ui.openProjectYAMLText26247e"),
                         onClick = onOpenProjectConfig,
                         enabled = projectOverridesAvailable,
                     )
@@ -1623,57 +1567,57 @@ private const val WEBVIEW_MODERN_MAJOR = 110
 /** Google's updatable WebView provider on Play — the install target for outdated engines. */
 private const val GOOGLE_WEBVIEW_PACKAGE = "com.google.android.webview"
 
-private fun explorerHiddenModeLabel(mode: ExplorerHiddenMode): String = when (mode) {
-    ExplorerHiddenMode.HideSpecifiedAndInjected -> "Specified + By-Injected"
-    ExplorerHiddenMode.HideInjected -> "By-Injected only"
-    ExplorerHiddenMode.None -> "Off"
+private fun explorerHiddenModeLabel(strings: dev.suicode.packages.UiTranslations, mode: ExplorerHiddenMode): String = when (mode) {
+    ExplorerHiddenMode.HideSpecifiedAndInjected -> strings.text("option.SpecifiedByInjected")
+    ExplorerHiddenMode.HideInjected -> strings.text("option.ByInjectedonly")
+    ExplorerHiddenMode.None -> strings.text("option.Off")
 }
 
 /** Human-readable labels for the "When excluded" dropdown — HOW excluded entries appear. */
-private fun explorerExcludeEffectLabel(effect: ExplorerExcludeEffect): String = when (effect) {
-    ExplorerExcludeEffect.GreyOut -> "Grey out"
-    ExplorerExcludeEffect.Hide -> "Hide"
+private fun explorerExcludeEffectLabel(strings: dev.suicode.packages.UiTranslations, effect: ExplorerExcludeEffect): String = when (effect) {
+    ExplorerExcludeEffect.GreyOut -> strings.text("option.Greyout")
+    ExplorerExcludeEffect.Hide -> strings.text("option.Hide")
 }
 
 /** Human-readable label for an [ExtraKeysVisibility] dropdown option. */
-private fun extraKeysVisibilityLabel(mode: ExtraKeysVisibility): String = when (mode) {
-    ExtraKeysVisibility.Hidden -> "Hidden"
-    ExtraKeysVisibility.WithKeyboard -> "With keyboard"
-    ExtraKeysVisibility.Always -> "Always"
+private fun extraKeysVisibilityLabel(strings: dev.suicode.packages.UiTranslations, mode: ExtraKeysVisibility): String = when (mode) {
+    ExtraKeysVisibility.Hidden -> strings.text("option.Hidden")
+    ExtraKeysVisibility.WithKeyboard -> strings.text("option.Withkeyboard")
+    ExtraKeysVisibility.Always -> strings.text("option.Always")
 }
 
 /** Human-readable label for a [BottomBarVisibility] dropdown option. */
-private fun bottomBarVisibilityLabel(mode: BottomBarVisibility): String = when (mode) {
-    BottomBarVisibility.Hidden -> "Hidden"
-    BottomBarVisibility.HideOnKeyboard -> "Hide on Soft Keyboard"
-    BottomBarVisibility.AlwaysShow -> "Always Show"
+private fun bottomBarVisibilityLabel(strings: dev.suicode.packages.UiTranslations, mode: BottomBarVisibility): String = when (mode) {
+    BottomBarVisibility.Hidden -> strings.text("option.Hidden")
+    BottomBarVisibility.HideOnKeyboard -> strings.text("option.HideonSoftKeyboard")
+    BottomBarVisibility.AlwaysShow -> strings.text("option.AlwaysShow")
 }
 
-private fun headerActionButtonLabel(button: HeaderActionButton): String = when (button) {
-    HeaderActionButton.Terminal -> "Terminal"
-    HeaderActionButton.CommandPalette -> "Command Palette"
-    HeaderActionButton.Hidden -> "Hidden"
+private fun headerActionButtonLabel(strings: dev.suicode.packages.UiTranslations, button: HeaderActionButton): String = when (button) {
+    HeaderActionButton.Terminal -> strings.text("ui.terminal")
+    HeaderActionButton.CommandPalette -> strings.text("ui.commandPalette")
+    HeaderActionButton.Hidden -> strings.text("option.Hidden")
 }
 
-private fun tabColoringLabel(mode: TabColoring): String = when (mode) {
-    TabColoring.RandomRemember -> "Random (if not exist then remember)"
-    TabColoring.Random -> "Random"
-    TabColoring.DirectoryBased -> "Directory based (then remember)"
-    TabColoring.Disabled -> "Disabled"
+private fun tabColoringLabel(strings: dev.suicode.packages.UiTranslations, mode: TabColoring): String = when (mode) {
+    TabColoring.RandomRemember -> strings.text("option.Randomifnotexistthenremember")
+    TabColoring.Random -> strings.text("option.Random")
+    TabColoring.DirectoryBased -> strings.text("option.Directorybasedthenremember")
+    TabColoring.Disabled -> strings.text("option.Disabled")
 }
 
 /** [defaultSuffix] disambiguates the per-button System Default label, e.g. "System Default (Vol Up)". */
-private fun volumeKeyActionLabel(action: VolumeKeyAction, defaultSuffix: String): String = when (action) {
-    VolumeKeyAction.SystemDefault -> "System Default ($defaultSuffix)"
-    VolumeKeyAction.Undo -> "Undo"
-    VolumeKeyAction.Redo -> "Redo"
-    VolumeKeyAction.KeyLeft -> "Key Left"
-    VolumeKeyAction.KeyRight -> "Key Right"
-    VolumeKeyAction.KeyUp -> "Key Up"
-    VolumeKeyAction.KeyDown -> "Key Down"
-    VolumeKeyAction.ScrollUp -> "Scroll Up"
-    VolumeKeyAction.ScrollDown -> "Scroll Down"
-    VolumeKeyAction.CommandPalette -> "Command Palette"
+private fun volumeKeyActionLabel(strings: dev.suicode.packages.UiTranslations, action: VolumeKeyAction, defaultSuffix: String): String = when (action) {
+    VolumeKeyAction.SystemDefault -> strings.text("settings.systemVolume", mapOf("key" to (defaultSuffix).toString()))
+    VolumeKeyAction.Undo -> strings.text("ui.undo")
+    VolumeKeyAction.Redo -> strings.text("ui.redo")
+    VolumeKeyAction.KeyLeft -> strings.text("option.KeyLeft")
+    VolumeKeyAction.KeyRight -> strings.text("option.KeyRight")
+    VolumeKeyAction.KeyUp -> strings.text("option.KeyUp")
+    VolumeKeyAction.KeyDown -> strings.text("option.KeyDown")
+    VolumeKeyAction.ScrollUp -> strings.text("option.ScrollUp")
+    VolumeKeyAction.ScrollDown -> strings.text("option.ScrollDown")
+    VolumeKeyAction.CommandPalette -> strings.text("ui.commandPalette")
 }
 
 /** Current Settings search query; cards/headers self-filter on it. */
@@ -1698,6 +1642,8 @@ private fun matchesSettingsQuery(query: String, vararg haystacks: String): Boole
 /** Compact, single-line search field (smaller than a default OutlinedTextField). */
 @Composable
 private fun SettingsSearchField(query: String, onQueryChange: (String) -> Unit) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Radius.xl),
@@ -1720,7 +1666,7 @@ private fun SettingsSearchField(query: String, onQueryChange: (String) -> Unit) 
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
-                        text = "Search settings",
+                        text = strings.text("ui.searchSettings"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1737,7 +1683,7 @@ private fun SettingsSearchField(query: String, onQueryChange: (String) -> Unit) 
             if (query.isNotEmpty()) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
-                    contentDescription = "Clear search",
+                    contentDescription = strings.text("ui.clearSearch"),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .size(16.dp)
@@ -1751,6 +1697,8 @@ private fun SettingsSearchField(query: String, onQueryChange: (String) -> Unit) 
 /** Shown when a search query matches no card, so an empty page reads as "no results" not "broken". */
 @Composable
 private fun SettingsNoResults(query: String) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1759,12 +1707,12 @@ private fun SettingsNoResults(query: String) {
         verticalArrangement = Arrangement.spacedBy(Space.xs),
     ) {
         Text(
-            text = "No settings match “$query”",
+            text = strings.text("settings.noMatches", mapOf("query" to (query).toString())),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Try a shorter or different term, like “font” or “theme”.",
+            text = strings.text("ui.tryAShorterOrDifferentTermLikeFontOr"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1804,6 +1752,8 @@ private fun ColumnScope.SettingsGroup(
     stateKey: String = title,
     content: @Composable () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+    val displayTitle = strings.text(title)
     if (LocalSettingsQuery.current.isNotBlank()) {
         content()
         return
@@ -1818,7 +1768,7 @@ private fun ColumnScope.SettingsGroup(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = title,
+            text = displayTitle,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
@@ -1826,7 +1776,7 @@ private fun ColumnScope.SettingsGroup(
         )
         Icon(
             painter = jcIcon(if (expanded) JCodeIcon.ChevronUp else JCodeIcon.ChevronDown),
-            contentDescription = if (expanded) "Collapse $title" else "Expand $title",
+            contentDescription = if (expanded) strings.text("settings.collapse", mapOf("title" to (displayTitle).toString())) else strings.text("settings.expand", mapOf("title" to (displayTitle).toString())),
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(IconSize.md),
         )
@@ -1917,6 +1867,8 @@ private fun BundleRow(
     swatch: List<Color>,
     onClick: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1951,7 +1903,7 @@ private fun BundleRow(
         if (selected) {
             Icon(
                 imageVector = Icons.Rounded.Check,
-                contentDescription = "Selected",
+                contentDescription = strings.text("ui.selected"),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(IconSize.md),
             )
@@ -1965,12 +1917,14 @@ private fun UiIconSetRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // Five slots a set is most likely to have restyled, so two packs are told apart at a glance
     // rather than by their names.
     val sample = listOf(JCodeIcon.Files, JCodeIcon.Run, JCodeIcon.Terminal, JCodeIcon.Search, JCodeIcon.Settings)
     IconSetRow(
         name = set.name,
-        description = set.description.ifBlank { "${set.filledSlots} icons" },
+        description = set.description.ifBlank { strings.text("settings.icons", mapOf("count" to (set.filledSlots).toString())) },
         selected = selected,
         onClick = onClick,
         preview = {
@@ -1994,12 +1948,14 @@ private fun FileIconSetRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // Previewed through the same resolver the Explorer uses, on names a pack of any language is
     // likely to answer — so the row shows what the set will actually draw, not a curated sample.
     val sample = listOf("src" to true, "index.ts" to false, "app.py" to false, "README.md" to false)
     IconSetRow(
         name = name,
-        description = description.ifBlank { detail?.let { "${it.iconCount} icons" } ?: "" },
+        description = description.ifBlank { detail?.let { strings.text("settings.icons", mapOf("count" to (it.iconCount).toString())) } ?: "" },
         selected = selected,
         onClick = onClick,
         preview = {
@@ -2025,6 +1981,8 @@ private fun IconSetRow(
     onClick: () -> Unit,
     preview: @Composable () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2054,7 +2012,7 @@ private fun IconSetRow(
         if (selected) {
             Icon(
                 imageVector = Icons.Rounded.Check,
-                contentDescription = "Selected",
+                contentDescription = strings.text("ui.selected"),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(IconSize.md),
             )
@@ -2076,13 +2034,15 @@ private fun formatLogSize(bytes: Long): String = when {
  */
 @Composable
 private fun DiagnosticLogDialog(lines: List<String>, onDismiss: () -> Unit) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val clipboard = LocalClipboardManager.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Recent diagnostics") },
+        title = { Text(strings.text("ui.recentDiagnostics")) },
         text = {
             if (lines.isEmpty()) {
-                Text("Nothing recorded yet.", style = MaterialTheme.typography.bodySmall)
+                Text(strings.text("ui.nothingRecordedYet"), style = MaterialTheme.typography.bodySmall)
             } else {
                 // Newest last, scrolled to the bottom: the end of the log is what a report is about.
                 val scroll = rememberScrollState()
@@ -2104,10 +2064,10 @@ private fun DiagnosticLogDialog(lines: List<String>, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { CompactFilledButton(text = "Close", onClick = onDismiss) },
+        confirmButton = { CompactFilledButton(text = strings.text("ui.close"), onClick = onDismiss) },
         dismissButton = {
             CompactOutlinedButton(
-                text = "Copy",
+                text = strings.text("ui.copy"),
                 onClick = {
                     clipboard.setText(AnnotatedString(buildString { lines.forEach { appendLine(it) } }))
                 },
@@ -2141,6 +2101,8 @@ private fun SummaryRow(
 
 @Composable
 private fun EnvVarEditor(settings: EnvVarSettings) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // Dialog state: null = closed; [adding] distinguishes a brand-new variable from editing [editTarget].
     var editTarget by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -2148,22 +2110,21 @@ private fun EnvVarEditor(settings: EnvVarSettings) {
     Column(verticalArrangement = Arrangement.spacedBy(Space.ms)) {
         // A plain heading, not a SettingsGroup: this tab is one section and has no search field.
         Text(
-            text = "Environment variables",
+            text = strings.text("ui.environmentVariables"),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = Space.s, start = Space.xxs),
         )
         Text(
-            text = "Exported into every terminal and Build & Run session (e.g. API keys, GOPRIVATE, " +
-                "JAVA_OPTS). Applied to newly opened terminals.",
+            text = strings.text("ui.exportedIntoEveryTerminalAndBuildRunSessionE"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         val entries = settings.vars.entries.sortedBy { it.key.lowercase() }
         if (entries.isEmpty()) {
             Text(
-                text = "No variables yet. Tap “Add variable” to create one.",
+                text = strings.text("ui.noVariablesYetTapAddVariableToCreateOne"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = Space.sm),
@@ -2179,20 +2140,20 @@ private fun EnvVarEditor(settings: EnvVarSettings) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                             Text(
-                                text = value.ifEmpty { "(empty)" },
+                                text = value.ifEmpty { strings.text("ui.empty") },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        CompactOutlinedButton(text = "Edit", onClick = { editTarget = name; adding = false })
-                        CompactOutlinedButton(text = "Delete", onClick = { settings.onRemove(name) })
+                        CompactOutlinedButton(text = strings.text("ui.edit"), onClick = { editTarget = name; adding = false })
+                        CompactOutlinedButton(text = strings.text("ui.delete"), onClick = { settings.onRemove(name) })
                     }
                 }
             }
         }
-        CompactFilledButton(text = "Add variable", onClick = { editTarget = ""; adding = true })
+        CompactFilledButton(text = strings.text("ui.addVariable"), onClick = { editTarget = ""; adding = true })
     }
 
     val target = editTarget
@@ -2220,26 +2181,28 @@ private fun EnvVarDialog(
     onDismiss: () -> Unit,
     onSave: (name: String, value: String) -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     var name by remember { mutableStateOf(initialName) }
     var value by remember { mutableStateOf(initialValue) }
     val nameValid = name.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))
     val duplicate = name != editingName && name in existingNames
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (editingName == null) "Add variable" else "Edit variable") },
+        title = { Text(if (editingName == null) strings.text("ui.addVariable") else strings.text("ui.editVariable")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.trim() },
-                    label = { Text("Name") },
+                    label = { Text(strings.text("ui.name")) },
                     singleLine = true,
                     isError = name.isNotEmpty() && (!nameValid || duplicate),
                     supportingText = {
                         if (duplicate) {
-                            Text("A variable named \"$name\" already exists")
+                            Text(strings.text("settings.variableExists", mapOf("name" to (name).toString())))
                         } else if (name.isNotEmpty() && !nameValid) {
-                            Text("Letters, digits and underscore only; can't start with a digit")
+                            Text(strings.text("ui.lettersDigitsAndUnderscoreOnlyCanTStartWith"))
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -2247,19 +2210,19 @@ private fun EnvVarDialog(
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it },
-                    label = { Text("Value") },
+                    label = { Text(strings.text("ui.value")) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
         confirmButton = {
             CompactFilledButton(
-                text = "Save",
+                text = strings.text("ui.save"),
                 onClick = { onSave(name, value) },
                 enabled = nameValid && !duplicate,
             )
         },
-        dismissButton = { CompactOutlinedButton(text = "Cancel", onClick = onDismiss) },
+        dismissButton = { CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = onDismiss) },
     )
 }
 

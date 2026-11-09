@@ -56,10 +56,12 @@ internal fun OpenFolderTypeDialog(
     onDismiss: () -> Unit,
     onConfirm: (isWorkspace: Boolean) -> Unit,
 ) {
-    AlertDialog(onDismissRequest=onDismiss,title={Text("Open folder as Project?")},
-        text={Text("$folderName\nFiles remain accessible through Internal Files without a Project. Opening as a Project adds optional tools and context.")},
-        confirmButton={CompactFilledButton(text="Open Project",onClick={onConfirm(false)})},
-        dismissButton={CompactOutlinedButton(text="Cancel",onClick=onDismiss)})
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
+    AlertDialog(onDismissRequest=onDismiss,title={Text(strings.text("ui.openFolderAsProject"))},
+        text={Text(strings.text("project.openDescription", mapOf("name" to (folderName).toString())))},
+        confirmButton={CompactFilledButton(text=strings.text("ui.openProject"),onClick={onConfirm(false)})},
+        dismissButton={CompactOutlinedButton(text=strings.text("ui.cancel"),onClick=onDismiss)})
 }
 
 /**
@@ -79,6 +81,8 @@ internal fun ImportProgressHost(progress: StateFlow<ImportProgress?>) {
  */
 @Composable
 internal fun ImportProgressDialog(progress: ImportProgress) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Dialog(
         onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
@@ -93,7 +97,7 @@ internal fun ImportProgressDialog(progress: ImportProgress) {
                 verticalArrangement = Arrangement.spacedBy(Space.md),
             ) {
                 Text(
-                    text = if (progress.phase == ImportPhase.Scanning) "Scanning folder" else "Importing folder",
+                    text = if (progress.phase == ImportPhase.Scanning) strings.text("ui.scanningFolder") else strings.text("ui.importingFolder"),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -108,14 +112,14 @@ internal fun ImportProgressDialog(progress: ImportProgress) {
                     val fraction = (progress.done.toFloat() / progress.total).coerceIn(0f, 1f)
                     LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
                     Text(
-                        text = "${progress.done} / ${progress.total} files",
+                        text = strings.text("project.importProgress", mapOf("done" to (progress.done).toString(), "total" to (progress.total).toString())),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Text(
-                        text = "Reading contents…",
+                        text = strings.text("ui.readingContents"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -135,18 +139,20 @@ internal fun PostCloneDialog(
     onOpen: () -> Unit,
     onAdd: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     AlertDialog(
         onDismissRequest = onAdd,
-        title = { Text("Cloned '$projectName'") },
+        title = { Text(strings.text("project.cloned", mapOf("name" to (projectName).toString()))) },
         text = {
             Text(
-                "It was added to this workspace. Open it now, or keep it in the workspace to open later?",
+                strings.text("ui.itWasAddedToThisWorkspaceOpenItNow"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
-        confirmButton = { CompactFilledButton(text = "Open folder", onClick = onOpen) },
-        dismissButton = { CompactOutlinedButton(text = "Add to workspace", onClick = onAdd) },
+        confirmButton = { CompactFilledButton(text = strings.text("ui.openFolderText6a9084"), onClick = onOpen) },
+        dismissButton = { CompactOutlinedButton(text = strings.text("ui.addToWorkspace"), onClick = onAdd) },
     )
 }
 
@@ -165,6 +171,8 @@ internal fun NewItemDialog(
     onOpenGallery: (String, String, String) -> Unit = { _, _, _ -> },
     resolveDynamicOptions: suspend (String) -> List<String> = { emptyList() },
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     var name by rememberSaveable { mutableStateOf("") }
     var selectedTemplateId by rememberSaveable(templates) {
         mutableStateOf(templates.firstOrNull()?.id)
@@ -202,16 +210,16 @@ internal fun NewItemDialog(
     // Left column: folder type + name. Right column (Project): template list; (Workspace): a hint.
     val primarySection: @Composable () -> Unit = {
         SettingsTextFieldRow(
-            label = "Name",
+            label = strings.text("ui.name"),
             value = name,
             onValueChange = { name = it },
-            placeholder = "Project name",
+            placeholder = strings.text("ui.projectName"),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         )
     }
     val detailSection: @Composable () -> Unit = {
         run {
-            Text("Template", style = MaterialTheme.typography.labelLarge)
+            Text(strings.text("ui.template"), style = MaterialTheme.typography.labelLarge)
             templates.forEach { template ->
                 TemplateOption(
                     template = template,
@@ -229,7 +237,7 @@ internal fun NewItemDialog(
             Text(
                 when {
                     step == 1 && selectedTemplate != null -> selectedTemplate.name
-                    else -> "New Project"
+                    else -> strings.text("ui.newProject")
                 },
             )
         },
@@ -240,7 +248,7 @@ internal fun NewItemDialog(
                     verticalArrangement = Arrangement.spacedBy(Space.lg),
                 ) {
                     Text(
-                        "Configure this project, then create it.",
+                        strings.text("ui.configureThisProjectThenCreateIt"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -287,7 +295,7 @@ internal fun NewItemDialog(
             val gallery = selectedTemplate?.gallery.orEmpty()
             val handsOff = gallery.isNotBlank() && selectedTemplate?.extensionId?.isNotBlank() == true
             CompactFilledButton(
-                text = if (handsOff || (step == 0 && hasInputs)) "Next" else "Create",
+                text = if (handsOff || (step == 0 && hasInputs)) strings.text("ui.next") else strings.text("ui.create"),
                 onClick = {
                     if (handsOff) {
                         // The extension takes it from here: it draws the variants, asks whatever it
@@ -313,7 +321,7 @@ internal fun NewItemDialog(
         },
         dismissButton = {
             CompactOutlinedButton(
-                text = if (step == 1) "Back" else "Cancel",
+                text = if (step == 1) strings.text("ui.back") else strings.text("ui.cancel"),
                 onClick = { if (step == 1) step = 0 else onDismiss() },
             )
         },
@@ -368,6 +376,8 @@ private fun TemplateOption(
     installedToolchains: Set<String>,
     onSelect: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val missing = template.requires.filter { it !in installedToolchains }
     Row(
         modifier = Modifier
@@ -379,10 +389,10 @@ private fun TemplateOption(
     ) {
         RadioButton(selected = selected, onClick = onSelect)
         Column(modifier = Modifier.padding(top = Space.md)) {
-            Text(template.name, style = MaterialTheme.typography.bodyLarge)
+            Text(if(template.id=="empty") strings.text("ui.empty") else template.name, style = MaterialTheme.typography.bodyLarge)
             if (template.description.isNotBlank()) {
                 Text(
-                    template.description,
+                    if(template.id=="empty") strings.text("project.blankDescription") else template.description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

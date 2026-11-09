@@ -121,6 +121,8 @@ internal fun GoToLineDialog(
     onDismiss: () -> Unit,
     onGo: (line: Int, column: Int) -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     var input by remember { mutableStateOf("") }
     val parsed = remember(input) { parseLineColumn(input) }
 
@@ -150,7 +152,7 @@ internal fun GoToLineDialog(
             CompactFilledButton(text = "Go", onClick = ::confirm, enabled = parsed != null)
         },
         dismissButton = {
-            CompactOutlinedButton(text = "Cancel", onClick = onDismiss)
+            CompactOutlinedButton(text = strings.text("ui.cancel"), onClick = onDismiss)
         },
     )
 }
@@ -172,6 +174,8 @@ internal fun ColorPickOverlay(
     onPicked: (argb: Int) -> Unit,
     onCancel: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val context = LocalContext.current
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
@@ -214,7 +218,7 @@ internal fun ColorPickOverlay(
                     color = MaterialTheme.colorScheme.inverseOnSurface,
                 )
                 Text(
-                    text = "Cancel",
+                    text = strings.text("ui.cancel"),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.inversePrimary,
                 )
@@ -250,6 +254,8 @@ internal fun ColorSampleDialog(
     onPickAgain: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val clipboard = LocalClipboardManager.current
     val a = (argb ushr 24) and 0xFF
     val r = (argb ushr 16) and 0xFF
@@ -299,7 +305,7 @@ internal fun ColorSampleDialog(
             }
         },
         confirmButton = {
-            CompactFilledButton(text = "Done", onClick = onDismiss)
+            CompactFilledButton(text = strings.text("ui.Done"), onClick = onDismiss)
         },
         dismissButton = {
             CompactOutlinedButton(text = "Pick again", onClick = onPickAgain)

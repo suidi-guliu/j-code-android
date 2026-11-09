@@ -434,6 +434,8 @@ private fun MigrationImportCard(
     onImport: () -> Unit,
     onSetUpFresh: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val interactive = enabled && !running && !completed
     StepCard(
         number = number,
@@ -454,10 +456,10 @@ private fun MigrationImportCard(
             verticalArrangement = Arrangement.spacedBy(Space.sm),
         ) {
             FilledTonalButton(onClick = onImport, enabled = interactive) {
-                Text("Import")
+                Text(strings.text("ui.Import"))
             }
             OutlinedButton(onClick = onSetUpFresh, enabled = interactive) {
-                Text("Set up fresh instead")
+                Text(strings.text("ui.Setupfreshinstead"))
             }
         }
         if (interactive) {
@@ -483,6 +485,8 @@ private fun DistroSelectionCard(
     onRefresh: () -> Unit,
     onRestoreEnvironment: (() -> Unit)? = null,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     // Interactive until the previous step (storage) is done; the whole card also locks while a setup
     // runs AND stays locked once it has succeeded (Step 3 done) — re-selecting/re-running from here
     // then makes no sense. A failed run leaves it interactive so the user can retry.
@@ -535,7 +539,7 @@ private fun DistroSelectionCard(
                 }
             }
             OutlinedButton(onClick = onRefresh, enabled = interactive) {
-                Text("Refresh")
+                Text(strings.text("files.refresh"))
             }
         }
         if (onRestoreEnvironment != null && interactive) {
@@ -562,6 +566,8 @@ private fun ConfigureStepCard(
     modifier: Modifier = Modifier,
     fillLog: Boolean = false,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     StepCard(
         number = number,
         active = running || completed,
@@ -629,13 +635,14 @@ private fun ConfigureStepCard(
             fixedLogHeight = !fillLog,
         )
 
-        if (completed && onDismiss != null) {
+        if (onDismiss != null) {
             Spacer(modifier = Modifier.height(8.dp))
             FilledTonalButton(
                 onClick = onDismiss,
+                enabled = !running,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Done")
+                Text(strings.text(if(completed) "ui.Done" else "ui.Continuewithoutenvironment"))
             }
         }
     }
@@ -650,6 +657,8 @@ private fun ConfigureStepCard(
  */
 @Composable
 private fun WebEngineHintCard() {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val ctx = LocalContext.current
     val engineVersion = remember {
         runCatching { android.webkit.WebView.getCurrentWebViewPackage()?.versionName }.getOrNull()
@@ -667,7 +676,7 @@ private fun WebEngineHintCard() {
                 .padding(Space.lg),
             verticalArrangement = Arrangement.spacedBy(Space.ms),
         ) {
-            Text("Browser engine is outdated", fontWeight = FontWeight.SemiBold)
+            Text(strings.text("ui.Browserengineisoutdated"), fontWeight = FontWeight.SemiBold)
             Text(
                 text = "This device's WebView is Chromium $engineVersion, which modern sites can " +
                     "render blank or broken. JCode's built-in browser and web previews use it. " +
@@ -693,7 +702,7 @@ private fun WebEngineHintCard() {
                     }
                 },
             ) {
-                Text("Get latest WebView")
+                Text(strings.text("ui.getLatestWebView"))
             }
         }
     }
@@ -702,6 +711,8 @@ private fun WebEngineHintCard() {
 /** Reveals the setup wizard on a device that is already configured, for adding a second distro. */
 @Composable
 private fun AddEnvironmentCard(onAdd: () -> Unit) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Surface(
         shape = RoundedCornerShape(Radius.sheet),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
@@ -712,14 +723,14 @@ private fun AddEnvironmentCard(onAdd: () -> Unit) {
                 .padding(Space.lg),
             verticalArrangement = Arrangement.spacedBy(Space.ms),
         ) {
-            Text("Add an environment", fontWeight = FontWeight.SemiBold)
+            Text(strings.text("ui.Addanenvironment"), fontWeight = FontWeight.SemiBold)
             Text(
                 text = "Install another Linux distro alongside the ones above. Each keeps its own SDKs " +
                     "and language servers.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FilledTonalButton(onClick = onAdd) { Text("Install another distro") }
+            FilledTonalButton(onClick = onAdd) { Text(strings.text("ui.Installanotherdistro")) }
         }
     }
 }
@@ -731,6 +742,8 @@ private fun InstalledEnvironmentsCard(
     onSwitch: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     val hostArch = Arch.host()
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -744,7 +757,7 @@ private fun InstalledEnvironmentsCard(
                 .padding(Space.lg),
             verticalArrangement = Arrangement.spacedBy(Space.ms),
         ) {
-            Text("Installed environments", fontWeight = FontWeight.SemiBold)
+            Text(strings.text("ui.Installedenvironments"), fontWeight = FontWeight.SemiBold)
             Text(
                 text = "Switch which environment terminals and builds target. SDKs and language servers stay " +
                     "installed per environment. Open terminals keep their original environment.",
@@ -771,7 +784,7 @@ private fun InstalledEnvironmentsCard(
         val target = environments.firstOrNull { it.id == deleteId }
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Remove environment") },
+            title = { Text(strings.text("ui.Removeenvironment")) },
             text = {
                 Text(
                     "Remove ${target?.label ?: deleteId}? Its rootfs and everything installed inside it " +
@@ -781,13 +794,13 @@ private fun InstalledEnvironmentsCard(
             // Destructive "Remove" sits away from the rightmost (reflexive-tap) slot, which Material
             // gives to the dismiss button.
             confirmButton = {
-                CompactDestructiveButton(text = "Remove", onClick = {
+                CompactDestructiveButton(text = strings.text("ui.remove"), onClick = {
                     onDelete(deleteId)
                     pendingDelete = null
                 })
             },
             dismissButton = {
-                CompactFilledButton(text = "Cancel", onClick = { pendingDelete = null })
+                CompactFilledButton(text = strings.text("ui.cancel"), onClick = { pendingDelete = null })
             },
         )
     }
@@ -802,6 +815,8 @@ private fun EnvironmentRow(
     onSwitch: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Surface(
         shape = RoundedCornerShape(Radius.xxl),
         color = if (env.isActive) {
@@ -848,7 +863,7 @@ private fun EnvironmentRow(
                 )
             }
             TextButton(onClick = onDelete, enabled = canDelete) {
-                Text("Remove", color = MaterialTheme.colorScheme.error)
+                Text(strings.text("ui.remove"), color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -856,6 +871,8 @@ private fun EnvironmentRow(
 
 @Composable
 private fun Header() {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -867,9 +884,9 @@ private fun Header() {
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {
-            Text("Environment setup", fontWeight = FontWeight.SemiBold)
+            Text(strings.text("ui.Environmentsetup"), fontWeight = FontWeight.SemiBold)
             Text(
-                text = "Pick a Linux distro and JCode configures the rest automatically.",
+                text = strings.text("ui.PickaLinuxdistroandJCodeconfigurestherestautomatically"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1004,6 +1021,8 @@ private fun ActivityLogCard(
     modifier: Modifier = Modifier,
     fixedLogHeight: Boolean = true,
 ) {
+    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Radius.xxxl),
@@ -1022,15 +1041,15 @@ private fun ActivityLogCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    Text("Setup log", fontWeight = FontWeight.SemiBold)
+                    Text(strings.text("ui.setupLog"), fontWeight = FontWeight.SemiBold)
                     Text(
-                        text = runningStep?.key ?: "Waiting for progress",
+                        text = runningStep?.key ?: strings.text("ui.Waitingforprogress"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 TextButton(onClick = onToggle) {
-                    Text(if (expanded) "Hide" else "Show")
+                    Text(if (expanded) strings.text("option.Hide") else strings.text("ui.show"))
                 }
             }
             if (expanded) {
