@@ -1,0 +1,94 @@
+name: Diagnose sui-code Chinese Kit on a separate fresh Android 16 AVD
+on:
+  push:
+    branches: [sui-code/v0.5.3-zh-hans-kit]
+    paths:
+      - '.github/workflows/diagnose-zh-hans-fresh.yml'
+      - 'tools/localization/android_regression.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fresh-only:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5.3-zh-hans-kit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify immutable delivery, old deliveries, app identity and original signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=.delivery/sui-code-v0.5.3-zh-hans
+          (cd "$root" && sha256sum --check --strict SHA256SUMS)
+          for old in sui-code-native-0.4 sui-code-v0.5 sui-code-v0.5-ui-polish sui-code-v0.5.2-startup-recovery; do
+            (cd ".delivery/$old" && sha256sum --check --strict SHA256SUMS)
+          done
+          apk="$root/sui-code-v0.5.3-debug.apk"
+          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          old_cert=$("$signer" verify --print-certs .delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk | awk '/certificate SHA-256 digest:/ {print $NF}')
+          new_cert=$("$signer" verify --print-certs "$apk" | awk '/certificate SHA-256 digest:/ {print $NF}')
+          test "$old_cert" = "$new_cert"
+          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
+          "$(dirname "$signer")/aapt" dump badging "$apk" > "$RUNNER_TEMP/zh-apk-badging.txt"
+          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070806' versionName='0.5.3'" "$RUNNER_TEMP/zh-apk-badging.txt"
+          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/zh-apk-badging.txt"
+      - name: Verify original icons, independent language archive and signed test APK inputs
+        shell: python
+        run: |
+          import pathlib,zipfile,os,json,hashlib
+          root=pathlib.Path('.delivery/sui-code-v0.5.3-zh-hans')
+          meta=json.loads((root/'apk-metadata.json').read_text())
+          for field in ['apk','language_pack']:
+              item=meta[field];p=root/item['file']
+              assert p.stat().st_size==item['bytes']
+              assert hashlib.sha256(p.read_bytes()).hexdigest()==item['sha256']
+          assert (root/'sui-code-zh-hans-1.0.0.suik').read_bytes()==pathlib.Path('localization/releases/sui-code-zh-hans-1.0.0.suik').read_bytes()
+          with zipfile.ZipFile('.delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk') as old,zipfile.ZipFile(root/'sui-code-v0.5.3-debug.apk') as new:
+              icons=[n for n in old.namelist() if 'ic_launcher' in n]
+              assert len(icons)==15
+              for n in icons:assert old.read(n)==new.read(n),n
+              assert not any('sui-code-zh-hans' in n for n in new.namelist()),'Chinese must not be embedded into main APK'
+          target=pathlib.Path(os.environ['RUNNER_TEMP'])/'zh-inputs';target.mkdir()
+          with zipfile.ZipFile(root/'android-test-inputs.zip') as z:
+              for n in ['payload.tar','payload-sha256.json','startup-androidTest.apk']:(target/n).write_bytes(z.read(n))
+      - name: Prepare two hardware accelerated Android 16 AVDs
+        id: avds
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-36;google_apis;x86_64' > "$RUNNER_TEMP/zh-sdk-install.log" 2>&1
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/zh-avds"
+          mkdir -p "$ANDROID_AVD_HOME"
+          for name in sui-zh-upgrade sui-zh-fresh; do
+            printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n "$name" -k 'system-images;android-36;google_apis;x86_64' -d pixel_c --force
+          done
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+      - name: Isolated fresh Android 16 installation and language lifecycle
+        run: bash tools/localization/run_emulator.sh fresh
+      - name: Expose actionable failure diagnostics
+        if: failure()
+        shell: python
+        run: |
+          import pathlib,os
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'zh-android-evidence';rows=[]
+          for p in list(root.glob('*/failure.txt'))+list(root.glob('*/startup-android.txt'))+list(root.glob('*/full-kit-android.txt')):
+              rows.append(str(p.relative_to(root))+': '+p.read_text(errors='replace')[-5500:])
+          if rows:print('::error title=Android locale diagnostics::'+'\n'.join(rows)[-14000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
+      - name: Preserve isolated fresh-install evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zh-hans-isolated-fresh-evidence
+          path: |
+            ${{ runner.temp }}/zh-android-evidence/
+            ${{ runner.temp }}/zh-sdk-install.log
+          if-no-files-found: warn
+          retention-days: 30
