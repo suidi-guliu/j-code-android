@@ -76,6 +76,7 @@ def wait_text(label,contains=False,scroll=False,pane=False,timeout=50):
  deadline=time.monotonic()+timeout
  while True:
   tree=xml();found=matches(tree,label,contains)
+  if pane:found=[n for n in found if (bounds(n)[0]+bounds(n)[2])/2<WIDTH*.4]
   if found:return tree,found
   assert time.monotonic()<deadline,'Visible UI text missing: '+label
   if scroll:swipe(pane)
@@ -94,9 +95,14 @@ def checkpoint(name,expected=()):
 def alive(name,chinese=False):
  adb('shell','am force-stop '+pkg);r=adb('shell','am start -W -n '+activity,timeout=180)
  (a.evidence/(name+'-launch.txt')).write_text(r.stdout+r.stderr)
- deadline=time.monotonic()+60
+ deadline=time.monotonic()+60;seen_process=False
  while True:
-  assert adb('shell','pidof '+pkg).stdout.strip(),'Activity did not survive'
+  pid=adb('shell','pidof '+pkg,check=False).stdout.strip()
+  if not pid:
+   assert not seen_process,'Activity process exited after it had started'
+   assert time.monotonic()<deadline,'Activity process never started within the existing first-frame deadline'
+   time.sleep(.5);continue
+  seen_process=True
   tree=xml();labels=['运行文件','环境配置'] if chinese else ['Run file','Environment setup']
   if any(matches(tree,t) for t in labels):break
   assert time.monotonic()<deadline,'No actual app first frame';time.sleep(1)
