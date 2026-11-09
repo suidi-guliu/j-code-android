@@ -34,6 +34,7 @@ def install(path):
 def runas(command,check=True):return adb('shell','run-as '+pkg+' sh -c '+shlex.quote(command),check=check)
 def xml():
  global last_xml
+ adb('shell','rm -f /data/local/tmp/sui-zh-ui.xml')
  adb('shell','uiautomator dump --compressed /data/local/tmp/sui-zh-ui.xml',timeout=90)
  last_xml=adb('shell','cat /data/local/tmp/sui-zh-ui.xml').stdout
  return ET.fromstring(last_xml)
@@ -45,7 +46,7 @@ def tap_node(n):
  adb('shell',f'input tap {(x1+x2)//2} {(y1+y2)//2}');time.sleep(.7)
 def swipe(pane=False):
  x=220 if pane else WIDTH//2
- adb('shell',f'input swipe {x} {int(HEIGHT*.78)} {x} {int(HEIGHT*.30)} 350');time.sleep(.4)
+ adb('shell',f'input swipe {x} {int(HEIGHT*.78)} {x} {int(HEIGHT*(.50 if pane else .30))} 350');time.sleep(.4)
 def wait_text(label,contains=False,scroll=False,pane=False,timeout=50):
  deadline=time.monotonic()+timeout
  while True:
@@ -163,7 +164,7 @@ def ui_lifecycle():
  tap('设置',nav=True);wait_text('搜索设置');checkpoint('chinese-settings',['搜索设置','外观'])
  # Real portrait/font scale recreation, still no environment installation or data reset.
  adb('shell','wm size 800x1280');adb('shell','settings put system font_scale 1.3');time.sleep(2)
- checkpoint('chinese-portrait-font130',['设置'])
+ checkpoint('chinese-portrait-font130',['设置','搜索设置'])
  adb('shell','wm size 1280x800');adb('shell','settings put system font_scale 1.0');time.sleep(2)
  card_action('禁用',True);wait_text('Run file');checkpoint('disabled-english-fallback',['Run file'])
  card_action('Enable',False);review();wait_text('运行文件');checkpoint('reenabled-chinese',['运行文件'])
@@ -183,7 +184,11 @@ while True:
  if r.returncode==0:break
  assert time.monotonic()<deadline,'Owned AVD shared storage not ready: '+r.stdout+r.stderr
  time.sleep(2)
-adb('push',a.kit,'/sdcard/Download/'+a.kit.name)
+adb('push',a.kit,'/data/local/tmp/'+a.kit.name)
+r=adb('shell','cp /data/local/tmp/'+a.kit.name+' /sdcard/Download/'+a.kit.name,check=False)
+if r.returncode:
+ details=adb('shell','id; ls -ldZ /sdcard /storage/emulated/0 /sdcard/Download; getprop sys.user.0.ce_available',check=False).stdout
+ raise RuntimeError('Emulator shell cannot prepare Downloads: '+r.stdout+r.stderr+'\n'+details)
 adb('shell','am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/'+a.kit.name,check=False)
 if a.mode=='upgrade':
  install(root/'.delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk');alive('v052-original-first-frame')

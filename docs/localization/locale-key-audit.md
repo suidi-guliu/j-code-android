@@ -569,7 +569,7 @@
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:387|ui.select|选择|已绑定|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:388|files.sort|排序：{sort}|已绑定|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:388|ui.name|名称|已绑定|
-|feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:388|option.Modified|已修改|已绑定|
+|feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:388|option.Modified|修改时间|已绑定|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:388|option.Size|大小|已绑定|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:391|ui.selectionActions|选中项操作 ▾|已绑定|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:394|ui.selectAllVisible|选择全部可见项|已绑定|

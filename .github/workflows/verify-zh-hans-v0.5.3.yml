@@ -61,7 +61,7 @@ jobs:
           set -euo pipefail
           # JVM tests do not load ARM64 JNI. The actual APK is built with all native tasks in Codex Cloud.
           # Keep this job focused on host contracts instead of requiring a second Rust cross toolchain.
-          gradle --no-daemon --max-workers=4 -x :native:ripgrep-ffi:cargoBuildDebugJniLibs -x :native:wasmtime-ffi:cargoBuildDebugJniLibs :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:search:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :core:editor:testDebugUnitTest :core:term:testDebugUnitTest :core:debug:testDebugUnitTest :core:lsp:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
+          gradle --console=plain --stacktrace --no-daemon --max-workers=2 -x :native:ripgrep-ffi:cargoBuildDebugJniLibs -x :native:wasmtime-ffi:cargoBuildDebugJniLibs :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:search:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :core:editor:testDebugUnitTest :core:term:testDebugUnitTest :core:debug:testDebugUnitTest :core:lsp:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
       - name: Publish concrete test and build diagnostics
         if: always()
         shell: python
@@ -80,8 +80,14 @@ jobs:
                   tail='\n'.join(log.read_text().splitlines()[-100:])
                   out.write('\n### Gradle tail\n```text\n'+tail+'\n```\n')
                   if 'BUILD FAILED' in tail:
-                      encoded=tail[-7000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+                      encoded=tail[-2500:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
                       print('::error title=Native Gradle diagnostics::'+encoded)
+                  if 'BUILD FAILED' in log.read_text() or 'BUILD SUCCESSFUL' not in log.read_text():
+                      import re
+                      lines=log.read_text().splitlines()
+                      selected=[line for line in lines if re.search(r'(^e:|^FAILURE|^\* What|^\* Exception|^Caused by:|^> (Could|Execution|Task|Failed)|daemon disappeared|OutOfMemory|BUILD FAILED|What went wrong|Unable to)',line)]
+                      detail='\n'.join(selected[-22:])[-2800:]
+                      print('::error title=Gradle root cause::'+detail.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
       - name: Verify development packages and reject the illegal plugin
         run: |
           set -euo pipefail

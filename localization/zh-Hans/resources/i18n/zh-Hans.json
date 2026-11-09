@@ -613,7 +613,7 @@
   "option.Output": "输出",
   "option.Issues": "问题",
   "option.Tasks": "任务",
-  "option.Modified": "已修改",
+  "option.Modified": "修改时间",
   "option.Size": "大小",
   "settings.systemVolume": "系统默认（{key}）",
   "find.placeholderContent": "搜索文件内容",
