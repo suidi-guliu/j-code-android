@@ -59,6 +59,7 @@ jobs:
           with zipfile.ZipFile(root/'android-test-inputs.zip') as z:
               for n in ['payload.tar','payload-sha256.json','startup-androidTest.apk']:(target/n).write_bytes(z.read(n))
       - name: Prepare two hardware accelerated Android 16 AVDs
+        id: avds
         shell: bash
         run: |
           set -euo pipefail
@@ -75,6 +76,7 @@ jobs:
       - name: Android 16 retained-data upgrade and real Chinese UI lifecycle
         run: bash tools/localization/run_emulator.sh upgrade
       - name: Android 16 clean install and real Chinese UI lifecycle
+        if: ${{ !cancelled() && steps.avds.outcome == 'success' }}
         run: bash tools/localization/run_emulator.sh fresh
       - name: Attach actual Android screenshots, logs and verification receipt
         shell: python

@@ -176,10 +176,13 @@ def ui_lifecycle():
  tap('新建文件夹',scroll=True,pane=True);checkpoint('chinese-create-folder',['新建文件夹','取消']);tap('取消')
  tap('查找',nav=True);checkpoint('chinese-find',['文件内容'])
  tap('语言',nav=True);wait_text('刷新就绪状态',scroll=True);checkpoint('chinese-languages',['刷新就绪状态'])
- tap('设置',nav=True);wait_text('搜索设置');checkpoint('chinese-settings',['搜索设置','外观'])
+ tap('设置',nav=True);tree,_=wait_text('外观')
+ assert any(n.attrib.get('class')=='android.widget.EditText' for n in tree.iter('node')),'Expected the actual Settings search editor'
+ # The visual placeholder is behind BasicTextField and Android omits it from accessibility XML.
+ checkpoint('chinese-settings',['全局','外观'])
  # Real portrait/font scale recreation, still no environment installation or data reset.
  adb('shell','wm size 800x1280');adb('shell','settings put system font_scale 1.3');time.sleep(2)
- checkpoint('chinese-portrait-font130',['设置','搜索设置'])
+ checkpoint('chinese-portrait-font130',['设置','外观'])
  adb('shell','wm size 1280x800');adb('shell','settings put system font_scale 1.0');time.sleep(2)
  card_action('禁用',True);wait_text('Run file');checkpoint('disabled-english-fallback',['Run file'])
  card_action('Enable',False);review();wait_text('运行文件');checkpoint('reenabled-chinese',['运行文件'])
