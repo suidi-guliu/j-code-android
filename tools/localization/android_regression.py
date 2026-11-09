@@ -34,10 +34,18 @@ def install(path):
 def runas(command,check=True):return adb('shell','run-as '+pkg+' sh -c '+shlex.quote(command),check=check)
 def xml():
  global last_xml
- adb('shell','rm -f /data/local/tmp/sui-zh-ui.xml')
- adb('shell','uiautomator dump --compressed /data/local/tmp/sui-zh-ui.xml',timeout=90)
- last_xml=adb('shell','cat /data/local/tmp/sui-zh-ui.xml').stdout
- return ET.fromstring(last_xml)
+ # Android may report a successful dump without creating a file during Activity recreation.
+ # Retry only capture, always delete the prior file, and never accept a stale hierarchy.
+ attempts=[]
+ for attempt in range(5):
+  adb('shell','rm -f /data/local/tmp/sui-zh-ui.xml')
+  dump=adb('shell','uiautomator dump --compressed /data/local/tmp/sui-zh-ui.xml',timeout=90,check=False)
+  captured=adb('shell','cat /data/local/tmp/sui-zh-ui.xml',check=False)
+  if dump.returncode==0 and captured.returncode==0:
+   tree=ET.fromstring(captured.stdout);last_xml=captured.stdout;return tree
+  attempts.append({'attempt':attempt+1,'dump':dump.stdout+dump.stderr,'capture':captured.stderr})
+  time.sleep(1)
+ raise RuntimeError('Fresh Android UI hierarchy capture failed: '+json.dumps(attempts))
 def matches(tree,label,contains=False):
  return [n for n in tree.iter('node') if (label in n.attrib.get('text','') or label in n.attrib.get('content-desc',''))] if contains else [n for n in tree.iter('node') if label in [n.attrib.get('text'),n.attrib.get('content-desc')]]
 def bounds(n):return list(map(int,re.findall(r'\d+',n.attrib['bounds'])))
