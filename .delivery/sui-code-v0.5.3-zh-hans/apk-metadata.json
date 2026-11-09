@@ -9,7 +9,7 @@
   "language_pack": {
     "file": "sui-code-zh-hans-1.0.0.suik",
     "bytes": 17980,
-    "sha256": "4c69cbf4b76faf613ef66b7d60fed4c80e102c1e08823cbe0aa8ce6fddb259be"
+    "sha256": "bc02011e142432b15f6a527abca2a7ee3ec113210efaa0b74046c023b22a0113"
   },
   "applicationId": "dev.suicode.ide.debug",
   "versionName": "0.5.3",
@@ -24,5 +24,6 @@
   "catalog_keys": 732,
   "chinese_values": 732,
   "physical_arm64_tested": false,
-  "android_result": "pending gated workflow"
+  "android_result": "pending gated workflow",
+  "language_pack_build_source_commit": "589f7f923dc9a205feb51d646b26b4166e177e36"
 }
