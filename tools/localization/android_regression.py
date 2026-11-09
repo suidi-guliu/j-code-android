@@ -116,17 +116,15 @@ def import_kit(chinese=False):
  open_packages(chinese)
  tap('导入 .suic / .suik' if chinese else 'Import .suic / .suik')
  time.sleep(1)
- # Android DocumentsUI provides the real scoped URI grant; no all-files permission is used.
+ # A test-APK-only read-only DocumentsProvider supplies the exact shipped bytes through real SAF.
  tree=xml()
- if not matches(tree,a.kit.name,True):
-  if matches(tree,'Downloads'):tap('Downloads')
-  else:
-   for label in ['Show roots','Show navigation drawer','Open navigation drawer']:
-    if matches(tree,label):tap(label);break
-   tap('Downloads')
+ if not matches(tree,'sui-code test packages'):
+  for label in ['Show roots','Show navigation drawer','Open navigation drawer']:
+   if matches(tree,label):tap(label);break
+ tap('sui-code test packages',scroll=True,pane=True)
  tap(a.kit.name,contains=True,scroll=True)
  review()
- note('REAL_SAF_IMPORT_AND_REVIEW_PASS')
+ note('REAL_SAF_IMPORT_AND_REVIEW_PASS (read-only test DocumentsProvider; shipped Kit bytes)')
 def select_language(chinese):
  current_zh=bool(matches(xml(),'界面语言'))
  tap('界面语言' if current_zh else 'Interface language')
@@ -176,27 +174,15 @@ def ui_lifecycle():
 
 (a.evidence/'platform.txt').write_text(adb('shell','getprop').stdout)
 adb('shell','wm size 1280x800');adb('shell','wm density 160');adb('shell','settings put system font_scale 1.0')
-# Boot completion can precede user unlock / emulated shared-storage readiness.
+# The test DocumentsProvider avoids adb/shell writes into Android16's FUSE Downloads.
 adb('shell','input keyevent KEYCODE_WAKEUP');adb('shell','wm dismiss-keyguard',check=False);adb('shell','input keyevent 82')
-deadline=time.monotonic()+60
-while True:
- r=adb('shell','mkdir -p /sdcard/Download',check=False)
- if r.returncode==0:break
- assert time.monotonic()<deadline,'Owned AVD shared storage not ready: '+r.stdout+r.stderr
- time.sleep(2)
-adb('push',a.kit,'/data/local/tmp/'+a.kit.name)
-r=adb('shell','cp /data/local/tmp/'+a.kit.name+' /sdcard/Download/'+a.kit.name,check=False)
-if r.returncode:
- details=adb('shell','id; ls -ldZ /sdcard /storage/emulated/0 /sdcard/Download; getprop sys.user.0.ce_available',check=False).stdout
- raise RuntimeError('Emulator shell cannot prepare Downloads: '+r.stdout+r.stderr+'\n'+details)
-adb('shell','am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/'+a.kit.name,check=False)
 if a.mode=='upgrade':
  install(root/'.delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk');alive('v052-original-first-frame')
  adb('shell','am force-stop '+pkg);adb('push',a.inputs/'payload.tar','/data/local/tmp/sui-zh-payload.tar');runas('tar -xf /data/local/tmp/sui-zh-payload.tar');hashes('v052-seeded')
  install(a.inputs/'startup-androidTest.apk')
  instrument('dev.blamspot.jcode.BaselineDataTest#createRegisteredProject','v052-create-project',1)
  adb('shell','am force-stop '+pkg)
-install(a.apk);alive('v053-first-frame');ensure_workbench()
+install(a.apk);install(a.inputs/'startup-androidTest.apk');alive('v053-first-frame');ensure_workbench()
 if a.mode=='upgrade':
  hashes('v053-before-localization');instrument('dev.blamspot.jcode.BaselineDataTest#verifyRegisteredProjectSurvives','v053-project-retained',1);alive('v053-project-restart');ensure_workbench()
 ui_lifecycle()

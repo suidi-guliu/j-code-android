@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application android:name="android.app.Application" android:appComponentFactory="android.app.AppComponentFactory" tools:replace="android:appComponentFactory">
+        <provider android:name="dev.blamspot.jcode.ZhKitDocumentsProvider"
+            android:authorities="dev.suicode.ide.debug.test.zh-kit"
+            android:exported="true" android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter><action android:name="android.content.action.DOCUMENTS_PROVIDER" /></intent-filter>
+        </provider>
+    </application>
+</manifest>
