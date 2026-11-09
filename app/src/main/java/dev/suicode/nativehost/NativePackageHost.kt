@@ -34,14 +34,13 @@ class NativePackageHost private constructor(private val context: Context) {
     private val mutation=Mutex()
     private val mutableRows=MutableStateFlow<List<NativePackageRow>>(emptyList())
     val rows=mutableRows.asStateFlow()
-    private val languagePrefs=context.getSharedPreferences("sui-native-ui-language",Context.MODE_PRIVATE)
-    private val mutableLanguage=MutableStateFlow(languagePrefs.getString("selection-v1",null))
+    private val mutableLanguage=MutableStateFlow(dev.blamspot.jcode.startup.StartupPreferences.language(context))
     val selectedUiLanguage=mutableLanguage.asStateFlow()
     private val mutableLocalizations=MutableStateFlow<List<LocalizationBundle>>(emptyList())
     val localizations=mutableLocalizations.asStateFlow()
     fun selectUiLanguage(selection: String?) {
         require(selection==null || mutableLocalizations.value.any { it.selectionId==selection }) { "Unavailable language package" }
-        languagePrefs.edit().putString("selection-v1",selection).apply();mutableLanguage.value=selection
+        dev.blamspot.jcode.startup.StartupPreferences.saveLanguage(context,selection);mutableLanguage.value=selection
     }
     private val mutableError=MutableStateFlow<String?>(null)
     val error=mutableError.asStateFlow()
@@ -194,15 +193,18 @@ class NativePackageHost private constructor(private val context: Context) {
     }
     private fun publish() {
         mutableRows.value=store.records().mapNotNull { record ->
-            runCatching { NativePackageRow(record,store.load(record.id)) }.onFailure { error -> mutableError.value="${record.id}: ${error.message}" }.getOrNull()
+            runCatching { NativePackageRow(record,store.load(record.id)) }.onFailure { error -> if(error is Exception) dev.blamspot.jcode.startup.StartupDiagnostics.report(context,"native-packages.load.${record.id}",error);mutableError.value="${record.id}: ${error.message}" }.getOrNull()
         }
         mutableLocalizations.value=mutableRows.value.filter { it.record.enabled && sessions.containsKey(it.record.id) && Capability.LOCALIZATION in it.record.grants }
-            .flatMap { LocalizationResources.forPack(it.pack) }.sortedWith(compareBy({it.locale},{it.packageId}))
+            .flatMap { row ->
+                try { LocalizationResources.forPack(row.pack) }
+                catch(e: Exception) { dev.blamspot.jcode.startup.StartupDiagnostics.report(context,"localization.package.${row.record.id}",e);mutableError.value="Language resources unavailable: ${row.record.id}: ${e.message}";emptyList() }
+            }.sortedWith(compareBy({it.locale},{it.packageId}))
     }
     private suspend fun action(block: ()->Unit) = withContext(Dispatchers.IO) {
         mutation.withLock {
             try { mutableError.value=null;block();reconcile();publish() }
-            catch(e: Exception) { mutableError.value=e.message ?: "Native package operation failed";runCatching { publish() };throw e }
+            catch(e: Exception) { dev.blamspot.jcode.startup.StartupDiagnostics.report(context,"native-packages.operation",e);mutableError.value=e.message ?: "Native package operation failed";runCatching { publish() };throw e }
         }
     }
     companion object {

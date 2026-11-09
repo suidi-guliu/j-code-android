@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private val mouseContextClick = MouseContextClick(::dispatchReplayedTouch)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        dev.blamspot.jcode.startup.StartupDiagnostics.install(applicationContext)
         setTheme(R.style.Theme_JCode)
         super.onCreate(savedInstanceState)
         if(BuildConfig.DEBUG) heartbeat=MainThreadHeartbeat()
@@ -76,7 +77,7 @@ class MainActivity : ComponentActivity() {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         setContent {
-            dev.suicode.nativehost.NativeLocalizationProvider { JCodeRoot(viewModel = viewModel) }
+            JCodeRoot(viewModel = viewModel)
         }
     }
 
@@ -175,6 +176,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun JCodeRoot(viewModel: MainViewModel) {
+    val context=androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        dev.blamspot.jcode.startup.StartupDiagnostics.event(context,"root.composed")
+    }
     val windowInfo by rememberJCodeWindowInfo()
     val densityMode = if (windowInfo.hasPhysicalKeyboard) DensityMode.Compact else DensityMode.Comfortable
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -196,8 +201,10 @@ private fun JCodeRoot(viewModel: MainViewModel) {
         uiIconSet = uiIconSet,
         fileIconSet = fileIconSet,
     ) {
-        WithoutExtractedIme {
-            JCodeApp(viewModel = viewModel, modifier = Modifier)
+        dev.suicode.nativehost.NativeLocalizationProvider(viewModel.nativePackages) {
+            WithoutExtractedIme {
+                JCodeApp(viewModel = viewModel, modifier = Modifier)
+            }
         }
     }
 }

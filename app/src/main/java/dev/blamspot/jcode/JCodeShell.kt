@@ -2188,7 +2188,7 @@ private fun JCodeShell(
     val paneDensity=LocalDensity.current
     var measuredWorkbenchWidth by remember { mutableFloatStateOf(configuration.screenWidthDp.toFloat()) }
     val panePrefs=remember(appContext) { appContext.getSharedPreferences("sui-workbench-layout",Context.MODE_PRIVATE) }
-    var requestedPaneWidth by remember { mutableFloatStateOf(panePrefs.getFloat("content-width-v1",Float.NaN)) }
+    var requestedPaneWidth by remember { mutableFloatStateOf(dev.blamspot.jcode.startup.StartupPreferences.paneWidth(appContext,panePrefs)) }
     val paneBounds=dev.blamspot.jcode.design.WorkbenchPaneSizing.bounds(measuredWorkbenchWidth,paneDensity.fontScale,requestedPaneWidth)
     val usesModalWorkspace = paneBounds.modal || windowInfo.heightClass == JCodeWindowHeightClass.Compact
     val isPortraitMobileMode = usesModalWorkspace && windowInfo.widthClass == JCodeWindowWidthClass.Compact
@@ -4130,7 +4130,7 @@ private fun JCodeShell(
                         dev.blamspot.jcode.workbench.WorkbenchPaneResize(paneBounds,
                             onWidth={requestedPaneWidth=it},
                             onDelta={delta -> val live=dev.blamspot.jcode.design.WorkbenchPaneSizing.bounds(measuredWorkbenchWidth,paneDensity.fontScale,requestedPaneWidth); requestedPaneWidth=(live.width+delta).coerceIn(live.minimum,live.maximum)},
-                            onCommit={panePrefs.edit().putFloat("content-width-v1",requestedPaneWidth).apply()},
+                            onCommit={dev.blamspot.jcode.startup.StartupPreferences.savePaneWidth(appContext,panePrefs,requestedPaneWidth)},
                             modifier=Modifier.align(Alignment.CenterStart).padding(start=leftSidebarWidth-12.dp).zIndex(2f))
                     }
                 }

@@ -9,14 +9,21 @@ import androidx.compose.ui.unit.dp
 import dev.blamspot.jcode.design.LocalUiTranslations
 import dev.blamspot.jcode.design.uiText
 import dev.suicode.packages.UiTranslations
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.CancellationException
+import dev.blamspot.jcode.startup.StartupDiagnostics
 
 @Composable
-fun NativeLocalizationProvider(content: @Composable ()->Unit) {
+fun NativeLocalizationProvider(host: NativePackageHost,content: @Composable ()->Unit) {
     val context=LocalContext.current
-    val host=remember(context) { NativePackageHost.get(context) }
-    val bundles by host.localizations.collectAsState()
-    val selection by host.selectedUiLanguage.collectAsState()
-    val strings=remember(bundles,selection) { UiTranslations(bundles,selection) }
+    var strings by remember(host) { mutableStateOf(UiTranslations()) }
+    LaunchedEffect(host) {
+        host.localizations.combine(host.selectedUiLanguage) { bundles,selection ->
+            try { UiTranslations(bundles,selection) }
+            catch(e: CancellationException) { throw e }
+            catch(e: Exception) { StartupDiagnostics.report(context,"localization.snapshot",e);UiTranslations() }
+        }.collect { strings=it }
+    }
     CompositionLocalProvider(LocalUiTranslations provides strings,content=content)
 }
 

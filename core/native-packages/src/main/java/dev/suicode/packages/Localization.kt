@@ -40,12 +40,6 @@ data class LocalizationBundle(val packageId: String,val locale: String,val displ
 
 /** Parsed only from authenticated payload bytes; no paths, classes, HTML or scripts are evaluated. */
 object LocalizationResources {
-    private val placeholder=Regex("\\{([a-z][a-zA-Z0-9]*)}")
-    private fun parameters(value: String): Set<String> {
-        val stripped=placeholder.replace(value,"")
-        if('{' in stripped || '}' in stripped) fail("E_LOCALIZATION","Malformed placeholder")
-        return placeholder.findAll(value).map { it.groupValues[1] }.toSet()
-    }
     fun parse(bytes: ByteArray): Map<String,String> {
         if(bytes.size>65536) fail("E_LOCALIZATION","Translation resource exceeds 64 KiB")
         val d=jsonObject(bytes)
@@ -53,7 +47,7 @@ object LocalizationResources {
         return d.mapValues { (key,value) ->
             val fallback=UiTextKeys.english[key] ?: fail("E_LOCALIZATION","Unknown or protected key: $key")
             val text=(value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: fail("E_LOCALIZATION","String required: $key")
-            if(text.length !in 1..2048 || unsafe(text) || parameters(text)!=parameters(fallback)) fail("E_LOCALIZATION","Invalid text/placeholders: $key")
+            if(text.length !in 1..2048 || unsafe(text) || UiPlaceholders.parameters(text)!=UiPlaceholders.parameters(fallback)) fail("E_LOCALIZATION","Invalid text/placeholders: $key")
             text
         }
     }
@@ -69,9 +63,39 @@ class UiTranslations(bundles: List<LocalizationBundle> = emptyList(),selection: 
     private val entries=bundles.singleOrNull { it.selectionId==selection }?.entries.orEmpty().toMap()
     fun text(key: String,arguments: Map<String,String> = emptyMap()): String {
         val english=UiTextKeys.english[key] ?: throw IllegalArgumentException("Unknown UI key $key")
-        val expected=Regex("\\{([a-z][a-zA-Z0-9]*)}").findAll(english).map { it.groupValues[1] }.toSet()
+        val expected=UiPlaceholders.parameters(english)
         require(arguments.keys==expected) { "Placeholder arguments differ for $key" }
-        // Replace by match, so replacement values cannot inject additional formatting placeholders.
-        return Regex("\\{([a-z][a-zA-Z0-9]*)}").replace(entries[key] ?: english) { arguments.getValue(it.groupValues[1]) }
+        return UiPlaceholders.render(entries[key] ?: english,arguments)
+    }
+}
+
+/** Literal scanner shared by verification and rendering. Android ICU and JVM regex differ on `}`. */
+internal object UiPlaceholders {
+    private data class Slot(val start: Int,val end: Int,val name: String)
+    private fun slots(text: String): List<Slot> {
+        val out=mutableListOf<Slot>()
+        var index=0
+        while(index<text.length) {
+            when(text[index]) {
+                '}' -> fail("E_LOCALIZATION","Unmatched closing placeholder brace")
+                '{' -> {
+                    val end=text.indexOf('}',index+1)
+                    if(end<0) fail("E_LOCALIZATION","Unclosed placeholder")
+                    val name=text.substring(index+1,end)
+                    if(name.isEmpty() || name[0] !in 'a'..'z' || name.any { it !in 'a'..'z' && it !in 'A'..'Z' && it !in '0'..'9' }) fail("E_LOCALIZATION","Invalid placeholder name")
+                    out+=Slot(index,end+1,name);index=end
+                }
+            }
+            index++
+        }
+        return out
+    }
+    fun parameters(text: String): Set<String> = slots(text).map { it.name }.toSet()
+    fun render(text: String,arguments: Map<String,String>): String = buildString {
+        var previous=0
+        for(slot in slots(text)) {
+            append(text,previous,slot.start);append(arguments.getValue(slot.name));previous=slot.end
+        }
+        append(text,previous,text.length)
     }
 }

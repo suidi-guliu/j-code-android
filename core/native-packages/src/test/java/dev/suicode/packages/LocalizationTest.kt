@@ -6,6 +6,37 @@ import kotlin.test.*
 class LocalizationTest {
     private val example=File("../../docs/specifications/examples/packages/zh-hans-kit.suik")
     private fun parse(s: String)=LocalizationResources.parse((canonical(Json.parseToJsonElement(s))+"\n").toByteArray())
+    @Test fun freshEnglishStartupRendersEveryCoreKeyWithoutAnyTranslationPackage() {
+        val text=UiTranslations()
+        for((key,english) in UiTextKeys.english) {
+            val args=UiPlaceholders.parameters(english).associateWith { "1" }
+            assertTrue(text.text(key,args).isNotBlank())
+        }
+    }
+    @Test fun literalScannerRejectsMalformedAndNestedBracesAndNeverFormatsArgumentData() {
+        for(text in listOf("}","{","{{count}}","{Bad}","{has-dash}","{}")) assertFailsWith<PackageFailure> { UiPlaceholders.parameters(text) }
+        assertEquals(setOf("count"),UiPlaceholders.parameters("{count} / {count}"))
+        assertEquals("$\\{other} / $\\{other}",UiPlaceholders.render("{count} / {count}",mapOf("count" to "$\\{other}")))
+    }
+    @Test fun api3OfficialPackagesAndApi4ResourcesCoexistAfterStoreReopen() {
+        val root=Files.createTempDirectory("v05-upgrade-store")
+        val installed=mutableMapOf<String,Pair<String,String>>()
+        val verifier=PackageVerifier()
+        var store=PackageStore(root,verifier)
+        try {
+            for(kind in listOf("suic","suik")) for(language in listOf("Java","C_CPP","Python")) {
+                val bytes=File("../../native-library/v1/$language.$kind").readBytes()
+                val p=store.inspect(bytes,kind)
+                store.install(bytes,kind,Consent(p.digest,p.permissions,true));store.enable(p.id,emptyMap())
+                installed[p.id]=p.version to p.digest
+            }
+            store.close();store=PackageStore(root,verifier)
+            for((id,expected) in installed) { assertEquals(expected.first,store.load(id).version);assertEquals(expected.second,store.load(id).digest) }
+            val p=store.inspect(example.readBytes(),"suik");store.install(example.readBytes(),"suik",Consent(p.digest,p.permissions,true));store.enable(p.id,emptyMap())
+            assertEquals(7,store.records().size)
+            for((id,expected) in installed) assertEquals(expected.second,store.load(id).digest)
+        } finally { store.close();root.toFile().deleteRecursively() }
+    }
     @Test fun realSuikHasNoEnvironmentDependencyAndLoadsTranslations() {
         val pack=PackageVerifier().verify(example.readBytes(),"suik")
         assertEquals(setOf(Capability.LOCALIZATION),pack.permissions)
