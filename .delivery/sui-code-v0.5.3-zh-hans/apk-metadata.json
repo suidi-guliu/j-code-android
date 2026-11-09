@@ -1,10 +1,10 @@
 {
-  "apk_build_source_commit": "44c7c77ac68318958a84bed0e86b6740c7f1304c",
+  "apk_build_source_commit": "79c0093a972949d4bd2aca7363ba2602a1edbe16",
   "source_archive_commit": "44c7c77ac68318958a84bed0e86b6740c7f1304c",
   "apk": {
     "file": "sui-code-v0.5.3-debug.apk",
-    "bytes": 90070001,
-    "sha256": "abc71eee8d9ace53075c341d32995dc27515b093acb04868e85143bac4b1247e"
+    "bytes": 90070121,
+    "sha256": "65c1022e697a67693ff6316a47283bc7012c2706d4560b2f35d03bb1fd7581e7"
   },
   "language_pack": {
     "file": "sui-code-zh-hans-1.0.0.suik",
@@ -25,5 +25,6 @@
   "chinese_values": 732,
   "physical_arm64_tested": false,
   "android_result": "pending gated workflow",
-  "language_pack_build_source_commit": "589f7f923dc9a205feb51d646b26b4166e177e36"
+  "language_pack_build_source_commit": "589f7f923dc9a205feb51d646b26b4166e177e36",
+  "jvm_tests": 260
 }
