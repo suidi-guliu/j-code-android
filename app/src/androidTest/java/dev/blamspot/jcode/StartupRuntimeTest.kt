@@ -61,4 +61,44 @@ class StartupRuntimeTest {
             restore(language,"selection-v1",oldLanguage);restore(pane,"content-width-v1",oldPane)
         }
     }
+    @Test fun damagedOrMissingLanguageArchiveFallsBackWithoutRemovingOtherPackages() = kotlinx.coroutines.runBlocking {
+        val instrument=InstrumentationRegistry.getInstrumentation()
+        val context=instrument.targetContext
+        val host=dev.suicode.nativehost.NativePackageHost.get(context)
+        host.restore()
+        val bytes=instrument.context.assets.open("zh-hans-kit.suik").use { it.readBytes() }
+        val pack=dev.suicode.packages.PackageVerifier().verify(bytes,"suik")
+        org.junit.Assume.assumeFalse("Do not replace an existing user-owned example",host.rows.value.any { it.record.id==pack.id })
+        val previous=host.rows.value.associate { it.record.id to it.record.digest }
+        val prefs=context.getSharedPreferences("sui-native-ui-language",0)
+        val old=prefs.all["selection-v1"]
+        val archive=java.io.File(context.filesDir,"sui-code/native-packages/${pack.digest}.suik")
+        var installed=false
+        try {
+            host.install(dev.suicode.nativehost.PackagePreview(bytes,"suik",pack,"instrumentation-only fixture"),pack.permissions,true)
+            installed=true
+            val bundle=host.localizations.value.single { it.packageId==pack.id }
+            host.selectUiLanguage(bundle.selectionId)
+            assertEquals("文件",UiTranslations(host.localizations.value,host.selectedUiLanguage.value).text("nav.files"))
+            val damaged=bytes.clone().also { it[it.size/2]=(it[it.size/2].toInt() xor 1).toByte() }
+            archive.writeBytes(damaged);host.restore()
+            assertEquals("Files",UiTranslations(host.localizations.value,host.selectedUiLanguage.value).text("nav.files"))
+            assertTrue(archive.readBytes().contentEquals(damaged));assertNotNull(host.error.value)
+            assertTrue(archive.delete());host.restore()
+            assertEquals("Files",UiTranslations(host.localizations.value,host.selectedUiLanguage.value).text("nav.files"))
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                instrument.waitForIdleSync()
+                scenario.onActivity { assertFalse(it.isFinishing);assertTrue(it.window.decorView.width>0) }
+            }
+            for((id,digest) in previous) assertEquals(digest,host.rows.value.single { it.record.id==id }.record.digest)
+        } finally {
+            if(installed) { archive.parentFile?.mkdirs();archive.writeBytes(bytes);host.uninstall(pack.id) }
+            host.selectUiLanguage(null)
+            val e=prefs.edit()
+            when(old) { null -> e.remove("selection-v1");is String -> e.putString("selection-v1",old);is Int -> e.putInt("selection-v1",old);is Float -> e.putFloat("selection-v1",old);is Long -> e.putLong("selection-v1",old);is Boolean -> e.putBoolean("selection-v1",old);is Set<*> -> e.putStringSet("selection-v1",old.filterIsInstance<String>().toSet()) }
+            check(e.commit())
+        }
+        Unit
+    }
+
 }

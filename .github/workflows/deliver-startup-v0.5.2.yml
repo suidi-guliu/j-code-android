@@ -1,0 +1,175 @@
+name: Verify startup upgrade and deliver sui-code 0.5.2
+on:
+  push:
+    branches: [sui-code/v0.5.2-startup-recovery]
+    paths:
+      - '.github/workflows/deliver-startup-v0.5.2.yml'
+      - '.delivery/sui-code-v0.5.2-startup-recovery/**'
+      - 'tools/startup/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  startup-and-deliver:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5.2-startup-recovery'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_APK_SHA256: 05ded85495070c8e4735fd3c539f1da02ea29ada120af70c47d9811a04abf3b5
+      EXPECTED_APK_BYTES: '87061016'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify immutable APK, original signer and preserved older deliveries
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=.delivery/sui-code-v0.5.2-startup-recovery
+          (cd "$root" && sha256sum --check --strict SHA256SUMS)
+          for old in sui-code-native-0.4 sui-code-v0.5 sui-code-v0.5-ui-polish; do
+            (cd ".delivery/$old" && sha256sum --check --strict SHA256SUMS)
+          done
+          apk="$root/sui-code-v0.5.2-startup-debug.apk"
+          test "$(stat -c %s "$apk")" = "$EXPECTED_APK_BYTES"
+          printf '%s  %s\n' "$EXPECTED_APK_SHA256" "$apk" | sha256sum --check --strict
+          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          old_cert=$("$signer" verify --print-certs .delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk | awk '/certificate SHA-256 digest:/ {print $NF}')
+          new_cert=$("$signer" verify --print-certs "$apk" | awk '/certificate SHA-256 digest:/ {print $NF}')
+          test "$old_cert" = "$new_cert"
+          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
+          "$(dirname "$signer")/aapt" dump badging "$apk" > "$RUNNER_TEMP/startup-apk-badging.txt"
+          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070805' versionName='0.5.2'" "$RUNNER_TEMP/startup-apk-badging.txt"
+          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/startup-apk-badging.txt"
+      - name: Verify original Launcher resources and unpack signed test inputs
+        shell: python
+        run: |
+          import pathlib,zipfile,os
+          root=pathlib.Path('.delivery/sui-code-v0.5.2-startup-recovery')
+          with zipfile.ZipFile('.delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk') as old,zipfile.ZipFile(root/'sui-code-v0.5.2-startup-debug.apk') as new:
+              names=[n for n in old.namelist() if 'ic_launcher' in n]
+              assert names and sorted(names)==sorted(n for n in new.namelist() if 'ic_launcher' in n)
+              for name in names: assert old.read(name)==new.read(name),name
+          target=pathlib.Path(os.environ['RUNNER_TEMP'])/'startup-inputs'
+          target.mkdir()
+          with zipfile.ZipFile(root/'android-test-inputs.zip') as z:
+              for name in ['payload.tar','payload-sha256.json','probe.jar','startup-androidTest.apk']:
+                  (target/name).write_bytes(z.read(name))
+      - name: Prepare hardware accelerated Android 16 Emulators
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-36;google_apis;x86_64' > "$RUNNER_TEMP/sdk-install.log" 2>&1
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/startup-avds"
+          mkdir -p "$ANDROID_AVD_HOME"
+          for name in sui-startup-upgrade sui-startup-fresh; do
+            printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n "$name" -k 'system-images;android-36;google_apis;x86_64' -d pixel_c --force
+          done
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+      - name: Reproduce original crash, verify data-preserving upgrade and clean startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          evidence="$RUNNER_TEMP/android-startup-evidence"
+          mkdir -p "$evidence"
+          adb start-server
+          for mode in upgrade fresh; do
+            if [ "$mode" = upgrade ]; then port=5554; else port=5556; fi
+            emulator -avd "sui-startup-$mode" -port "$port" -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader -memory 2048 -cores 2 -skin 1280x800 -camera-back none -camera-front none > "$evidence/emulator-$mode.log" 2>&1 &
+            emulator_pid=$!
+            trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
+            serial="emulator-$port"
+            ready=false
+            for attempt in $(seq 1 120); do
+              if adb -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; then ready=true; break; fi
+              sleep 5
+            done
+            test "$ready" = true
+            if [ "$mode" = upgrade ]; then
+              adb -s "$serial" push "$RUNNER_TEMP/startup-inputs/probe.jar" /data/local/tmp/probe.jar
+              adb -s "$serial" push .delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk /data/local/tmp/original.apk
+              if adb -s "$serial" shell 'CLASSPATH=/data/local/tmp/probe.jar:/data/local/tmp/original.apk app_process /system/bin AndroidUiTextProbe' > "$evidence/original-dex.log" 2>&1; then echo 'Original broken DEX unexpectedly passed'; exit 1; fi
+              grep 'PatternSyntaxException' "$evidence/original-dex.log"
+              adb -s "$serial" push .delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk /data/local/tmp/fixed.apk
+              adb -s "$serial" shell 'CLASSPATH=/data/local/tmp/probe.jar:/data/local/tmp/fixed.apk app_process /system/bin AndroidUiTextProbe' > "$evidence/fixed-dex.log" 2>&1
+              grep 'SHIPPING_DEX_ENGLISH_STARTUP_PASS' "$evidence/fixed-dex.log"
+            fi
+            python3 tools/startup/emulator_regression.py --serial "$serial" --mode "$mode" --fixtures "$RUNNER_TEMP/startup-inputs" --fixed .delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk --tests "$RUNNER_TEMP/startup-inputs/startup-androidTest.apk" --evidence "$evidence/$mode"
+            adb -s "$serial" emu kill || true
+            wait "$emulator_pid" || true
+            trap - EXIT
+          done
+      - name: Attach actual Android evidence and runtime receipt
+        shell: python
+        run: |
+          import pathlib,json,os,zipfile,hashlib
+          evidence=pathlib.Path(os.environ['RUNNER_TEMP'])/'android-startup-evidence'
+          for mode in ['upgrade','fresh']:
+              result=json.loads((evidence/mode/'result.json').read_text())
+              assert result['result']=='PASS' and result['instrumentation_tests']==4
+          root=pathlib.Path('.delivery/sui-code-v0.5.2-startup-recovery')
+          with zipfile.ZipFile(root/'android-startup-evidence.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for p in evidence.rglob('*'):
+                  if p.is_file(): z.write(p,p.relative_to(evidence))
+          url=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          receipt='\n\n## GitHub Android startup validation receipt\n\nActual Android16 x86_64 Emulators with ARM64 native bridge: v0.5 normal first frame, v0.5.1 Activity PatternSyntaxException reproduced, signed v0.5.2 data-preserving upgrade and separate clean install passed; repeated startup, malformed UI preferences, missing/corrupt language resources and 8 Android instrumentation cases passed. 13 fixture payload hashes retained. Runtime directories are synthetic retention sentinels, not an executed Ubuntu/JDK installation. No ARM64 physical-device acceptance is claimed.\n\nRun: '+url+'\n'
+          with (root/'report.md').open('a') as out: out.write(receipt)
+          metadata=json.loads((root/'apk-metadata.json').read_text());metadata['android_startup_run']=url;metadata['android_emulator_startup']='PASS';metadata['android_instrumentation_cases']=8
+          (root/'apk-metadata.json').write_text(json.dumps(metadata,indent=2)+'\n')
+          (root/'SHA256SUMS').write_text('\n'.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name for p in sorted(root.iterdir()) if p.name!='SHA256SUMS')+'\n')
+      - name: Upload one verified startup repair APK and complete delivery
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sui-code-v0.5.2-startup-recovery
+          path: .delivery/sui-code-v0.5.2-startup-recovery/*
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Download uploaded Artifact for byte-for-byte verification
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
+          path: ${{ runner.temp }}/startup-roundtrip
+          merge-multiple: true
+      - name: Verify roundtrip and publish actual download entry
+        shell: bash
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/startup-roundtrip" && sha256sum --check --strict SHA256SUMS)
+          for source in .delivery/sui-code-v0.5.2-startup-recovery/*; do cmp "$source" "$RUNNER_TEMP/startup-roundtrip/$(basename "$source")"; done
+          {
+            echo '## Startup recovery verified'
+            echo 'Actual Android16 Emulator startup, retained-data upgrade, clean install and 8 instrumentation cases passed. Not physical ARM64 acceptance.'
+            printf '[Download verified Artifact](%s)\n\nAPK SHA-256: `%s`\n' "$ARTIFACT_URL" "$EXPECTED_APK_SHA256"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Expose actionable startup diagnostics
+        if: failure()
+        shell: python
+        run: |
+          import pathlib,os
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'android-startup-evidence'
+          rows=[]
+          for p in list(root.glob('*/failure.txt'))+list(root.glob('*/instrumentation.txt'))+list(root.glob('emulator-*.log')):
+              if p.exists(): rows.append(p.name+': '+p.read_text(errors='replace')[-2200:])
+          text='\n'.join(rows)[-7000:]
+          if text: print('::error title=Android test diagnostics::'+text.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
+      - name: Retain failure diagnostics without distributing an unverified APK
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-verification-failure-diagnostics
+          path: |
+            ${{ runner.temp }}/android-startup-evidence/
+            ${{ runner.temp }}/sdk-install.log
+          if-no-files-found: warn
+          retention-days: 30
