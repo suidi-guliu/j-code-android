@@ -17,11 +17,11 @@ class BaselineDataTest {
             lateinit var model: MainViewModel
             scenario.onActivity { activity ->
                 model=ViewModelProvider(activity)[MainViewModel::class.java]
-                if(create) model.createNewItem(MainViewModel.NewItemRequest("PreservedProject",false,"empty",emptyMap()))
+                if(create) model.createNewItem(MainViewModel.NewItemRequest("preserved-project",false,"empty",emptyMap()))
             }
             val deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
-            while(model.currentWorkspace.value?.projects?.none { it.name=="PreservedProject" }!=false && System.nanoTime()<deadline) Thread.sleep(100)
-            assertTrue("Original registered Project must exist without creating it during verification",model.currentWorkspace.value?.projects?.any { it.name=="PreservedProject" }==true)
+            while(model.currentWorkspace.value?.projects?.none { it.name=="preserved-project" }!=false && System.nanoTime()<deadline) Thread.sleep(100)
+            assertTrue("Registered Project missing: ${model.currentWorkspace.value?.projects?.map { it.name }}",model.currentWorkspace.value?.projects?.any { it.name=="preserved-project" }==true)
         }
     }
 }
