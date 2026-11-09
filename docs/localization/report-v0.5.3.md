@@ -24,7 +24,7 @@
 
 另外分别记录27处宿主受保护英文和267处技术原文/资源及控制标识，不把它们当作已翻译；总键引用902处，涉及720个不同键。扫描范围含app、core/design和feature；不含无法词法识别的动态后端、任意扩展作者文案。每个剩余位置都在审计文件中列出。新增未审阅的硬编码显示文案会使自动检查失败。
 
-Files、Settings、Languages、Packages、Find及调试等主控件路径的静态字面文案已接入。剩余包括旧 JCode/VSIX 高级入口、浏览器/DevTools、虚拟设备、部分旧任务配置、迁移/高级生命周期提示、部分动态语言服务/后端错误。IDE Kit 作者自己的 Overview 面板文字、语言名称及工具原始输出保留原文，未改动原 Kit。本轮不宣称“全应用汉化”。
+Files、Settings、Languages、Packages、Find及调试等主控件路径的静态字面文案已接入。剩余包括旧 JCode/VSIX 高级入口、浏览器/DevTools、虚拟设备、部分旧任务配置、迁移提示、少量关闭运行/多文件未保存提示、部分动态语言服务/后端错误。IDE Kit 作者自己的 Overview 面板文字、语言名称及工具原始输出保留原文，未改动原 Kit。本轮不宣称“全应用汉化”。
 
 ## 信任与安装
 
@@ -59,3 +59,35 @@ Android模拟器为Android16 x86_64，ARM64 APK使用系统native bridge。升�
 ## ARM64平板后续验收
 
 覆盖安装后检查启动、原项目/文件/Kit及Ubuntu仍在；导入独立包、确认唯一权限后选择中文，检查文件/查找/语言/扩展包/设置/运行调试主操作。退出重开确认选择保留；禁用及卸载后确认英文回退。字体、横竖屏及已安装真实环境的显示仍需平板验收。无需清数据或重装环境，也不要求先重测全部语言功能。
+
+
+## 最终运行回执与真实下载
+
+[完整 Android 16 回归、上传和下载回验运行](https://github.com/suidi-guliu/j-code-android/actions/runs/42594545561) · [下载整合 Artifact](https://github.com/suidi-guliu/j-code-android/actions/runs/42594545561/artifacts/13663238265)。Artifact 保留30天，需要登录 GitHub。内部路径不作为下载方式。
+
+|文件|大小（字节）|无需登录的独立下载|
+|---|---:|---|
+|sui-code-v0.5.3-debug.apk|90070121|[APK](https://raw.githubusercontent.com/suidi-guliu/j-code-android/1bc687baa55741512022ea03e84f51a918bbf45b/.delivery/sui-code-v0.5.3-zh-hans/sui-code-v0.5.3-debug.apk)|
+|sui-code-zh-hans-1.0.0.suik|17980|[简体中文 Kit](https://raw.githubusercontent.com/suidi-guliu/j-code-android/589f7f923dc9a205feb51d646b26b4166e177e36/localization/releases/sui-code-zh-hans-1.0.0.suik)|
+
+APK SHA-256：`233b635cebad616419377202f3eba3f643014f46eaa151864c2d4c694f0b0a43`。
+
+语言包 SHA-256：`bc02011e142432b15f6a527abca2a7ee3ec113210efaa0b74046c023b22a0113`。
+
+两个独立下载地址均已实际返回HTTP200、完整读取并验证大小和SHA-256。最终Artifact经工作流下载后逐文件SHA-256和逐字节cmp回验，包含APK、独立Kit、report、changes.patch、source.zip、SDK、规范、覆盖审计、构建日志、JUnit结果、Android截图/XML/logcat及元数据。
+
+**Android16最终结果：覆盖升级与全新安装均通过。** 每个AVD完成真实SAF导入、受保护来源与权限确认、中文选择、即时刷新、冷启动持久化、禁用、重新启用、显式英文、重新选中文、卸载英文回退、竖屏/字体130%截图和重复冷启动；8个Android仪器测试/AVD，合计16例，另有原版Project创建/升级后保留2次检查。升级的13个旧包/文件/环境路径夹具哈希保持一致。没有清数据或卸载目标应用。
+
+[当前生产源码的260例JVM/Linux集成验证](https://github.com/suidi-guliu/j-code-android/actions/runs/42594545565)通过；6例词法扫描测试通过，90个有效Schema描述符通过，非法/安全覆盖样例被拒绝。Android端也实际复现并捕获旧ICU表达式错误，再验证全部732个键的安全渲染。
+
+APK构建源码：`d47da0f4670f06bacb33774a157679dc6f621c72`；工作流及Artifact源码快照：`6438a7bddc1d4811903872a1ab45d13410a0d685`。其后公共报告回执提交只更新文档。原图标15个已编译资源、签名、包名和旧交付目录校验通过。Debug APK code1070806可覆盖v0.5.2 code1070805，保持原UID与数据目录。
+
+### 本轮定位及测试诊断
+
+首轮无Ubuntu暂缓配置实际暴露了false/null状态被当作持续初始化的问题，已修复并以2例单元测试及真实Android首屏回归覆盖。工具侧曾误选SAF预览图标、错误滚动区域、重复入口/相邻包操作，以及误依赖被输入控件遮蔽的无障碍提示文字；修正后重跑完整流程。一次首启命令返回UNKNOWN，紧接着的PID查询为空；现按原有首屏期限等待初次进程出现，进程启动后退出仍立即失败，不重启掩盖应用崩溃。诊断保留启动命令结果、fatal logcat及新鲜界面快照，原始失败运行可从分支Actions历史查看。
+
+### 待ARM64平板确认及翻译缺口
+
+上述为Android16 x86_64模拟器/native bridge结果，**不是联想ARM64平板实机验收**。Ubuntu/JDK等目录哨兵只证明保留字节，不证明真实工具链执行。已有Ubuntu、JDK/GCC/Python、LSP/DAP运行及字体/布局观感仍需用户后续集中确认。剩余373处全仓可本地化显示字面文案在逐位置审计中公开，其中常用10个源码范围有22处；未宣称全应用汉化。主安全授权文案保持受保护英文，语言包明确未签名。
+
+公开规范：[Native Extension & IDE Kit Specification](https://github.com/suidi-guliu/j-code-android/blob/6438a7bddc1d4811903872a1ab45d13410a0d685/docs/specifications/SUIC-SUIK-Development-Specification.md) · [UI Extension & Design Specification](https://github.com/suidi-guliu/j-code-android/blob/6438a7bddc1d4811903872a1ab45d13410a0d685/docs/specifications/SuiCode-UI-Design-Specification.md)。

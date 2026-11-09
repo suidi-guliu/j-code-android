@@ -10,6 +10,8 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开�
 
 ## v0.5.3 简体中文语言包
 
+[下载APK、独立中文包及完整证据](https://github.com/suidi-guliu/j-code-android/actions/runs/42594545561/artifacts/13663238265) · [独立中文包直链](https://raw.githubusercontent.com/suidi-guliu/j-code-android/589f7f923dc9a205feb51d646b26b4166e177e36/localization/releases/sui-code-zh-hans-1.0.0.suik)（Artifact需登录，保留30天）。
+
 常用界面通过独立、可启停的 `.suik` 提供简体中文。英文仍为默认回退，中文不内置到APK；原有环境、图标与语言Kit保留。[安装与开发说明](localization/README.md) · [实际覆盖及缺口](docs/localization/locale-key-audit.md) · [交付报告](docs/localization/report-v0.5.3.md)。需要先覆盖升级主程序，再独立导入语言包；来源和权限确认仍显示宿主受保护英文。
 
 ## v0.5.2 启动修复
@@ -44,4 +46,4 @@ bash gradlew :core:native-packages:testDebugUnitTest :core:distro:testDebugUnitT
 bash gradlew :app:assembleDebug
 ```
 
-默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070805；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
+默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070806；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。

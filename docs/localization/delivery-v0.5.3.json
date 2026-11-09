@@ -1,0 +1,32 @@
+{
+  "branch": "sui-code/v0.5.3-zh-hans-kit",
+  "tested_archive_source_commit": "6438a7bddc1d4811903872a1ab45d13410a0d685",
+  "apk_build_source_commit": "d47da0f4670f06bacb33774a157679dc6f621c72",
+  "applicationId": "dev.suicode.ide.debug",
+  "versionName": "0.5.3",
+  "versionCode": 1070806,
+  "certificate_sha256": "62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0",
+  "apk": {
+    "file": "sui-code-v0.5.3-debug.apk",
+    "bytes": 90070121,
+    "sha256": "233b635cebad616419377202f3eba3f643014f46eaa151864c2d4c694f0b0a43",
+    "download": "https://raw.githubusercontent.com/suidi-guliu/j-code-android/1bc687baa55741512022ea03e84f51a918bbf45b/.delivery/sui-code-v0.5.3-zh-hans/sui-code-v0.5.3-debug.apk"
+  },
+  "language_pack": {
+    "file": "sui-code-zh-hans-1.0.0.suik",
+    "bytes": 17980,
+    "sha256": "bc02011e142432b15f6a527abca2a7ee3ec113210efaa0b74046c023b22a0113",
+    "download": "https://raw.githubusercontent.com/suidi-guliu/j-code-android/589f7f923dc9a205feb51d646b26b4166e177e36/localization/releases/sui-code-zh-hans-1.0.0.suik",
+    "signing": "unsigned / unverified"
+  },
+  "actions_run": "https://github.com/suidi-guliu/j-code-android/actions/runs/42594545561",
+  "artifact_download": "https://github.com/suidi-guliu/j-code-android/actions/runs/42594545561/artifacts/13663238265",
+  "jvm_tests_passed": 260,
+  "scanner_tests_passed": 6,
+  "android_instrumentation_tests_passed": 16,
+  "original_project_checks_passed": 2,
+  "old_payload_hashes_preserved": 13,
+  "android_platform": "Android 16 x86_64 AVD with ARM64 native bridge",
+  "physical_arm64_tested": false,
+  "artifact_roundtrip_verified": true
+}
