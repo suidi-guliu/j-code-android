@@ -38,8 +38,15 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.14.3'
+      - name: Provision pinned Gradle from its official distribution with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/gradle-8.14.3-bin.zip"
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 20 --max-time 240 https://downloads.gradle.org/distributions/gradle-8.14.3-bin.zip -o "$archive"
+          printf 'bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531  %s\n' "$archive" | sha256sum --check --strict
+          unzip -q "$archive" -d "$RUNNER_TEMP/gradle-tool"
+          echo "$RUNNER_TEMP/gradle-tool/gradle-8.14.3/bin" >> "$GITHUB_PATH"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -61,7 +68,7 @@ jobs:
           set -euo pipefail
           # JVM tests do not load ARM64 JNI. The actual APK is built with all native tasks in Codex Cloud.
           # Keep this job focused on host contracts instead of requiring a second Rust cross toolchain.
-          gradle --console=plain --stacktrace --no-daemon --max-workers=2 -x :native:ripgrep-ffi:cargoBuildDebugJniLibs -x :native:wasmtime-ffi:cargoBuildDebugJniLibs :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:search:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :core:editor:testDebugUnitTest :core:term:testDebugUnitTest :core:debug:testDebugUnitTest :core:lsp:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
+          gradle --console=plain --stacktrace --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx3g -Dfile.encoding=UTF-8" -Pkotlin.compiler.execution.strategy=in-process -x :native:ripgrep-ffi:cargoBuildDebugJniLibs -x :native:wasmtime-ffi:cargoBuildDebugJniLibs :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:search:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :core:editor:testDebugUnitTest :core:term:testDebugUnitTest :core:debug:testDebugUnitTest :core:lsp:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
       - name: Publish concrete test and build diagnostics
         if: always()
         shell: python

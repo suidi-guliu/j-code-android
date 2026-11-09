@@ -1977,9 +1977,9 @@ fun JCodeApp(
     // belongs on the setup screen (which this yields to), not behind a spinner that never ends.
     val environmentReady =
         environmentState.distroInstalled == true && environmentState.jcodeUserReady == true
-    val environmentResolving = environmentState.distroInstalled == null ||
-        environmentState.jcodeUserReady == null ||
-        environmentState.runningStep != null
+    val environmentResolving = dev.blamspot.jcode.startup.environmentStartupResolving(
+        environmentState.distroInstalled, environmentState.jcodeUserReady, environmentState.runningStep != null,
+    )
     if (!showFirstRunEnvironmentScreen && !environmentReady && environmentResolving) {
         OnboardingFeature.StartupSplash(
             distroLabel = environmentState.runtime.selectedDistro.label,
