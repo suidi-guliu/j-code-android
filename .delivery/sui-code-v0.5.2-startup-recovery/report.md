@@ -45,14 +45,14 @@ java.util.regex.PatternSyntaxException: Syntax error in regexp pattern near inde
 
 [独立GitHub JVM回归](https://github.com/suidi-guliu/j-code-android/actions/runs/42551247185)。Schema89个声明、非法包拒绝及9个Launcher源资源基线校验继续通过。
 
-Android测试已编译4个方法：旧ICU表达式与修复英文渲染、真实Activity重复启动、坏SharedPreferences保留、语言包启用后损坏/缺失的回退及首屏。最终交付工作流在两个独立AVD分别执行（共8例），并包含：
+Android测试已编译4个方法：旧ICU表达式与修复英文渲染、真实Activity重复启动、坏SharedPreferences保留、语言包启用后损坏/缺失的回退及首屏。最终交付工作流在两个独立AVD分别执行（8例回归，另有2例原版Project创建/保留验证），并包含：
 
-- 原v0.5正常首屏、真实UI创建可选Project；真实六个API3包与项目文件配置夹具。
+- 原v0.5正常首屏、经原v0.5生产ViewModel API创建真实可选Project（不直接改数据库）；真实六个API3包与项目文件配置夹具。
 - 保留数据覆盖安装原v0.5.1并采集实际Activity崩溃。
-- 覆盖修复版、三次冷进程启动、坏UI偏好启动及Project继续可见。
+- 覆盖修复版、三次冷进程启动、坏UI偏好启动及真实Project元数据继续可读。
 - 13个旧包/源码/配置/环境路径哨兵SHA256保留；新AVD全新安装；截图、层级、logcat、诊断和仪器测试结果。
 
-**环境路径哨兵只是保留数据夹具，不是运行过的Ubuntu/JDK。** 不会据此宣称真实Ubuntu24.04/JDK/GCC/Python运行通过。云端宿主/dev/kvm不存在；本地TCG模拟器可运行ART探针，但Framework包管理启动严重受限，因此使用GitHub KVM完成Activity测试。Artifact中的运行时回执记录实际通过情况，失败时只保留诊断，不分发未经启动验证的APK。
+**无Ubuntu的模拟器正常首屏是既有Environment setup引导页，不假装含已安装环境的完整工作台已实测。** Project元数据通过原版生产API创建与读取；环境路径哨兵只是保留数据夹具，不是运行过的Ubuntu/JDK。 不会据此宣称真实Ubuntu24.04/JDK/GCC/Python运行通过。云端宿主/dev/kvm不存在；本地TCG模拟器可运行ART探针，但Framework包管理启动严重受限，因此使用GitHub KVM完成Activity测试。Artifact中的运行时回执记录实际通过情况，失败时只保留诊断，不分发未经启动验证的APK。
 
 ## 5. 构建、签名与图标
 

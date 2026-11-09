@@ -53,12 +53,11 @@ def alive(name,project=False):
   assert adb('shell','pidof '+pkg).stdout.strip(),'Activity process did not survive'
   xml=snapshot(name)
   nodes=list(ET.fromstring(xml).iter('node'))
-  ready=any(n.attrib.get('package')==pkg and n.attrib.get('text') in ['Run file','Internal Files'] for n in nodes)
-  registered=not project or sum(n.attrib.get('text')=='PreservedProject' for n in nodes)>=2
-  if ready and registered:break
-  assert time.monotonic()<deadline,'Workbench/registered Project not visible in actual app window'
+  ready=any(n.attrib.get('package')==pkg and n.attrib.get('text') in ['Run file','Internal Files','Environment setup'] for n in nodes)
+  if ready:break
+  assert time.monotonic()<deadline,'Neither the normal workbench nor existing first-run environment screen is visible'
   time.sleep(2)
- note('FIRST_FRAME_PASS '+name)
+ note('FIRST_FRAME_PASS '+name+(' (existing environment onboarding: no installed Linux runtime)' if 'Environment setup' in xml else ' (workbench)'))
  return xml
 def hashes(label):
  expected=json.loads((a.fixtures/'payload-sha256.json').read_text())
@@ -80,23 +79,14 @@ if a.mode=='upgrade':
  shellrun('tar -xf /data/local/tmp/sui-startup-payload.tar')
  hashes('v050-before-open')
  xml=alive('v050-with-data')
- # Register a real optional Project using the original v0.5 UI, not direct SQLite edits.
- choices=lambda n:'add project' in n.get('content-desc','').lower() or n.get('text') in ['New Project','New project']
- if any(choices(n.attrib) for n in ET.fromstring(xml).iter('node')):
-  click(xml,choices)
- else:
-  # The original v0.5 narrow panel may clip its + icon. Use its retained real command palette.
-  adb('shell','input keycombination 113 59 44');time.sleep(1)
-  xml=snapshot('v050-command-palette')
-  click(xml,lambda n:n.get('class')=='android.widget.EditText')
-  adb('shell','input text New%sFolder');time.sleep(1)
-  xml=snapshot('v050-command-search')
-  click(xml,lambda n:n.get('text')=='New Folder')
- xml=snapshot('v050-create-project')
- click(xml,lambda n:n.get('class')=='android.widget.EditText')
- adb('shell','input text PreservedProject');time.sleep(1)
- xml=snapshot('v050-project-name');click(xml,lambda n:n.get('text')=='Create')
- time.sleep(3);alive('v050-registered-project',project=True);hashes('v050-registered')
+ # Register a real optional Project through the unchanged v0.5 ViewModel API.
+ # Its legitimate environment onboarding is kept: this does not fake an installed Ubuntu.
+ install(a.tests)
+ created=adb('shell','am instrument -w -r -e class dev.blamspot.jcode.BaselineDataTest#createRegisteredProject dev.suicode.ide.debug.test/androidx.test.runner.AndroidJUnitRunner',timeout=180)
+ (a.evidence/'v050-project-create.txt').write_text(created.stdout+created.stderr)
+ assert 'OK (1 test)' in created.stdout,created.stdout
+ note('ORIGINAL_PRODUCTION_PROJECT_CREATED')
+ hashes('v050-registered')
  adb('shell','am force-stop '+pkg)
  install(repo/'.delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk')
  adb('shell','am start -W -n '+activity,check=False,timeout=180);time.sleep(7)
@@ -107,7 +97,12 @@ if a.mode=='upgrade':
  adb('shell','am force-stop '+pkg)
 install(a.fixed)
 for i in range(3):alive(a.mode+'-fixed-'+str(i+1),project=a.mode=='upgrade')
-if a.mode=='upgrade':hashes('fixed-after-three-starts')
+if a.mode=='upgrade':
+ hashes('fixed-after-three-starts')
+ verified=adb('shell','am instrument -w -r -e class dev.blamspot.jcode.BaselineDataTest#verifyRegisteredProjectSurvives dev.suicode.ide.debug.test/androidx.test.runner.AndroidJUnitRunner',timeout=180)
+ (a.evidence/'registered-project-retained.txt').write_text(verified.stdout+verified.stderr)
+ assert 'OK (1 test)' in verified.stdout,verified.stdout
+ note('REGISTERED_PROJECT_METADATA_RETAINED')
 # A real Android preference type mismatch must not block composition; original inputs are retained.
 adb('shell','am force-stop '+pkg)
 for name,xml in [('sui-native-ui-language','<?xml version="1.0" encoding="utf-8"?><map><int name="selection-v1" value="7"/><string name="untouched">keep</string></map>'),('sui-workbench-layout','<?xml version="1.0" encoding="utf-8"?><map><string name="content-width-v1">broken</string><string name="untouched">keep</string></map>')]:

@@ -114,13 +114,20 @@ jobs:
               result=json.loads((evidence/mode/'result.json').read_text())
               assert result['result']=='PASS' and result['instrumentation_tests']==4
           root=pathlib.Path('.delivery/sui-code-v0.5.2-startup-recovery')
+          import subprocess
+          commit=os.environ['GITHUB_SHA']
+          paths=[p for p in subprocess.check_output(['git','ls-tree','--name-only',commit],text=True).splitlines() if p!='.delivery']
+          subprocess.run(['git','archive','--format=zip','--prefix=sui-code-v0.5.2-startup-recovery/','-o',str(root/'source.zip'),commit,*paths],check=True)
+          subprocess.run(['git','fetch','--depth=1','origin','f6bf5ad29e8e8ddabdc0b546357e4ec70c29a1b1'],check=True)
+          (root/'changes.patch').write_bytes(subprocess.check_output(['git','diff','--binary','f6bf5ad29e8e8ddabdc0b546357e4ec70c29a1b1',commit,'--','.',':(exclude).delivery']))
+          (root/'modified-files.txt').write_text(subprocess.check_output(['git','diff','--name-status','f6bf5ad29e8e8ddabdc0b546357e4ec70c29a1b1',commit,'--','.',':(exclude).delivery'],text=True))
           with zipfile.ZipFile(root/'android-startup-evidence.zip','w',zipfile.ZIP_DEFLATED) as z:
               for p in evidence.rglob('*'):
                   if p.is_file(): z.write(p,p.relative_to(evidence))
           url=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-          receipt='\n\n## GitHub Android startup validation receipt\n\nActual Android16 x86_64 Emulators with ARM64 native bridge: v0.5 normal first frame, v0.5.1 Activity PatternSyntaxException reproduced, signed v0.5.2 data-preserving upgrade and separate clean install passed; repeated startup, malformed UI preferences, missing/corrupt language resources and 8 Android instrumentation cases passed. 13 fixture payload hashes retained. Runtime directories are synthetic retention sentinels, not an executed Ubuntu/JDK installation. No ARM64 physical-device acceptance is claimed.\n\nRun: '+url+'\n'
+          receipt='\n\n## GitHub Android startup validation receipt\n\nActual Android16 x86_64 Emulators with ARM64 native bridge: v0.5 normal app first frame (existing environment onboarding without an installed runtime), v0.5.1 Activity PatternSyntaxException reproduced, signed v0.5.2 data-preserving upgrade and separate clean install passed; repeated startup, malformed UI preferences, missing/corrupt language resources and 8 Android instrumentation regressions plus 2 original Project metadata checks passed. 13 fixture payload hashes retained. Runtime directories are synthetic retention sentinels, not an executed Ubuntu/JDK installation. No ARM64 physical-device acceptance is claimed.\n\nRun: '+url+'\n'
           with (root/'report.md').open('a') as out: out.write(receipt)
-          metadata=json.loads((root/'apk-metadata.json').read_text());metadata['android_startup_run']=url;metadata['android_emulator_startup']='PASS';metadata['android_instrumentation_cases']=8
+          metadata=json.loads((root/'apk-metadata.json').read_text());metadata['source_archive_commit']=commit;metadata['test_automation_commit']=commit;metadata['android_startup_run']=url;metadata['android_emulator_startup']='PASS';metadata['android_instrumentation_cases']=8
           (root/'apk-metadata.json').write_text(json.dumps(metadata,indent=2)+'\n')
           (root/'SHA256SUMS').write_text('\n'.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name for p in sorted(root.iterdir()) if p.name!='SHA256SUMS')+'\n')
       - name: Upload one verified startup repair APK and complete delivery
