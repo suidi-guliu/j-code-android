@@ -381,8 +381,11 @@ class ProotManager(private val context: Context) {
             args.addAll(listOf("-b", "$root:$root"))
         }
         
+        // Tool-safe guest aliases are directories in the rootfs, never moves of user projects.
+        check(File(rootfsPath,"sui-projects").let { it.isDirectory || it.mkdirs() }) { "E_TASK_PATH: cannot prepare tool-safe mount root" }
         // Bind mounts
-        for (bind in RuntimeMounts.ordered(binds)) {
+        for (entry in RuntimeMounts.ordered(binds)) {
+            val bind = RuntimeMounts.addressable(entry, File(appContext.filesDir,"runtime-mount-aliases"))
             args.addAll(listOf("-b", "${bind.host}:${bind.target}"))
         }
         

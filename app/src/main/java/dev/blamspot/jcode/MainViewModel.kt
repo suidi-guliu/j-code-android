@@ -2580,6 +2580,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .map { it.filePath.path }
         },
         isServerPaired = ::isLanguageServerPaired,
+        projectRootForPath = ::deriveProjectDir,
     )
 
     /**
@@ -2617,6 +2618,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Running language servers, surfaced in the status bar. */
     val lspServers = lspController.servers
+    fun restartLanguageServer(serverId: String) = lspController.restartServer(serverId)
+    fun languageServerLog(serverId: String): String = lspController.serverLog(serverId)
 
     /** A catalog server an opened file needs but which isn't installed; drives the install prompt. */
     val lspMissingServer = lspController.missingServer
@@ -3022,7 +3025,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Installing (or removing) a Dev Pack changes which servers are paired, so the files already
         // open have to be re-evaluated rather than waiting for the user to reopen them.
         viewModelScope.launch {
-            nativePackages.rows.map { rows -> rows.map { it.record } }.distinctUntilChanged().collect {
+            nativePackages.rows.map { rows -> rows.filter { row -> row.pack.declarations().any { it.type in setOf("language","lsp","dap") } }.map { it.record } }.distinctUntilChanged().collect {
                 refreshInstalledExtensions()
                 lspController.shutdownAll()
                 dev.suicode.nativehost.NativeLanguageServices.refreshAndCheck(nativePackages,distroService) { error -> _messages.tryEmit(error) }

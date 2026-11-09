@@ -23,6 +23,7 @@ android {
 
 dependencies {
     testImplementation(kotlin("test"))
+    testImplementation("org.json:json:20240303")
     implementation(libs.coroutines.android)
     implementation(project(":core:distro"))
 }

@@ -1954,6 +1954,11 @@ class DistroService(
         owner: String? = null,
     ): Process? = spawnStdioProcessBound(command,workdir,userOverride,extraPath,owner,null)
 
+    fun spawnProjectStdioProcess(command: String, project: File, owner: String): Process? {
+        val paths = NativeTaskPaths.resolve(project,project,_environmentState.value.runtime.binds)
+        return spawnStdioProcessBound(command,paths.guestDirectory,null,"",owner,paths.binds)
+    }
+
     private fun spawnStdioProcessBound(command: String, workdir: String, userOverride: String?, extraPath: String, owner: String?, binds: List<DistroBind>?): Process? {
         val runtime = _environmentState.value.runtime
         val distroId = runtime.selectedDistro.id

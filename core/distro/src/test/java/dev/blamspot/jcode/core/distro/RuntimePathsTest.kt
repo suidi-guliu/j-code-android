@@ -14,21 +14,22 @@ class RuntimePathsTest {
         val project = File(projects,"多层/项目 空格:one").apply { mkdirs() }
         val source = File(project,"Main.java").apply { writeText("class Main {}") }
         val task = NativeTaskPaths.resolve(source,project,emptyList(),projects.path)
-        assertEquals("/workspace/多层/项目 空格:one",task.guestDirectory)
+        assertTrue(task.guestDirectory.startsWith("/sui-projects/"))
+        assertEquals(project.canonicalPath,ProjectPathRegistry.guestToHost(task.guestDirectory))
         assertEquals(task.guestDirectory+"/Main.java",task.guestSource)
         assertTrue(task.binds.any { it.host==projects.canonicalPath && it.target=="/workspace" })
-        assertTrue(task.binds.none { ':' in it.host })
+        assertTrue(task.binds.map { RuntimeMounts.addressable(it,File(root,"aliases")) }.none { ':' in it.host })
     }
     @Test fun internalFilesWithoutAProjectKeepTheSamePathAsEditorAndProtocolClients() = sandbox { root ->
         val source = File(root,"internal/中文:folder/hello ' $;.py").apply { parentFile!!.mkdirs();writeText("print(1)") }
         val task = NativeTaskPaths.resolve(source,null,emptyList(),File(root,"projects").path)
-        assertEquals(source.canonicalPath,task.guestSource)
-        assertEquals(source.parentFile!!.canonicalPath,task.guestDirectory)
-        assertTrue(task.binds.none { ':' in it.host })
+        assertEquals(source.canonicalPath,ProjectPathRegistry.guestToHost(task.guestSource))
+        assertEquals(source.parentFile!!.canonicalPath,ProjectPathRegistry.guestToHost(task.guestDirectory))
+        assertTrue(task.binds.map { RuntimeMounts.addressable(it,File(root,"aliases")) }.none { ':' in it.host })
     }
     @Test fun broadBindsCannotMaskNestedProjectsAndExplicitOverridesAreRetained() = sandbox { root ->
         val bindings = RuntimeMounts.ordered(listOf(DistroBind("/a","/workspace/one/sub"),DistroBind("/b","/workspace"),DistroBind("/c","/workspace/one")),root.path)
-        assertEquals(listOf("/workspace","/workspace/one","/workspace/one/sub"),bindings.map { it.target })
+        assertEquals(listOf("/workspace","/workspace/one","/workspace/one/sub"),bindings.filter { !it.target.startsWith("/sui-projects/") }.map { it.target })
         assertEquals("/b",bindings.first().host)
     }
     @Test fun switchingProjectsDoesNotReuseThePreviousProjectMount() = sandbox { root ->
@@ -46,5 +47,23 @@ class RuntimePathsTest {
         val elsewhere=File(root,"elsewhere").apply { mkdir() }
         assertFails { NativeTaskPaths.resolve(source,elsewhere,emptyList(),root.path) }
         assertFails { NativeTaskPaths.resolve(File(root,"missing.c"),null,emptyList(),root.path) }
+    }
+    @Test fun legacyBindsContainingColonsUseStableAliasesWithoutTouchingTheProject() = sandbox { root ->
+        val project=File(root,"old:project").apply { mkdir() };val file=File(project,"keep.txt").apply { writeText("preserve") }
+        val input=DistroBind(project.path,"/workspace/old:project")
+        val alias=RuntimeMounts.addressable(input,File(root,"aliases"))
+        assertFalse(':' in alias.host);assertEquals(input.target,alias.target)
+        assertEquals(project.toPath(),Files.readSymbolicLink(File(alias.host).toPath()))
+        assertEquals(alias,RuntimeMounts.addressable(input,File(root,"aliases")))
+        assertEquals("preserve",file.readText())
+    }
+    @Test fun nestedProjectsChooseTheSameFirstUnsafeAncestorInEitherOpenOrder() = sandbox { root ->
+        val outer=File(root,"project;one").apply { mkdir() };val inner=File(outer,"nested 中文").apply { mkdir() }
+        ProjectPathRegistry.register(inner,root.path);val first=ProjectPathRegistry.hostToGuest(inner.canonicalPath)
+        ProjectPathRegistry.register(outer,root.path)
+        assertEquals(first,ProjectPathRegistry.hostToGuest(inner.canonicalPath))
+        assertEquals(ProjectPathRegistry.hostToGuest(outer.canonicalPath)+"/nested 中文",first)
+        assertEquals(inner.canonicalPath,ProjectPathRegistry.guestToHost(first!!))
+        assertFails { ProjectPathRegistry.guestToHost(ProjectPathRegistry.hostToGuest(outer.canonicalPath)+"/../escape") }
     }
 }

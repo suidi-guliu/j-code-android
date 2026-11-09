@@ -210,6 +210,9 @@ object WorkspaceHostPaths {
     fun hostToGuest(hostPath: String): String {
         val root = java.io.File(projectsRoot).canonicalPath
         val normalized = runCatching { java.io.File(hostPath).canonicalPath }.getOrDefault(hostPath)
+        val actual=java.io.File(normalized)
+        ProjectPathRegistry.register(if(actual.isDirectory) actual else actual.parentFile ?: actual,root)
+        ProjectPathRegistry.hostToGuest(normalized)?.let { return it }
         return when {
             normalized == root -> DEFAULT_DISTRO_WORKDIR
             normalized.startsWith("$root/") -> DEFAULT_DISTRO_WORKDIR + normalized.removePrefix(root)
@@ -218,7 +221,7 @@ object WorkspaceHostPaths {
     }
 
     /** Guest /workspace path -> host absolute path (returned unchanged if not under /workspace). */
-    fun guestToHost(guestPath: String): String = when {
+    fun guestToHost(guestPath: String): String = ProjectPathRegistry.guestToHost(guestPath) ?: when {
         guestPath == DEFAULT_DISTRO_WORKDIR -> projectsRoot
         guestPath.startsWith("$DEFAULT_DISTRO_WORKDIR/") -> projectsRoot + guestPath.removePrefix(DEFAULT_DISTRO_WORKDIR)
         else -> guestPath

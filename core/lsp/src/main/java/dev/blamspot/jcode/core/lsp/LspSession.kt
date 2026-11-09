@@ -90,9 +90,14 @@ class LspSession(
             val result = sendRequest("initialize", initializeParams(rootUri), INITIALIZE_TIMEOUT_MS)
             serverCapabilities = result.asObject()?.optJSONObject("capabilities")
             sendNotification("initialized", JSONObject())
+            if (closed) return
             readyAtNanos=System.nanoTime()
             _state.value = LspState.READY
-        } catch(e: kotlinx.coroutines.CancellationException) { close();throw e }
+        } catch(e: kotlinx.coroutines.CancellationException) {
+            if(e is kotlinx.coroutines.TimeoutCancellationException && kotlinx.coroutines.currentCoroutineContext().isActive)
+                failTransport(LspException("Language server initialize timed out; inspect server logs before restarting"))
+            else { close();throw e }
+        }
         catch (e: Exception) {
             if(closed) return
             errorMessage = e.message ?: e::class.java.simpleName
@@ -104,7 +109,7 @@ class LspSession(
     private fun initializeParams(rootUri: String): JSONObject = JSONObject().apply {
         put("processId", android.os.Process.myPid())
         put("rootUri", rootUri)
-        put("initializationOptions", JSONObject(descriptor.initializationOptions))
+        put("initializationOptions", contextOptions(JSONObject(descriptor.initializationOptions)))
         put("workspaceFolders", JSONArray().put(workspaceFolder(rootUri)))
         put("capabilities", JSONObject().apply {
             put("textDocument", JSONObject().apply {
@@ -142,6 +147,13 @@ class LspSession(
                 put("positionEncodings", JSONArray().put("utf-16"))
             })
         })
+    }
+
+    private fun contextOptions(value: Any): Any = when(value) {
+        is JSONObject -> JSONObject().also { out -> value.keys().forEach { key -> out.put(key,contextOptions(value.get(key))) } }
+        is JSONArray -> JSONArray().also { out -> for(i in 0 until value.length()) out.put(contextOptions(value.get(i))) }
+        is String -> value.replace("\${workspaceRoot}",dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(projectRoot))
+        else -> value
     }
 
     private fun workspaceFolder(rootUri: String): JSONObject = JSONObject().apply {
@@ -375,27 +387,37 @@ class LspSession(
 
     private suspend fun writeMessage(message: JSONObject) = withContext(Dispatchers.IO) {
         val bytes = frame(message)
-        writeMutex.withLock { transport?.write(bytes) }
+        writeMutex.withLock { (transport ?: throw LspException("Language server stream is unavailable")).write(bytes) }
     }
 
     private suspend fun readLoop() {
-        val buffer = ByteArray(READ_CHUNK)
-        while (scope.isActive && !closed) {
-            val t = transport ?: break
-            val n = try {
-                t.read(buffer)
-            } catch (e: Exception) {
-                -1
-            }
-            when {
-                n > 0 -> {
-                    append(buffer, n)
-                    drainMessages()
+        try {
+            val buffer = ByteArray(READ_CHUNK)
+            while (scope.isActive && !closed) {
+                val t = transport ?: break
+                when(val n=t.read(buffer)) {
+                    in 1..Int.MAX_VALUE -> { append(buffer,n);drainMessages() }
+                    -1 -> break
+                    else -> delay(10)
                 }
-                n < 0 -> break
-                else -> delay(10)
             }
-        }
+            if(!closed) failTransport(LspException("Language server closed its protocol stream; inspect server logs and restart"))
+        } catch(e: kotlinx.coroutines.CancellationException) { throw e }
+        catch(e: Exception) { if(!closed) failTransport(e) }
+    }
+
+    @Synchronized private fun failTransport(error: Exception) {
+        if(closed) return
+        errorMessage=error.message ?: error.javaClass.simpleName
+        _state.value=LspState.ERROR
+        pending.values.forEach { it.completeExceptionally(error) }
+        close()
+    }
+
+    private suspend fun replyMessage(message: JSONObject) {
+        try { writeMessage(message) }
+        catch(e: kotlinx.coroutines.CancellationException) { throw e }
+        catch(e: Exception) { if(!closed) failTransport(e) }
     }
 
     // Accumulator for partial messages. Grown by doubling and compacted in place rather than
@@ -405,6 +427,7 @@ class LspSession(
     private var accLen = 0
 
     private fun append(data: ByteArray, n: Int) {
+        if(accLen+n>16*1024*1024+65536) throw LspException("Language server frame exceeded 16 MiB")
         if (accLen + n > acc.size) {
             var capacity = acc.size
             while (capacity < accLen + n) capacity *= 2
@@ -426,12 +449,13 @@ class LspSession(
             val headerEnd = indexOfHeaderEnd(consumed)
             if (headerEnd < 0) break
             val header = String(acc, consumed, headerEnd - consumed, Charsets.US_ASCII)
-            val length = CONTENT_LENGTH.find(header)?.groupValues?.get(1)?.toIntOrNull() ?: break
+            val length = CONTENT_LENGTH.find(header)?.groupValues?.get(1)?.toIntOrNull() ?: throw LspException("Invalid language server Content-Length")
+            if(length !in 0..16*1024*1024) throw LspException("Language server frame exceeded 16 MiB")
             val bodyStart = headerEnd + 4
             if (accLen - bodyStart < length) break
             val content = String(acc, bodyStart, length, Charsets.UTF_8)
             consumed = bodyStart + length
-            runCatching { handleMessage(JSONObject(content)) }
+            handleMessage(JSONObject(content))
         }
         if (consumed > 0) {
             System.arraycopy(acc, consumed, acc, 0, accLen - consumed)
@@ -504,7 +528,7 @@ class LspSession(
 
     private fun respond(id: Any, result: Any) {
         scope.launch {
-            writeMessage(JSONObject().apply {
+            replyMessage(JSONObject().apply {
                 put("jsonrpc", "2.0")
                 put("id", id)
                 put("result", result)
@@ -514,7 +538,7 @@ class LspSession(
 
     private fun respondError(id: Any, code: Int, message: String) {
         scope.launch {
-            writeMessage(JSONObject().apply {
+            replyMessage(JSONObject().apply {
                 put("jsonrpc", "2.0")
                 put("id", id)
                 put("error", JSONObject().apply {

@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +73,8 @@ class LspController(
      * run, so a server never starts on a bare file-extension match alone.
      */
     private val isServerPaired: (serverId: String, fileName: String) -> Boolean,
+    /** Same project context resolver used by tasks and DAP; null retains the legacy fallback. */
+    private val projectRootForPath: (String) -> String? = { null },
 ) {
 
     private val backgroundScope=CoroutineScope(scope.coroutineContext + Dispatchers.IO)
@@ -85,6 +88,8 @@ class LspController(
     ) {
         var diagnosticsJob: Job? = null
         var stateJob: Job? = null
+        @Volatile var requestError: String? = null
+        private val history = ArrayDeque<String>()
 
         /**
          * The first stderr lines the server produced. First, not last: when a server dies during the
@@ -92,9 +97,12 @@ class LspController(
          */
         private val stderrHead = java.util.concurrent.CopyOnWriteArrayList<String>()
 
-        fun recordStderr(line: String) {
+        @Synchronized fun recordStderr(line: String) {
             if (line.isNotBlank() && stderrHead.size < MAX_STDERR_LINES) stderrHead.add(line.trim())
+            if(line.isNotBlank()) { if(history.size>=200) history.removeFirst();history.addLast(line.take(4096)) }
         }
+
+        @Synchronized fun logText(): String = history.joinToString("\n")
 
         val stderr: String? get() = stderrHead.joinToString(" | ").ifBlank { null }
     }
@@ -206,6 +214,15 @@ class LspController(
      */
     fun retryOpenDocuments() {
         backgroundScope.launch { openDocumentPaths().forEach { documentOpened(it) } }
+    }
+
+    fun serverLog(serverId: String): String = sessions.values.filter { it.descriptor.id==serverId }.joinToString("\n\n") { "${it.key.root}\n${it.logText()}\n${it.session.errorMessage.orEmpty()}" }
+
+    fun restartServer(serverId: String) {
+        backgroundScope.launch {
+            startMutex.withLock { sessions.keys.filter { it.serverId==serverId }.forEach(::stopSession) }
+            openDocumentPaths().filter { LspServerDescriptor.findForFile(File(it).name)?.id==serverId }.forEach { documentOpened(it) }
+        }
     }
 
     /** Tears every session down — a different project's files never belong to the same server root. */
@@ -371,20 +388,35 @@ class LspController(
         fallback: T,
         block: suspend (LspSession, String) -> T,
     ): T {
-        val (managed, document) = readySession(hostPath) ?: return fallback
+        val (managed, document) = readySession(hostPath) ?: run { if(!documents.containsKey(hostPath)) documentOpened(hostPath);readySession(hostPath) } ?: return fallback
         return try {
             // Flush debounced edits before asking about their new caret coordinates.
             document.changeJob?.cancelAndJoin()
             document.changeJob = null
+            sendDidOpen(managed,hostPath,document)
+            if(!document.opened.get()) return fallback
             val text = documentText(hostPath)
             if (text != null && document.opened.get()) syncDocument(managed, document, text)
             val started = android.os.SystemClock.elapsedRealtime()
             block(managed.session, document.uri).also {
+                managed.requestError=null
+                publishStatus()
                 android.util.Log.d("SuiPerformance", "lsp request server=${managed.descriptor.id} elapsedMs=${android.os.SystemClock.elapsedRealtime()-started}")
             }
         }
-        catch(e: kotlinx.coroutines.CancellationException) { throw e }
-        catch(_: Exception) { fallback }
+        catch(e: kotlinx.coroutines.CancellationException) {
+            if(e is kotlinx.coroutines.TimeoutCancellationException && kotlinx.coroutines.currentCoroutineContext().isActive) {
+                recordRequestFailure(managed,e);fallback
+            } else throw e
+        }
+        catch(e: Exception) { recordRequestFailure(managed,e);fallback }
+    }
+
+    private fun recordRequestFailure(managed: Managed,error: Exception) {
+        managed.requestError=error.message ?: error.javaClass.simpleName
+        managed.recordStderr("[Request error] ${managed.requestError}")
+        android.util.Log.e(TAG,"LSP request failed: ${managed.descriptor.id} ${managed.key.root}",error)
+        publishStatus()
     }
 
     private fun readySession(hostPath: String): Pair<Managed, OpenDocument>? {
@@ -433,10 +465,10 @@ class LspController(
 
     private fun startSession(descriptor: LspServerDescriptor, key: SessionKey): Managed {
         val session = LspSession(descriptor, key.root) { command ->
-            distroService.spawnStdioProcess(
+            distroService.spawnProjectStdioProcess(
                 command = command,
                 owner="sui-kit:${descriptor.ownerPackage}/lsp:${key.hashCode()}",
-                workdir = WorkspaceHostPaths.hostToGuest(key.root),
+                project = File(key.root),
             )?.let { process ->
                 ProcessLspTransport(process) { line -> sessions[key]?.recordStderr(line) }
             }
@@ -493,16 +525,14 @@ class LspController(
     }
 
     private suspend fun sendDidOpen(managed: Managed, hostPath: String, document: OpenDocument) {
-        if (!document.opened.compareAndSet(false, true)) return
-        val text = documentText(hostPath)
-        if (text == null) {
-            document.opened.set(false)
-            return
-        }
-        runCatching {
+        try { document.syncMutex.withLock {
+            if (document.opened.get()) return@withLock
+            val text = documentText(hostPath) ?: return@withLock
             managed.session.didOpen(document.uri, document.languageId, document.version.get(), text)
             document.sentText = text
-        }.onFailure { document.opened.set(false) }
+            document.opened.set(true)
+        } } catch(e: kotlinx.coroutines.CancellationException) { throw e }
+        catch(e: Exception) { managed.requestError=e.message ?: e.javaClass.simpleName;managed.recordStderr("[didOpen error] ${managed.requestError}");publishStatus() }
     }
 
     private fun stopSession(key: SessionKey) {
@@ -521,6 +551,10 @@ class LspController(
      * binds the projects root, so a server could not read them anyway.
      */
     private fun detectRoot(hostPath: String, detectors: List<String>): String? {
+        projectRootForPath(hostPath)?.let { root ->
+            val directory=File(root).canonicalFile
+            if(directory.isDirectory && File(hostPath).canonicalFile.toPath().startsWith(directory.toPath())) return directory.path
+        }
         val projectsRoot = File(WorkspaceHostPaths.projectsRoot).absolutePath.trimEnd('/')
         val file = File(hostPath).absoluteFile
         if (!file.path.startsWith("$projectsRoot/")) return null
@@ -570,8 +604,8 @@ class LspController(
         serverId = descriptor.id,
         name = LspServerCatalog.findById(descriptor.id)?.name ?: descriptor.id,
         root = key.root,
-        state = session.state.value,
-        detail = session.errorMessage ?: stderr,
+        state = if(requestError!=null) LspState.ERROR else session.state.value,
+        detail = session.errorMessage ?: requestError ?: stderr,
     )
 
     /** ".kt" for "Main.kt"; null for a file with no extension. */
