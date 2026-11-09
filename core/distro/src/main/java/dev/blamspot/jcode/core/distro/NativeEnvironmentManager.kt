@@ -62,7 +62,15 @@ class NativeEnvironmentManager(private val distro: DistroService) {
         }
     }
 
-    @Synchronized fun install(plan: NativeInstallPlan) {
+    /** Offline configuration repair reuses real installed tools and cannot reach apt. */
+    @Synchronized fun repairExisting(language: NativeEnvironment) {
+        if(job?.isActive==true) return
+        val runtime=distro.environmentState.value.runtime
+        val plan=NativeInstallPlan(language,language.packages.map { NativePackage(it,"0","0") },runtime.selectedDistro.id,runtime.selectedDistro.arch.rootfsKey)
+        mutable.update { it.copy(plan=plan) }
+        install(plan,repairOnly=true)
+    }
+    @Synchronized fun install(plan: NativeInstallPlan,repairOnly: Boolean=false) {
         if (job?.isActive == true || (plan != mutable.value.plan && plan != mutable.value.plan?.copy(upgrade=true))) return
         job = scope.launch {
             var poller: Job? = null
@@ -80,10 +88,11 @@ class NativeEnvironmentManager(private val distro: DistroService) {
                     if (file.isFile) mutable.update { it.copy(log = tail(file)) }
                     delay(750)
                 } }
-                val command = "mkdir -p /opt/sui-code/logs && /bin/bash -o pipefail -c " + shellQuote("/bin/bash -c ${shellQuote(plan.script(cancelPath))} 2>&1 | tee ${shellQuote(logPath)}")
+                val script=(if(repairOnly) "sudo() { echo '[E_ENV_TOOL_MISSING] Offline repair never installs packages; review a signed installation plan in Languages if the compiler is missing.' >&2; return 78; }\n" else "")+plan.script(cancelPath)
+                val command = "mkdir -p /opt/sui-code/logs && /bin/bash -o pipefail -c " + shellQuote("/bin/bash -c ${shellQuote(script)} 2>&1 | tee ${shellQuote(logPath)}")
                 val result = runner("${plan.language.title} environment", command, 2_100_000, plan.distroId)
                     ?: error("Could not open Setup terminal. Nothing was installed silently.")
-                val required=plan.language.packages.joinToString(" && ") { "dpkg-query -W -f='\${db:Status-Abbrev}' ${shellQuote(it)} 2>/dev/null | grep -q '^ii '" }
+                val required=if(repairOnly) "true" else plan.language.packages.joinToString(" && ") { "dpkg-query -W -f='\${db:Status-Abbrev}' ${shellQuote(it)} 2>/dev/null | grep -q '^ii '" }
                 val verify=distro.execOwned("set -eu; . /opt/sui-code/${plan.language.key}.env; TOOL=\"\${${plan.language.variable}}\"; test -x \"\$TOOL\"; \"\$TOOL\" --version; $required","/tmp","sui-kit:native-environment-verify",60000)
                 val outcome=InstallationOutcome.assess(result.exitCode,verify.succeeded,result.exitCode==130)
                 distro.invalidateCatalogProbes()
@@ -94,6 +103,7 @@ class NativeEnvironmentManager(private val distro: DistroService) {
             } finally { withContext(NonCancellable) {
                 poller?.cancelAndJoin()
                 logFile?.takeIf { it.isFile }?.let { f -> mutable.update { it.copy(log = tail(f)) } }
+                logFile?.let { file -> runCatching { distro.installationLogs.record("environment",plan.language.key,"Signed Ubuntu repositories",plan.distroId,mutable.value.message,file) }.onFailure { android.util.Log.e("SuiInstallLog","Cannot archive runtime log",it) } }
                 cancellationFile?.delete(); cancellationFile = null
                 mutable.update { it.copy(busy = false, installing = false) }
             } }

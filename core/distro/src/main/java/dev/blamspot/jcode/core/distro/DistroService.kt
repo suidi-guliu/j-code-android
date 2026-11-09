@@ -46,6 +46,7 @@ class DistroService(
     private val context: Context,
 ) {
     private val appContext = context.applicationContext
+    val installationLogs by lazy { InstallationLogArchive(File(appContext.filesDir,"sui-code/install-log-index")) }
 
     init {
         // Anchor host<->guest path translation on the ext4 projects root. DistroService is the common

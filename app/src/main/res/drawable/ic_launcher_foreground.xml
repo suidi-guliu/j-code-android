@@ -1,5 +1,2 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#191F29" android:pathData="M26,28h56v52h-56z"/>
-    <path android:fillColor="#85B4FF" android:pathData="M44,37l-16,17 16,17 5,-5 -11,-12 11,-12zM64,37l16,17 -16,17 -5,-5 11,-12 -11,-12z"/>
-    <path android:fillColor="#8BD5A4" android:pathData="M56,36h6l-10,37h-6z"/>
-</vector>
+<?xml version="1.0" encoding="utf-8"?>
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@drawable/sui_launcher_foreground" android:inset="0dp" />

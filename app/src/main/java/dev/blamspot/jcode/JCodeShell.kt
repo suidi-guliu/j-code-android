@@ -1822,6 +1822,9 @@ fun JCodeApp(
         onDeleteBuild = viewModel::deleteBuildConfig,
         runConfigVersion = runConfigVersion,
         managerActions = remember(viewModel, contributedToolchainManagers) { WorkbenchManagerActions(
+            nativeLspStatuses=viewModel.lspServers,
+            onRestartNativeLsp=viewModel::restartLanguageServer,
+            nativeLspLog=viewModel::languageServerLog,
             toolchainManagers = contributedToolchainManagers,
             // The same route every contributed action takes: the extension's own view, opened as an
             // editor page tab. A manager is a page, not a dialog — it is where you sit and work.
@@ -3919,7 +3922,7 @@ private fun JCodeShell(
                         onShowIssues = panelActions.onShowIssues,
                         managers = panelActions.toolchainManagers,
                         onOpenManager = panelActions.onOpenToolchainManager,
-                    ) } else dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),section)
+                    ) } else dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),section,managerActions.nativeLspStatuses,managerActions.onRestartNativeLsp,managerActions.nativeLspLog)
                                 }
                                 EditorPageKind.AndroidDevice -> AndroidDevicePage(
                                     adbInstalled = ADB_CATALOG_ID in sdkCatalogState.installedEntryIds,
@@ -4578,7 +4581,7 @@ private fun WorkspacePanel(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                    WorkbenchTool.Extensions,WorkbenchTool.IdeKits,WorkbenchTool.Packages -> dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),when(tool) { WorkbenchTool.IdeKits -> 1;WorkbenchTool.Packages -> 2;else -> 0 })
+                    WorkbenchTool.Extensions,WorkbenchTool.IdeKits,WorkbenchTool.Packages -> dev.suicode.nativehost.NativePackageCenter(Modifier.fillMaxSize(),when(tool) { WorkbenchTool.IdeKits -> 1;WorkbenchTool.Packages -> 2;else -> 0 },managerActions.nativeLspStatuses,managerActions.onRestartNativeLsp,managerActions.nativeLspLog)
 
                     WorkbenchTool.ToolchainManager -> dev.suicode.nativehost.NativeLanguageCenter(Modifier.fillMaxSize()) { ToolchainManagerPanel(
                         sdkState = sdkCatalogState,

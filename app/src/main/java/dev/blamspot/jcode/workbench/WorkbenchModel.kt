@@ -164,6 +164,9 @@ internal data class WorkbenchRunActions(
 )
 
 internal data class WorkbenchManagerActions(
+    val nativeLspStatuses: kotlinx.coroutines.flow.StateFlow<List<dev.blamspot.jcode.lsp.LspServerStatus>>? = null,
+    val onRestartNativeLsp: (String)->Unit = {},
+    val nativeLspLog: (String)->String = { "" },
     val onCheckSdkStatuses: () -> Unit,
     val onInstallSdkCatalogEntry: (String) -> Unit,
     val onInstallSdkCatalogVersion: (String, String) -> Unit,

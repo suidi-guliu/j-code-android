@@ -13,12 +13,13 @@ import dev.blamspot.jcode.core.distro.*
 
 /** Native package setup inside the existing Toolchains detail slot; no new visual system. */
 @Composable
-internal fun NativeEnvironmentPage(language: NativeEnvironment, environment: DistroEnvironmentState, modifier: Modifier) {
+fun NativeEnvironmentPage(language: NativeEnvironment, environment: DistroEnvironmentState, modifier: Modifier) {
     val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
 
     val context = LocalContext.current
     val manager = remember(context) { DistroServiceLocator.distroService(context).nativeEnvironmentManager }
     val state by manager.state.collectAsState()
+    var repairConfirmation by remember(language) { mutableStateOf(false) }
     var confirmation by remember(language) { mutableStateOf<NativeInstallPlan?>(null) }
     val ready = environment.distroInstalled == true && environment.jcodeUserReady == true
     val plan = state.plan?.takeIf { it.language == language && it.distroId == environment.runtime.selectedDistro.id }
@@ -31,6 +32,7 @@ internal fun NativeEnvironmentPage(language: NativeEnvironment, environment: Dis
         if (state.busy) CircularProgressIndicator()
         Button(onClick = { manager.query(language) }, enabled = ready && !state.busy) { Text(strings.text("ui.queryUbuntuVersionsRetry")) }
         Button(onClick={manager.verify(language)},enabled=ready && !state.busy) { Text(strings.text("ui.verifySelectedEnvironment")) }
+        Button(onClick={repairConfirmation=true},enabled=ready && !state.busy) { Text(strings.text("management.repairInstalledRuntime")) }
         if(language==NativeEnvironment.Python) {
             TextButton(onClick=manager::queryLatestPython,enabled=!state.busy) { Text(strings.text("ui.queryLatestOfficialPythonStableVersion")) }
             state.latestPython?.let { Text("Latest upstream: $it\nSource: ${PythonReleaseProvider.SOURCE}\nUbuntu's supported package version may be older; it is installed and updated through signed Ubuntu repositories.") }
@@ -54,6 +56,7 @@ internal fun NativeEnvironmentPage(language: NativeEnvironment, environment: Dis
         state.logPath?.let { Text("Persistent Ubuntu log: $it") }
         if (state.log.isNotBlank()) SelectionContainer { Text(state.log, style = MaterialTheme.typography.bodySmall) }
     }
+    if(repairConfirmation) AlertDialog(onDismissRequest={repairConfirmation=false},title={Text(strings.text("management.repairInstalledRuntime"))},text={Text(strings.text("management.offlineRepairDescription"))},confirmButton={TextButton(onClick={repairConfirmation=false;manager.repairExisting(language)}) { Text(strings.text("ui.confirmAndOpenTerminal")) }},dismissButton={TextButton(onClick={repairConfirmation=false}) { Text(strings.text("ui.cancel")) }})
     confirmation?.let { reviewed -> AlertDialog(
         onDismissRequest = { confirmation = null },
         title = { Text("Install ${language.title}?") },

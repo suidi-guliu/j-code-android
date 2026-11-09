@@ -74,7 +74,7 @@ class NativePackageHost private constructor(private val context: Context) {
     val library=mutableLibrary.asStateFlow()
     suspend fun refreshLibrary()=withContext(Dispatchers.IO) {
         fun fetch(path: String,limit: Int): ByteArray {
-            val connection=URL("https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5-workbench-reliability/native-library/v1/$path").openConnection() as java.net.HttpURLConnection
+            val connection=URL("https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5.4-ide-reliability-management/native-library/v1/$path").openConnection() as java.net.HttpURLConnection
             connection.instanceFollowRedirects=false;connection.connectTimeout=20000;connection.readTimeout=30000
             try {
                 check(connection.responseCode==200) { "Official library HTTP ${connection.responseCode}" }
@@ -140,7 +140,7 @@ class NativePackageHost private constructor(private val context: Context) {
             val data=connection.inputStream.use { it.readNBytes(32*1024*1024+1) }
             check(data.size==item.bytes && hash(data)==item.sha256) { "Package size/SHA-256 mismatch" }
             val pack=verifier.verify(data,item.kind,checkDependencies=false)
-            check(pack.official && pack.id==item.id && pack.version==item.version) { "Official signature/identity mismatch" }
+            check((if(item.signer.isEmpty()) !pack.official else pack.official) && pack.id==item.id && pack.version==item.version && pack.manifest.getValue("author").jsonPrimitive.content==item.author && PackageCards.forPack(pack).category.wire==item.category) { "Official signature/identity mismatch" }
             PackagePreview(data,item.kind,pack,item.url)
         } finally { connection.disconnect() }
     }

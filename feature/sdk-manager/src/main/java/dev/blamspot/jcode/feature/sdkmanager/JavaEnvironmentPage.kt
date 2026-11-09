@@ -30,7 +30,7 @@ import dev.blamspot.jcode.core.distro.JavaRelease
 
 /** Uses the current Toolchains detail slot and theme; no tablet layout redesign. */
 @Composable
-internal fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: Modifier = Modifier) {
+fun JavaEnvironmentPage(environment: DistroEnvironmentState, modifier: Modifier = Modifier) {
     val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
 
     val context = LocalContext.current

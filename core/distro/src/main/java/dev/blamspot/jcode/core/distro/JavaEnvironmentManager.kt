@@ -155,6 +155,7 @@ class JavaEnvironmentManager(private val distro: DistroService) {
                     installLog?.takeIf { it.isFile }?.let { file ->
                         mutableState.update { it.copy(log = readLog(file)) }
                     }
+                    installLog?.let { file -> runCatching { distro.installationLogs.record("environment","java",confirmed.source,plan.distroId.orEmpty(),mutableState.value.message,file) }.onFailure { android.util.Log.e("SuiInstallLog","Cannot archive runtime log",it) } }
                     runCatching { inventory() }
                     mutableState.update { it.copy(busy = false, installing = false) }
                 }

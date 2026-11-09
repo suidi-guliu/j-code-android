@@ -2618,7 +2618,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Running language servers, surfaced in the status bar. */
     val lspServers = lspController.servers
-    fun restartLanguageServer(serverId: String) = lspController.restartServer(serverId)
+    fun restartLanguageServer(serverId: String) {
+        if(debugController.state.value !in setOf(dev.blamspot.jcode.core.debug.DebugState.DISCONNECTED,dev.blamspot.jcode.core.debug.DebugState.TERMINATED,dev.blamspot.jcode.core.debug.DebugState.ERROR)) {
+            _messages.tryEmit(nativePackages.uiText("management.finishDebugFirst"))
+            return
+        }
+        lspController.restartServer(serverId)
+    }
     fun languageServerLog(serverId: String): String = lspController.serverLog(serverId)
 
     /** A catalog server an opened file needs but which isn't installed; drives the install prompt. */
@@ -4264,6 +4270,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun installLspCatalogEntry(entryId: String) {
+        if(LspServerCatalog.findById(entryId)?.ownerPackage!=null) { openNativePackagesPage(1);return }
         viewModelScope.launch(Dispatchers.IO) {
             val entry = LspServerCatalog.findById(entryId)
             if (entry != null && !installRequiredSdks(entry.requiredSdks, entry.name)) return@launch
@@ -4274,10 +4281,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun uninstallLspCatalogEntry(entryId: String) {
+        if(LspServerCatalog.findById(entryId)?.ownerPackage!=null) { openNativePackagesPage(1);return }
         runLspCatalogAction(entryId, LspCatalogAction.Uninstall)
     }
 
     fun installDebugEngine(entryId: String) {
+        if(DebugEngineCatalog.findById(entryId)?.ownerPackage!=null) { openNativePackagesPage(1);return }
         viewModelScope.launch(Dispatchers.IO) {
             val entry = DebugEngineCatalog.findById(entryId)
             if (entry != null && !installRequiredSdks(entry.requiredSdks, entry.name)) return@launch
@@ -4288,6 +4297,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun uninstallDebugEngine(entryId: String) {
+        if(DebugEngineCatalog.findById(entryId)?.ownerPackage!=null) { openNativePackagesPage(1);return }
         runDebugCatalogAction(entryId, DebugEngineAction.Uninstall)
     }
 

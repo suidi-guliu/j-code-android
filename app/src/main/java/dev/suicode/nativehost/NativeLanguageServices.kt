@@ -31,7 +31,7 @@ object NativeLanguageServices {
                 fun list(key: String)=Json.parseToJsonElement(text(key)).jsonArray.map { it.jsonPrimitive.content }
                 LspCatalogEntry(
                     ownerPackage=row.record.id,id=text("serverId"),category="sui-code IDE Kit",name=text("name"),description=row.record.id,
-                    installCommand=text("installCommand"),verifyCommand=text("verifyCommand"),uninstallCommand=text("uninstallCommand"),
+                    installCommand="printf '%s\\n' 'Manage this IDE component in Packages > IDE Kit Library' >&2; exit 78",verifyCommand=text("verifyCommand"),uninstallCommand="printf '%s\\n' 'Manage this IDE component in Packages > IDE Kit Library; installed tools and runtime data are retained' >&2; exit 78",
                     runCommand=text("runCommand"),languageIds=list("languageIds"),extensions=list("extensions"),rootDetectors=list("rootDetectors"),initializationOptions=text("initializationOptions")
                 )
             }.onFailure { onError("${row.record.id}/${c.id}: incomplete LSP adapter (${it.message})") }.getOrNull()
@@ -46,7 +46,7 @@ object NativeLanguageServices {
                 fun text(key: String)=args.getValue(key).jsonPrimitive.content
                 dev.blamspot.jcode.core.distro.DebugEngineEntry(
                     id=text("id"),category="sui-code IDE Kit",name=text("name"),description=row.record.id,
-                    installCommand=text("installCommand"),verifyCommand=text("verifyCommand"),uninstallCommand=text("uninstallCommand"),
+                    installCommand="printf '%s\\n' 'Manage this IDE component in Packages > IDE Kit Library' >&2; exit 78",verifyCommand=text("verifyCommand"),uninstallCommand="printf '%s\\n' 'Manage this IDE component in Packages > IDE Kit Library; installed tools and runtime data are retained' >&2; exit 78",
                     ownerPackage=row.record.id,adapterCommand=text("adapterCommand"),transport=text("transport"),debugType=text("debugType"),
                     extensions=Json.parseToJsonElement(text("extensions")).jsonArray.map { it.jsonPrimitive.content }
                 )

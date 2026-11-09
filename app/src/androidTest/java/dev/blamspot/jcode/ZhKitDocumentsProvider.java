@@ -11,7 +11,7 @@ import java.security.MessageDigest;
 
 /** Test APK only. Read-only real SAF root; no permissions, provider or fixture added to main APK. */
 public final class ZhKitDocumentsProvider extends DocumentsProvider {
-    private static final String NAME="sui-code-zh-hans-1.0.0.suik";
+    private static final String NAME="sui-code-zh-hans-1.0.1.suik";
     private static final String TITLE="sui-code test packages";
     private static final String[] ROOT_COLUMNS={"root_id","document_id","title","flags","mime_types"};
     private static final String[] DOC_COLUMNS={"document_id","_display_name","mime_type","flags","_size","last_modified"};

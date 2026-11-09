@@ -5,89 +5,87 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import dev.blamspot.jcode.core.distro.DistroServiceLocator
-import dev.suicode.packages.*
+import dev.blamspot.jcode.core.distro.*
+import dev.blamspot.jcode.feature.sdkmanager.JavaEnvironmentPage
+import dev.blamspot.jcode.feature.sdkmanager.NativeEnvironmentPage
 import kotlinx.coroutines.*
 
-/** The normal path is language readiness + one reviewed plan. Catalog internals remain advanced. */
+/** Runtime ownership only: no package host, Kit probes, IDE installers or Kit logs. */
 @Composable fun NativeLanguageCenter(modifier: Modifier=Modifier,advanced: @Composable ()->Unit) {
-    val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
-
+    val strings=dev.blamspot.jcode.design.LocalUiTranslations.current
     val context=LocalContext.current
-    val host=remember { NativePackageHost.get(context) }
-    val distro=remember { DistroServiceLocator.distroService(context) }
-    val rows by host.rows.collectAsState()
-    val library by host.library.collectAsState()
-    val setup by host.setup.state.collectAsState()
+    val distro=remember(context) { DistroServiceLocator.distroService(context) }
     val environment by distro.environmentState.collectAsState()
-    var advancedVisible by remember { mutableStateOf(false) }
-    var statuses by remember { mutableStateOf<Map<String,List<KitDependencyStatus>>>(emptyMap()) }
-    var pending by remember { mutableStateOf<PackagePreview?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
+    var search by rememberSaveable { mutableStateOf("") }
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var revision by remember { mutableIntStateOf(0) }
-    val scope=rememberCoroutineScope()
-    DisposableEffect(Unit) {
-        val cookie=System.identityHashCode(host)
-        android.os.Trace.beginAsyncSection("sui.languages.visible",cookie)
-        android.util.Log.i("SuiPerformance","Languages enter pid=${android.os.Process.myPid()} at=${android.os.SystemClock.elapsedRealtime()}")
-        onDispose { android.os.Trace.endAsyncSection("sui.languages.visible",cookie);android.util.Log.i("SuiPerformance","Languages leave") }
+    var detected by remember { mutableStateOf<Map<String,String>>(emptyMap()) }
+    var checking by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val runtimes=remember { listOf("java" to "Java · JDK · Temurin · 爪哇", "c" to "C · GCC · C语言", "cpp" to "C++ · G++ · CPP", "python" to "Python · Python 3 · 蟒蛇") }
+    LaunchedEffect(environment.runtime.selectedDistro.id,environment.distroInstalled,revision) {
+        if(!distro.isRuntimeReady()) return@LaunchedEffect
+        checking=true;error=null
+        try {
+            val script="""
+                set +e
+                for tool in java gcc g++ python3; do
+                    case "${'$'}tool" in java) id=java; envfile=java;; gcc) id=c; envfile=c;; g++) id=cpp; envfile=cpp;; python3) id=python; envfile=python;; esac
+                    (
+                        config=missing
+                        file=/opt/sui-code/"${'$'}envfile".env
+                        if [ -d "${'$'}file" ]; then config=directory
+                        elif [ -L "${'$'}file" ] && [ ! -r "${'$'}file" ]; then config=broken-link
+                        elif [ -r "${'$'}file" ]; then config=readable; . "${'$'}file"
+                        elif [ -e "${'$'}file" ]; then config=unreadable; fi
+                        command -v "${'$'}tool" >/dev/null 2>&1 || { printf 'SUI_RUNTIME\t%s\tmissing · config=%s\n' "${'$'}id" "${'$'}config"; exit 0; }
+                        version=$(timeout 5 "${'$'}tool" --version 2>&1 | head -1)
+                        printf 'SUI_RUNTIME\t%s\t%s · config=%s\n' "${'$'}id" "${'$'}version" "${'$'}config"
+                    )
+                done
+            """.trimIndent()
+            val result=withContext(Dispatchers.IO) { distro.execOwned(script,"/tmp","sui-runtime:discovery",30000) }
+            detected=result.stdout.lineSequence().map { it.split('\t',limit=3) }.filter { it.size==3 && it[0]=="SUI_RUNTIME" }.associate { it[1] to it[2] }
+            if(!result.succeeded) error=result.stderr.takeLast(1500)
+        } catch(e: CancellationException) { throw e }
+        catch(e: Exception) { error=e.message }
+        finally { checking=false }
     }
-    LaunchedEffect(rows,environment.runtime.selectedDistro.id,setup.installing,revision) {
-        if(setup.installing) return@LaunchedEffect
-        for(row in rows.filter { it.pack.kind==PackKind.KIT }) {
-            try { val result=host.setup.inspect(row.pack,revision>0);statuses=statuses+(row.record.id to result) }
-            catch(e: CancellationException) { throw e }
-            catch(e: Exception) { error="Readiness check: ${e.message}. Retry without changing the installed environment." }
-            yield()
-        }
-    }
-    if(advancedVisible) {
-        Column(modifier) {
-            FlowRow {
-                TextButton(onClick={advancedVisible=false}) { Text(strings.text("ui.languageReadiness")) }
-                TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { distro.checkAvailableCatalogUpdates() } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(strings.text("ui.checkTrustedSourceUpdates")) }
-            }
-            error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-            Box(Modifier.weight(1f)) { advanced() }
-        }
-    } else Column(modifier.padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Text(dev.blamspot.jcode.design.uiText("languages.title"),style=MaterialTheme.typography.headlineSmall)
-        Text(strings.text("languages.context", mapOf("distro" to (environment.runtime.selectedDistro.label).toString(), "architecture" to (environment.runtime.selectedDistro.arch.rootfsKey).toString())))
-        if(busy || setup.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+    Column(modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Text(strings.text("languages.title"),style=MaterialTheme.typography.titleLarge)
+        Text(strings.text("management.runtimeOnly"),style=MaterialTheme.typography.bodySmall)
+        OutlinedTextField(search,{search=it},Modifier.fillMaxWidth().testTag("languages-search"),singleLine=true,label={Text(strings.text("management.searchLanguages"))},trailingIcon={if(search.isNotEmpty()) TextButton(onClick={search=""}) { Text(strings.text("management.clear")) }})
+        dev.blamspot.jcode.feature.sdkmanager.InstallationLogHistory(distro,"environment")
+        if(checking) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-        if(setup.message.isNotBlank()) {
-            Text(when(setup.message) { "Checking prerequisites…" -> strings.text("packages.checking"); "Installing reviewed package resources" -> strings.text("packages.installingResources"); "Ready · package resources enabled; no language environment required" -> strings.text("packages.resourcesReady"); else -> setup.message })
-            if(setup.installing) { LinearProgressIndicator(progress={setup.progress/100f},modifier=Modifier.fillMaxWidth());TextButton(onClick=host.setup::cancel) { Text(strings.text("ui.cancelSafely")) } }
-            var logs by remember { mutableStateOf(false) }
-            TextButton(onClick={logs=!logs}) { Text(if(logs) strings.text("ui.hideInstallationLog") else strings.text("ui.installationLog")) }
-            if(logs) Text("${setup.logPath.orEmpty()}\n${setup.log.takeLast(12000)}",style=MaterialTheme.typography.bodySmall)
-        }
-        library.filter { it.kind=="suic" }.forEach { basic ->
-            val id=basic.id.removeSuffix(".basic")+".kit"
-            val installedBasic=rows.firstOrNull { it.record.id==basic.id }
-            val kit=rows.firstOrNull { it.record.id==id }
-            val status=statuses[id]
-            OutlinedCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                    Text(basic.name.removeSuffix(" Basic Plugin"),style=MaterialTheme.typography.titleLarge)
-                    Text(strings.text("languages.basicStatus", mapOf("status" to (installedBasic?.let { it.record.version+" · "+strings.text(if(it.record.enabled) "status.enabled" else "status.disabled") } ?: strings.text("status.notInstalled")).toString())))
-                    Text(strings.text("languages.kitStatus", mapOf("status" to (kit?.let { it.record.version+" · "+strings.text(if(it.record.enabled) "status.enabled" else "status.disabled") } ?: strings.text("status.optionalNotInstalled")).toString())))
-                    if(kit!=null && library.firstOrNull { it.id==id }?.version!=kit.record.version) Text(strings.text("ui.updatedKitAvailableReviewItsSignedDependencyPlanTo"),color=MaterialTheme.colorScheme.primary)
-                    Text(when { status==null -> strings.text("ui.developmentToolsCheckingWhenAKitIsInstalled");status.isEmpty() -> strings.text("ui.legacyKitReviewUpdatedPrerequisites");status.all { it.ready } -> strings.text("ui.readyRuntimeAndAllRequiredToolsDetected");else -> strings.text("languages.partial", mapOf("tools" to (status.filter { !it.ready }.joinToString { it.requirement.name }).toString())) })
-                    status?.forEach { Text("${if(it.ready) "✓" else "○"} ${it.requirement.name} · ${it.installedVersion}",style=MaterialTheme.typography.bodySmall) }
-                    FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        if(installedBasic==null) TextButton(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.download(basic) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(strings.text("ui.basicRunSetup")) }
-                        Button(enabled=!busy && !setup.busy,onClick={busy=true;scope.launch { try { pending=host.setupPreview(id) } catch(e: Exception) { error=e.message } finally { busy=false } }}) { Text(if(kit==null) strings.text("ui.setUpCompleteIDEKit") else strings.text("ui.reviewRepairDependencies")) }
+        if(selected!=null) {
+            TextButton(onClick={selected=null;revision++}) { Text(strings.text("management.backToEnvironments")) }
+            Box(Modifier.weight(1f)) {
+                when(selected) {
+                    "java" -> JavaEnvironmentPage(environment)
+                    else -> NativeEnvironmentPage(NativeEnvironment.entries.first { it.key==selected },environment,Modifier)
+                }
+            }
+        } else {
+            val visible=runtimes.filter { (id,name) -> "$name ${detected[id].orEmpty()} ${if(detected[id]?.contains("missing")==false) "installed 已安装 已检测" else "not installed 未安装"}".contains(search.trim(),ignoreCase=true) }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                if(visible.isEmpty()) Text(strings.text("management.noResults"),Modifier.testTag("languages-empty"))
+                visible.forEach { (id,name) ->
+                    OutlinedCard(Modifier.fillMaxWidth().testTag("runtime-$id")) {
+                        Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Text(name.substringBefore(" · "),style=MaterialTheme.typography.titleMedium)
+                            Text(detected[id] ?: strings.text(if(distro.isRuntimeReady()) "packages.checking" else "ui.completeUbuntuSetupBeforeInstallingJava"))
+                            Button(onClick={selected=id}) { Text(strings.text("management.manageEnvironment")) }
+                        }
                     }
                 }
             }
+            TextButton(onClick={revision++},enabled=!checking) { Text(strings.text("files.refresh")) }
         }
-        TextButton(enabled=!busy && !setup.busy,onClick={revision++}) { Text(strings.text("ui.refreshReadiness")) }
-        TextButton(onClick={advancedVisible=true}) { Text(strings.text("ui.advancedEnvironmentAndServerControls")) }
     }
-    pending?.let { NativePackageReview(host,it,onDismiss={pending=null},onInstalled={revision++}) }
 }
