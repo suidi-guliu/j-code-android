@@ -18,12 +18,20 @@ def note(message):
 def fail_hook(kind,error,tb):
  text=''.join(traceback.format_exception(kind,error,tb))
  (a.evidence/'failure.txt').write_text(text)
- try:(a.evidence/'failure-logcat.txt').write_text(adb('logcat','-d','-v','brief',timeout=30).stdout)
- except Exception:pass
+ try:
+  log=adb('logcat','-d','-v','brief',timeout=30).stdout
+  (a.evidence/'failure-logcat.txt').write_text(log)
+  lines=log.splitlines();fatal=[]
+  for i,line in enumerate(lines):
+   if 'FATAL EXCEPTION' in line or ('Fatal signal' in line and pkg in line):fatal.extend(lines[max(0,i-2):i+45])
+  text+='\nANDROID_FATAL '+('\n'.join(fatal)[-7500:] or 'No fatal exception found in captured logcat')
+  launches=sorted(a.evidence.glob('*-launch.txt'),key=lambda p:p.stat().st_mtime)
+  if launches:text+='\nLATEST_LAUNCH '+launches[-1].read_text()
+ except Exception as capture_error:text+='\nDIAGNOSTIC_CAPTURE '+str(capture_error)
  if last_xml:
   try:text+='\nLATEST_UI '+json.dumps([{k:v for k,v in n.attrib.items() if k in ['text','content-desc','bounds','enabled','checked','checkable']} for n in ET.fromstring(last_xml).iter('node') if n.attrib.get('text') or n.attrib.get('content-desc')],ensure_ascii=False)[-9500:]
   except Exception:pass
- print('::error title=Chinese Kit Android UI regression::'+text[-14000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'),flush=True)
+ print('::error title=Chinese Kit Android UI regression::'+text[-22000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'),flush=True)
  traceback.print_exception(kind,error,tb)
 sys.excepthook=fail_hook
 assert serial.startswith('emulator-') and adb('shell','getprop ro.kernel.qemu').stdout.strip()=='1','Refuse physical device'
