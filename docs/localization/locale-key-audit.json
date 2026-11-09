@@ -2342,27 +2342,37 @@
     },
     {
       "path": "feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt",
-      "line": 9,
-      "key": "nav.settings"
-    },
-    {
-      "path": "feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt",
       "line": 10,
-      "key": "ui.environment"
+      "key": "languages.title"
     },
     {
       "path": "feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt",
       "line": 11,
+      "key": "packages.title"
+    },
+    {
+      "path": "feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt",
+      "line": 14,
+      "key": "nav.settings"
+    },
+    {
+      "path": "feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt",
+      "line": 15,
+      "key": "ui.environment"
+    },
+    {
+      "path": "feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt",
+      "line": 16,
       "key": "ui.trash"
     },
     {
       "path": "feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt",
-      "line": 12,
+      "line": 17,
       "key": "project.tasks"
     },
     {
       "path": "feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt",
-      "line": 13,
+      "line": 18,
       "key": "project.build"
     },
     {

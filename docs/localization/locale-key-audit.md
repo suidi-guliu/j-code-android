@@ -2,7 +2,7 @@
 
 由 `python3 tools/localization/audit.py` 从生产源码及独立语言包资源生成。清单为词法扫描，动态后端日志和扩展作者文案不据此声称已翻译。**资源键翻译率不是全应用汉化率。**
 
-公开键：732；中文值：732；键引用位置：900；仍有硬编码位置：667（分别列出受保护宿主英文、技术原文及缺口）。
+公开键：732；中文值：732；键引用位置：902；仍有硬编码位置：667（分别列出受保护宿主英文、技术原文及缺口）。
 
 ## 页面/源码汇总
 
@@ -65,7 +65,7 @@
 |core/design/src/main/java/dev/blamspot/jcode/design/UiIconSet.kt|0|0|1|0|0|
 |core/design/src/main/java/dev/blamspot/jcode/design/VersionSection.kt|0|0|3|0|0|
 |feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt|23|23|0|0|0|
-|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt|5|0|0|0|0|
+|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt|7|0|0|0|0|
 |feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/VariableInspector.kt|0|0|9|0|0|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt|84|76|0|0|26|
 |feature/marketplace/src/main/java/dev/blamspot/jcode/feature/marketplace/ExtensionInstaller.kt|0|0|4|0|18|
@@ -547,11 +547,13 @@
 |feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt:632|ui.FindReferences|查找引用|已绑定|
 |feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt:632|ui.RenameSymbol|重命名符号|已绑定|
 |feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/EditorPane.kt:632|ui.formatDocument|格式化文档|已绑定|
-|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:9|nav.settings|设置|已绑定|
-|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:10|ui.environment|环境|已绑定|
-|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:11|ui.trash|回收站|已绑定|
-|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:12|project.tasks|高级任务|已绑定|
-|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:13|project.build|构建|已绑定|
+|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:10|languages.title|语言|已绑定|
+|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:11|packages.title|扩展包|已绑定|
+|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:14|nav.settings|设置|已绑定|
+|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:15|ui.environment|环境|已绑定|
+|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:16|ui.trash|回收站|已绑定|
+|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:17|project.tasks|高级任务|已绑定|
+|feature/editor-pane/src/main/java/dev/blamspot/jcode/feature/editor/pane/LocalizedPageTitle.kt:18|project.build|构建|已绑定|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:169|files.matches|{count} 个可见匹配项|已绑定|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:294|status.imported|已导入 {count} 个文件|已绑定|
 |feature/explorer/src/main/java/dev/blamspot/jcode/feature/explorer/ExplorerView.kt:295|status.importFailed|导入失败：{reason}|已绑定|

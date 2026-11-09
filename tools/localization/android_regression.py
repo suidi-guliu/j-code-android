@@ -46,7 +46,16 @@ def tap_node(n):
  adb('shell',f'input tap {(x1+x2)//2} {(y1+y2)//2}');time.sleep(.7)
 def swipe(pane=False):
  x=220 if pane else WIDTH//2
- adb('shell',f'input swipe {x} {int(HEIGHT*.78)} {x} {int(HEIGHT*(.50 if pane else .30))} 350');time.sleep(.4)
+ top,bottom=100,HEIGHT-50
+ if last_xml:
+  candidates=[]
+  for n in ET.fromstring(last_xml).iter('node'):
+   if n.attrib.get('scrollable')=='true':
+    x1,y1,x2,y2=bounds(n)
+    if x1<x<x2 and y2-y1>90:candidates.append(((x2-x1)*(y2-y1),y1,y2))
+  if candidates:_,top,bottom=max(candidates)
+ start=min(bottom-24,int(HEIGHT*.84));end=max(top+20,start-min(220,int((bottom-top)*.40)))
+ adb('shell',f'input swipe {x} {start} {x} {end} 350');time.sleep(.4)
 def wait_text(label,contains=False,scroll=False,pane=False,timeout=50):
  deadline=time.monotonic()+timeout
  while True:
@@ -148,7 +157,7 @@ def card_action(label,chinese):
   if owners:
    owner=min(owners,key=lambda t:t[0])[1];target=next(n for n in owner.iter('node') if n.attrib.get('text')==label);tap_node(target);return
   assert time.monotonic()<deadline,'Package action not visible for '+kitid+': '+label
-  swipe(True)
+  swipe(False)
 
 def ui_lifecycle():
  import_kit();select_language(True)
@@ -158,7 +167,7 @@ def ui_lifecycle():
  tap('文件',nav=True);checkpoint('chinese-files',['文件名筛选'])
  tap('新建文件夹',scroll=True,pane=True);checkpoint('chinese-create-folder',['新建文件夹','取消']);tap('取消')
  tap('查找',nav=True);checkpoint('chinese-find',['文件内容'])
- tap('语言',nav=True);wait_text('刷新就绪状态',scroll=True,pane=True);checkpoint('chinese-languages',['刷新就绪状态'])
+ tap('语言',nav=True);wait_text('刷新就绪状态',scroll=True);checkpoint('chinese-languages',['刷新就绪状态'])
  tap('设置',nav=True);wait_text('搜索设置');checkpoint('chinese-settings',['搜索设置','外观'])
  # Real portrait/font scale recreation, still no environment installation or data reset.
  adb('shell','wm size 800x1280');adb('shell','settings put system font_scale 1.3');time.sleep(2)
