@@ -1,10 +1,10 @@
 {
-  "apk_build_source_commit": "79c0093a972949d4bd2aca7363ba2602a1edbe16",
+  "apk_build_source_commit": "d47da0f4670f06bacb33774a157679dc6f621c72",
   "source_archive_commit": "44c7c77ac68318958a84bed0e86b6740c7f1304c",
   "apk": {
     "file": "sui-code-v0.5.3-debug.apk",
     "bytes": 90070121,
-    "sha256": "65c1022e697a67693ff6316a47283bc7012c2706d4560b2f35d03bb1fd7581e7"
+    "sha256": "233b635cebad616419377202f3eba3f643014f46eaa151864c2d4c694f0b0a43"
   },
   "language_pack": {
     "file": "sui-code-zh-hans-1.0.0.suik",
