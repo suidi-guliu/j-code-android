@@ -21,7 +21,7 @@ def fail_hook(kind,error,tb):
  try:(a.evidence/'failure-logcat.txt').write_text(adb('logcat','-d','-v','brief',timeout=30).stdout)
  except Exception:pass
  if last_xml:
-  try:text+='\nLATEST_UI '+json.dumps([n.attrib for n in ET.fromstring(last_xml).iter('node') if n.attrib.get('text') or n.attrib.get('content-desc')],ensure_ascii=False)[-9500:]
+  try:text+='\nLATEST_UI '+json.dumps([{k:v for k,v in n.attrib.items() if k in ['text','content-desc','bounds','enabled','checked','checkable']} for n in ET.fromstring(last_xml).iter('node') if n.attrib.get('text') or n.attrib.get('content-desc')],ensure_ascii=False)[-9500:]
   except Exception:pass
  print('::error title=Chinese Kit Android UI regression::'+text[-14000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'),flush=True)
  traceback.print_exception(kind,error,tb)
@@ -122,7 +122,7 @@ def import_kit(chinese=False):
   for label in ['Show roots','Show navigation drawer','Open navigation drawer']:
    if matches(tree,label):tap(label);break
  tap('sui-code test packages',scroll=True,pane=True)
- tap(a.kit.name,contains=True,scroll=True)
+ tap(a.kit.name,scroll=True)
  review()
  note('REAL_SAF_IMPORT_AND_REVIEW_PASS (read-only test DocumentsProvider; shipped Kit bytes)')
 def select_language(chinese):
