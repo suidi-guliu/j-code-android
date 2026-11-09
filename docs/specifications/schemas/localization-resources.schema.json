@@ -3,7 +3,7 @@
   "type": "object",
   "additionalProperties": false,
   "minProperties": 1,
-  "maxProperties": 732,
+  "maxProperties": 783,
   "properties": {
     "nav.files": {
       "type": "string",
@@ -3661,6 +3661,261 @@
       "maxLength": 2048
     },
     "project.blankDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.runtimeOnly": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.searchLanguages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.clear": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.backToEnvironments": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.noResults": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.manageEnvironment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.searchPackages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.category": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.verified": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.unverified": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.permissions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.basicPlugin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.notProvided": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.detected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.runtimeNeedsAttention": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.notRunning": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.declared": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.runtimeReadOnly": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.selectComponents": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.restartServer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.serverLog": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.category.languageidekit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.category.localization": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.category.developmenttool": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.category.utility": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.category.general": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.selectPlan": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.refreshPlan": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.environmentOnly": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.selected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.notSelected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.finishDebugFirst": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.reviewInstallation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.retryPlan": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.downloadBytes": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.reuseInstalled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.installRepair": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.noDownload": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.sizeUnavailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.behavior": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.retention": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.executionConsent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.trustPublisher": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.approvePermissions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.confirmPlan": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.logHistory": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.noLogs": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.updateAvailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.updateSelectedInstalled": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.repairInstalledRuntime": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "management.offlineRepairDescription": {
       "type": "string",
       "minLength": 1,
       "maxLength": 2048

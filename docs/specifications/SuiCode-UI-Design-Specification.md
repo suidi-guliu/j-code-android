@@ -1,6 +1,6 @@
 # sui-code UI Extension & Design Specification
 
-规范版本 **0.4.0**；对应 Core API **4**（兼容 API1 只读面板及 API2 原生交互面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
+规范版本 **0.4.2**；对应 Core API **4**（兼容 API1 只读面板及 API2 原生交互面板）、SUIC/SUIK **1.0**。配套规范：[原生扩展总规范](SUIC-SUIK-Development-Specification.md)。本规范不允许重新依赖 JCode UI 插件体系。
 
 ## 1. 范围、实现状态与品牌
 
@@ -256,3 +256,22 @@ Core API4与UiTranslations/uiText接口保持兼容。资源键完整目录、�
 菜单、按钮、提示、设置标题及状态使用资源键；保存到磁盘的枚举名/配置键与显示文案分离。文件名、用户代码、终端输出、扩展作者自带标题保持原文，禁止自动对任何任意String进行字典替换。宿主事件从当前快照生成，Compose不在首屏同步扫描资源。无环境时使用原暂缓配置能力访问被动资源，不能伪装Ubuntu已安装；运行与调试仍检查真实环境。
 
 横屏、竖屏、第二栏宽度及字体缩放沿用现有约束，文本使用既有换行、滚动和省略控件；不能以缩小中文字号或裁掉操作替代适配。覆盖表、剩余高级界面缺口与Android截图由`docs/localization/locale-key-audit.md`及版本交付报告公开。公开键中文值100%仅指资源表，不能据此宣称所有动态界面、工具输出及第三方面板都已翻译。
+
+
+## 0.4.2：统一扩展卡片与管理职责
+
+所有官方/第三方插件和Kit共用宿主OutlinedCard、现有Material主题、间距和响应式FlowRow，不能由扩展提供Android代码、DEX、JS或HTML。包类型、名称、版本、真实发布者、签名/未验证状态、来源、权限及生命周期操作具有相同布局；官方目录收录与包作者签名是不同概念。扩展卡片字段不得覆盖这些宿主安全信息。
+
+Core数据接口为`PackageCards.forPack(VerifiedPack):PackageCard`、`CardCategory`、`LanguageKitSlot`、`CardField`，参数/返回值、默认值、错误和版本约束详见原生开发规范0.4.2。它们只提供不可执行的声明数据；安装、启停、更新、回滚、卸载仍由宿主原生命周期执行。语言IDE Kit固定顺序显示基础插件、运行环境、LSP、DAP、Build、Test、Run、Format、Lint，缺少声明显示灰色未提供，检测失败显示错误，两者不得混用。运行环境只读；IDE工具的逐组件选择、依赖闭包、来源及影响审阅、安装与日志位于该Kit卡片。非语言类别允许经Schema验证的纯文本/HTTPS链接及已有组件操作，布局、触控尺寸、键盘导航、主题继承和卸载失效仍归宿主。
+
+Languages只管理官方运行环境及其日志，搜索使用语言中英文别名、环境、实际版本和检测状态。Packages的Plugin Library/IDE Kit Library/Installed共用顶部固定搜索，按名称、发布者、类别、版本和状态即时过滤；切换标签保留查询，清除操作明确，无结果显示空态。搜索仅过滤缓存元数据，不能调用Files/Find全文引擎或同步触发安装/网络请求。本地化Kit与语言Kit并列，任意locale均使用同一分类和生命周期，切换、禁用和卸载继续采用API4英文逐键回退。所有新增宿主文案使用公开UI资源键，作者内容保持字面文本。
+
+### 0.4.2 runtime, search, status and log ownership
+
+Languages contains runtime-only Java/JDK, C/GCC, C++/G++ and Python cards. Its fixed search filters environment names, compiler aliases, detected versions and installed state without archive IO or network access. Runtime discovery runs in cancellable background work. Packages has its own fixed search and keeps the query when switching Plugin Library / IDE Kit Library / Installed. It filters both signed-directory and locally imported package metadata, publisher, category, version and state; these queries never enter Files/Find search.
+
+All package types use the same `NativePackageCard` host renderer and existing Material tokens. Catalog-only entries show reviewable provenance but do not execute or pre-load unverified component descriptors. Installed language-ide-kit cards reserve all runtime/LSP/DAP/Build/Test/Run/Format/Lint slots. Absent declarations use reduced-emphasis “Not provided”; declared capabilities are explicitly separate from actual Starting/Ready/Error state. LSP runtime state and bounded logs come from the running controller, never the catalog's installation flag. Restart is blocked during an active debug session. The component selection review offers independent checkboxes, dependency closure, sources and transfer estimates; runtime requirements are read-only and link conceptually to Languages, without executing duplicate downloads.
+
+Localization cards are peers of language Kits and expose the same lifecycle controls plus the host language selector. A directory entry for an unsigned localization pack must still display Unverified publisher. Trust, capability approval and final install consent use host-owned English security labels, so an imported translation cannot rewrite those decisions. All ordinary management strings use API4 keys with independent Chinese resources and English fallback. Disable/uninstall safely falls back to English while retaining the prior locale selection for re-enablement.
+
+Current installation progress is separate from history. The runtime page reads only `environment` archives and Packages only `ide-component` archives. History shows component, source, time, distro and outcome and opens bounded log tails asynchronously; the same task must not be repeated across these two pages. File/project management and bottom-terminal sizing are unchanged by this ownership model.

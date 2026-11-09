@@ -1,6 +1,6 @@
 # sui-code Native Extension & IDE Kit Development Specification
 
-规范版本 **0.4.0**；Core API **4**（兼容 API 1、2、3 声明）；SUIC **1.0**；SUIK **1.0**。
+规范版本 **0.4.2**；Core API **4**（兼容 API 1、2、3 声明）；SUIC **1.0**；SUIK **1.0**。
 
 本文的 MUST/必须、MUST NOT/禁止、SHOULD/应为规范性要求。本文与 `core/native-packages/src/main/java/dev/suicode/packages` 中的生产验证器、加载器、授权会话及事务存储对应，不引用 JCode 插件 API。所有路径均相对仓库根目录。
 
@@ -482,6 +482,78 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
           "entry"
         ]
       }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "category"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "category": {
+          "const": "general"
+        },
+        "fields": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "type",
+              "value"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[^\\u0000\\u202a-\\u202e\\u2066-\\u2069]*$"
+              },
+              "type": {
+                "enum": [
+                  "text",
+                  "link"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024,
+                "pattern": "^[^\\u0000\\u202a-\\u202e\\u2066-\\u2069]*$"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "link"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "value": {
+                      "pattern": "^https://[^/@\\s]+(?:[/?#].*)?$"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
     }
   },
   "required": [
@@ -495,6 +567,26 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
     "permissions",
     "dependencies",
     "components"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "card"
+        ]
+      },
+      "then": {
+        "properties": {
+          "api": {
+            "properties": {
+              "min": {
+                "minimum": 4
+              }
+            }
+          }
+        }
+      }
+    }
   ]
 }
 ```
@@ -640,6 +732,177 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
           "entry"
         ]
       }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "category"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "category": {
+          "enum": [
+            "language-ide-kit",
+            "localization",
+            "development-tool",
+            "utility",
+            "general"
+          ]
+        },
+        "basicPlugin": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$"
+        },
+        "languageIds": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9+_.-]{0,63}$"
+          }
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "lsp": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "dap": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "build": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "test": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "run": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "format": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "lint": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "type",
+              "value"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[^\\u0000\\u202a-\\u202e\\u2066-\\u2069]*$"
+              },
+              "type": {
+                "enum": [
+                  "text",
+                  "link"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024,
+                "pattern": "^[^\\u0000\\u202a-\\u202e\\u2066-\\u2069]*$"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "link"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "value": {
+                      "pattern": "^https://[^/@\\s]+(?:[/?#].*)?$"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "actions": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "language-ide-kit"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "basicPlugin"
+              ]
+            },
+            "properties": {
+              "languageIds": {
+                "maxItems": 0
+              },
+              "slots": {
+                "maxProperties": 0
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "required": [
@@ -685,6 +948,24 @@ index.json 必须 canonical UTF-8 JSON+LF，根字段仅 format=1、packages。�
           "permissions": {
             "contains": {
               "const": "ui.localization"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "card"
+        ]
+      },
+      "then": {
+        "properties": {
+          "api": {
+            "properties": {
+              "min": {
+                "minimum": 4
+              }
             }
           }
         }
@@ -804,6 +1085,24 @@ API 1/2 的声明及授权保留。新增 `setup` 仅属于 `.suik`，Manifest `
           "resource": {
             "type": "string",
             "pattern": "^resources/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+          },
+          "dependsOn": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            }
+          },
+          "pythonModules": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+            }
           }
         },
         "required": [
@@ -4704,3 +5003,212 @@ Core占位符验证和渲染使用同一字面扫描器，不依赖Android ICU�
 `NativePackageHost.uiText(key: String, arguments: Map<String,String> = emptyMap()): String`是Android宿主事件文案适配器，读取已授权资源与用户选择的不可变快照，不进行磁盘或运行环境IO；返回值与`UiTranslations.text`完全一致。调用时机为生成宿主Toast/Snackbar等事件文本，未知键或错误参数抛IllegalArgumentException；无可用语言包时逐键返回英文。它不是扩展可执行入口，不增加权限，也不允许扩展执行任意代码。Compose控件仍读取`LocalUiTranslations`，只显示翻译，不更改枚举/配置标识、用户路径、命令或保存内容。
 
 `tools/localization/audit.py`输出生产源码位置、键、中文值、未接入字符串、宿主受保护英文和技术原文。静态显示参数引用覆盖率只衡量扫描到的字面文案，不包含无法静态识别的动态后端/扩展作者文案，不能称为“全应用汉化率”。`localization/ui-literal-baseline.json`对新增未审阅硬编码显示文字设回归门槛；更新基线必须人工说明缺口，不能把删除扫描范围当作翻译。
+
+
+## 0.4.2 / v0.5.4：统一扩展卡片与可选择依赖
+
+Core API仍为4，容器仍为SUIC/SUIK1.0。旧API1–4包没有`card`时，`PackageCards.forPack`返回安全通用卡片；旧权限、签名及生命周期继续有效。含card的包必须声明api.min>=4，并需要v0.5.4宿主；旧宿主对未知字段安全拒绝。Card协议版本独立为1，未知版本拒绝，不猜测其含义。卡片分类只控制允许的显示结构，不授予权限，不改变签名状态，也不放宽SUIC职责边界。
+
+### 生产Core接口
+
+`PackageCards.VERSION: Int = 1`。`PackageCards.forPack(pack: VerifiedPack): PackageCard`在完整性、签名及组件验证后调用；安装前预览、安装后、更新后可重复调用，无IO、副作用或执行权限要求。无card返回默认值；无效类别、版本、字段、组件引用抛出`PackageFailure(E_CARD)`，错误字段集合可能为`E_MANIFEST`，插件越界为`E_BOUNDARY`，API不足为`E_API`。验证器在返回VerifiedPack前强制调用此接口，不能靠UI忽略非法字段。
+
+`PackageCard`字段：`category: CardCategory=GENERAL`；`basicPlugin: String?=null`；`languageIds: List<String>=[]`；`slots: Map<LanguageKitSlot,String>={}`；`fields: List<CardField>=[]`；`actions: List<String>=[]`；`formatVersion: Int=1`。只包含经验证的数据，不包含信任标志或可执行回调。`CardCategory`枚举wire值为language-ide-kit、localization、development-tool、utility、general。`CardField(id:String,label:String,type:String,value:String)`的完整约束见下方Schema；label/value是作者提供的纯文本，不属于宿主安全授权文案。link必须为无凭证HTTPS地址；宿主仅在显式用户操作后打开，绝不作为HTML加载。
+
+`LanguageKitSlot`固定为runtime、lsp、dap、build、test、run、format、lint。basicPlugin另外引用Manifest中的依赖ID。runtime引用provider=environment的只读requirement ID；其他槽位引用同包真实组件ID：lsp→lsp，dap→dap，build→build，test→test，run→operation=SIMPLE_RUN的command，format→format，lint→lint。未声明槽位由宿主显示灰色“未提供”，不能当作检测失败；已声明但安装或运行失败显示实际错误。语言IDE卡片不接受自定义fields，保证统一布局。localization类别必须确实包含localization组件。
+
+非语言Kit可声明最多8个inert text/link字段、最多8个已有组件action；action只接受command/workflow/panel/build/test/format/lint，调用仍经过当前授权CoreSession、原能力检查及backend。禁用/卸载立即使操作不可用；更新后必须重新按摘要审核。宿主的包类型、发布者、来源、签名、权限和安装状态由VerifiedPack/PackageStore计算，不能由卡片字段替代。SUIC仅允许general类别与只读fields，禁止slots/basicPlugin/languageIds/actions，不允许以卡片绕过完整IDE Kit职责。
+
+`KitRequirement`新增可选`dependsOn: List<String>=[]`、`pythonModules: List<String>=[]`及解析结果`explicitDependencies: Boolean=false`。dependsOn必须引用当前setup描述符中存在的ID，ID在整个包内唯一，禁止循环。pythonModules为Python标识符点分路径，宿主使用固定Python模块导入检查，绝不拼接未转义脚本。`KitRequirements.parse(d:JsonObject):List<KitRequirement>`校验单个描述符；`forPack(pack:VerifiedPack)`读取全包setup并检查包内ID唯一；`selection(requirements:List<KitRequirement>,requested:Set<String>):List<KitRequirement>`返回拓扑顺序的必要依赖闭包。三者均无IO或进程执行，不需要安装权限；非法图/未知选择抛E_COMPONENT，非法资源路径仍E_PATH。旧描述符未写dependsOn时，对非environment组件保守加入该包environment依赖；显式空数组表示没有依赖。隐式闭包也检测循环。environment要求只参加检测与审核，不由IDE Kit安装器下载JDK/GCC/Python。
+
+日志必须按environment/package/component类别、owner、组件、来源、版本、发行版、创建时间和结果归属；Languages只呈现运行环境任务，Packages呈现扩展与IDE组件任务。检查状态与实际LSP/DAP运行状态分开，不能把安装探测成功显示成正在运行。任何安装脚本都必须经统一计划审阅、精确包摘要授权后由原PRoot/PTY执行。
+
+Card完整Schema（语义引用和职责检查由生产验证器补充）：
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:suicode:card:1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "category"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "category": {
+      "enum": [
+        "language-ide-kit",
+        "localization",
+        "development-tool",
+        "utility",
+        "general"
+      ]
+    },
+    "basicPlugin": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$"
+    },
+    "languageIds": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9+_.-]{0,63}$"
+      }
+    },
+    "slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runtime": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        },
+        "lsp": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        },
+        "dap": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        },
+        "build": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        },
+        "test": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        },
+        "run": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        },
+        "format": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        },
+        "lint": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "type",
+          "value"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\u0000\\u202a-\\u202e\\u2066-\\u2069]*$"
+          },
+          "type": {
+            "enum": [
+              "text",
+              "link"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "pattern": "^[^\\u0000\\u202a-\\u202e\\u2066-\\u2069]*$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "link"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "pattern": "^https://[^/@\\s]+(?:[/?#].*)?$"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "category": {
+            "const": "language-ide-kit"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "fields": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "basicPlugin"
+          ]
+        },
+        "properties": {
+          "languageIds": {
+            "maxItems": 0
+          },
+          "slots": {
+            "maxProperties": 0
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+### 0.4.2 installation ownership and catalog provenance
+
+`KitRequirements.selection(requirements: List<KitRequirement>, requested: Set<String>): List<KitRequirement>` returns a dependency-first closure. Unknown IDs or cycles fail `E_COMPONENT`. An omitted legacy `dependsOn` conservatively includes environment requirements; an explicit empty array means no requirement dependencies. Legacy requirements sharing a kit-resource installer are reviewed as one inseparable group; force repair is refused until the Kit declares the selective component contract. New official Kits declare independent requirements and their resource installer consumes the reviewed selection. Environment requirements are read-only in Packages, including legacy API3 Kits: the host must never turn them into a runtime download. Runtime installation and configuration repair are owned by Languages. Selected IDE tools whose closure lacks a usable runtime are blocked with a diagnostic; installed tools are retained. Skipping optional tools yields Partially Ready, not a simulated Ready state. Component probes do not execute package installers. `pythonModules` contains only dotted Python identifiers and is checked using the existing Ubuntu interpreter.
+
+The production host's `NativeKitSetup.prepare(preview, selectedComponents: Set<String>? = null, forceComponents: Set<String> = emptySet())` inspects all declared requirements but constructs installers only for the selected closure. `null` selects all non-runtime components. `forceComponents` must be a subset of selected non-runtime IDs; it explicitly requests a reviewed repair/update even when the installed check succeeds. Normal installation never reinstalls healthy components. APT updates pin reviewed signed candidates and do not upgrade unrelated requested components. The review binds the archive digest, exact source, versions, known download sizes, permissions, distro and creation time (maximum one hour). Changing selections invalidates approval until the refreshed plan has been reviewed. Grouped scripts receive `SUI_KIT_COMPONENTS`, the space-separated pending selected requirement IDs sharing that resource; a grouped installer must not deploy omitted siblings. All scripts remain authenticated package resources and require explicit `process.run`, `file.read`, `file.write` consent. Core retains independent final checks after command errors. Cancellation uses the existing Setup PTY and safe apt/dpkg boundaries; installed components are retained and package archives remain recoverable. Removing a Kit must not remove the language runtime or user data.
+
+Official directory format1 may list an approved **unsigned** package with both `signer` and `signature` empty. The catalog signature authenticates reviewed origin/size/hash; it does not sign that package or grant trust. A nonempty signer must equal the existing pinned official public-key digest and contain a signature. `cardCategory` is optional and validated against the card categories above (legacy default `general`). On download, package identity/version/author/category, byte count, SHA-256 and actual package signature status must agree with the catalog. An unsigned listed localization package still needs unverified-publisher confirmation; no trust root is added. Local imports follow the same verifier and renderer.
+
+Installation log metadata records task type (`environment` or `ide-component`), component/package ID, distro, source, timestamp, outcome and persistent log location. Languages reads only environment records, Packages only IDE records. Archives survive navigation/restarts. Logging failures are diagnosed and cannot prevent cancellation cleanup. Historical unindexed Ubuntu logs are retained. The host reads bounded log tails off the UI thread.
+
+Runnable card templates and the corresponding real archives are indexed in [examples/CARDS.md](examples/CARDS.md). The SDK copies the exact production `PackageCards`, `KitRequirements`, verifier and independent loaders; it does not emulate Android backends. Old API1–4 packages with no card declaration continue using a generic host card.

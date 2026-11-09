@@ -104,7 +104,7 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
         val expected = files.filterKeys { it !in setOf("checksums.sha256", "signature.sig") }.toSortedMap().entries.joinToString("") { "${sha(it.value)}  ${it.key}\n" }
         if (!checks.contentEquals(expected.toByteArray())) fail("E_CHECKSUM", "Checksum table or payload does not match")
         val m=jsonObject(files["manifest.json"] ?: fail("E_MANIFEST", "Missing manifest"))
-        m.keysExactly(setOf("id","name","author","version","kind","api","permissions","dependencies","components","description"))
+        m.keysExactly(setOf("id","name","author","version","kind","api","permissions","dependencies","components","description"),setOf("card"))
         val id=m.string("id")
         if (!id.matches(Regex("[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+"))) fail("E_MANIFEST", "Invalid package ID")
         for (field in listOf("name","author","description")) if (m.string(field).length !in 1..1024) fail("E_MANIFEST", field)
@@ -185,7 +185,10 @@ class PackageVerifier(private val officialKeys: Map<String, PublicKey> = emptyMa
                 official=officialKeys[fingerprint]?.encoded?.contentEquals(der)==true
             } catch(e: PackageFailure) { throw e } catch(_: Exception) { fail("E_SIGNATURE","Malformed signature") }
         }
-        return VerifiedPack(kind,id,m.string("version"),sha(bytes),official,fingerprint,permissions.toSet(),componentIds,m,files)
+        return VerifiedPack(kind,id,m.string("version"),sha(bytes),official,fingerprint,permissions.toSet(),componentIds,m,files).also {
+            PackageCards.forPack(it)
+            KitRequirements.forPack(it)
+        }
     }
 }
 

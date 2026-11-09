@@ -1,9 +1,9 @@
 {
   "id": "dev.suicode.localization.zh-hans",
-  "name": "sui-code Simplified Chinese",
+  "name": "简体中文语言包",
   "author": "sui-code contributors",
-  "description": "Simplified Chinese interface resources for sui-code 0.5.3 and later. No language runtime or development tools required. Unsigned; review the source and permissions before installing.",
-  "version": "1.0.0",
+  "description": "Simplified Chinese interface resources, including v0.5.4 environment and extension management. Unsigned publisher; no language runtime required.",
+  "version": "1.0.1",
   "kind": "suik",
   "api": {
     "min": 4,
@@ -19,5 +19,23 @@
       "type": "localization",
       "entry": "ide/strings.json"
     }
-  ]
+  ],
+  "card": {
+    "version": 1,
+    "category": "localization",
+    "fields": [
+      {
+        "id": "locale",
+        "label": "Language / 语言",
+        "type": "text",
+        "value": "简体中文 · zh-Hans"
+      },
+      {
+        "id": "scope",
+        "label": "Resources / 资源",
+        "type": "text",
+        "value": "Interface resources only · No Ubuntu/JDK/Python required"
+      }
+    ]
+  }
 }

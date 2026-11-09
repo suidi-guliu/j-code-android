@@ -17,7 +17,7 @@ class PackageVerifierTest {
     private fun load(name: String) = File(examples,name).readBytes()
     private fun manifest(kind: String="suic", components: String="[]", permissions: String="[]") = """{"api":{"max":1,"min":1},"author":"Tests","components":$components,"dependencies":[],"description":"Fixture","id":"dev.test.fixture","kind":"$kind","name":"Test","permissions":$permissions,"version":"0.1.0"}
 """.toByteArray()
-    private fun pack(kind: String="suic", payload: Map<String,ByteArray> = mapOf("manifest.json" to manifest()), signed: Boolean=false, corruptSignature: Boolean=false): Pair<ByteArray, java.security.PublicKey?> {
+    internal fun pack(kind: String="suic", payload: Map<String,ByteArray> = mapOf("manifest.json" to manifest()), signed: Boolean=false, corruptSignature: Boolean=false): Pair<ByteArray, java.security.PublicKey?> {
         val magic=PackKind.entries.first { it.suffix==kind }.magic.toByteArray()
         val files=payload.toMutableMap()
         val checks=files.toSortedMap().entries.joinToString("") { "${sha(it.value)}  ${it.key}\n" }.toByteArray()
@@ -52,7 +52,7 @@ class PackageVerifierTest {
     }
     @Test fun allValidExamplesVerify() {
         examples.listFiles()!!.filter { !it.name.startsWith("illegal") }.forEach { f ->
-            PackageVerifier().verify(f.readBytes(),f.extension,mapOf("dev.suicode.example.java" to "0.1.0","dev.suicode.example.c-cpp" to "0.1.0","dev.suicode.example.python" to "0.1.0"))
+            try { PackageVerifier().verify(f.readBytes(),f.extension,mapOf("dev.suicode.python.basic" to "1.1.0","dev.suicode.example.java" to "0.1.0","dev.suicode.example.c-cpp" to "0.1.0","dev.suicode.example.python" to "0.1.0")) } catch(e: Exception) { throw AssertionError("${f.name}: ${e.message}",e) }
         }
     }
     @Test fun illegalBoundaryIsRejected() { rejected("E_BOUNDARY") { PackageVerifier().verify(load("illegal-plugin.suic"),"suic") } }

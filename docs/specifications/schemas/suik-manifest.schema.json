@@ -130,6 +130,177 @@
           "entry"
         ]
       }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "category"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "category": {
+          "enum": [
+            "language-ide-kit",
+            "localization",
+            "development-tool",
+            "utility",
+            "general"
+          ]
+        },
+        "basicPlugin": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$"
+        },
+        "languageIds": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9+_.-]{0,63}$"
+          }
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "lsp": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "dap": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "build": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "test": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "run": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "format": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            },
+            "lint": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+            }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "type",
+              "value"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[^\\u0000\\u202a-\\u202e\\u2066-\\u2069]*$"
+              },
+              "type": {
+                "enum": [
+                  "text",
+                  "link"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024,
+                "pattern": "^[^\\u0000\\u202a-\\u202e\\u2066-\\u2069]*$"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "link"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "value": {
+                      "pattern": "^https://[^/@\\s]+(?:[/?#].*)?$"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "actions": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "language-ide-kit"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "basicPlugin"
+              ]
+            },
+            "properties": {
+              "languageIds": {
+                "maxItems": 0
+              },
+              "slots": {
+                "maxProperties": 0
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "required": [
@@ -175,6 +346,24 @@
           "permissions": {
             "contains": {
               "const": "ui.localization"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "card"
+        ]
+      },
+      "then": {
+        "properties": {
+          "api": {
+            "properties": {
+              "min": {
+                "minimum": 4
+              }
             }
           }
         }

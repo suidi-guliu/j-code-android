@@ -11,7 +11,7 @@ def main(destination):
  for rel in ['LICENSE','gradlew','gradlew.bat','gradle/wrapper/gradle-wrapper.jar','gradle/wrapper/gradle-wrapper.properties']:
   target=dst/rel;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/rel,target)
  (dst/'tools/sui_packages').mkdir(parents=True,exist_ok=True)
- for name in ['pack.py','check_specifications.py','requirements-dev.txt','generate_examples.py']:
+ for name in ['pack.py','check_specifications.py','requirements-dev.txt','generate_examples.py','generate_card_examples.py']:
   shutil.copy2(ROOT/'tools/sui_packages'/name,dst/'tools/sui_packages'/name)
  (dst/'settings.gradle.kts').write_text('rootProject.name = "sui-code-native-sdk"\n')
  (dst/'build.gradle.kts').write_text('''plugins {
@@ -29,7 +29,7 @@ application { mainClass.set("dev.suicode.packages.PackageTool") }
   rel=p.relative_to(ROOT);assert p.read_bytes()==(dst/rel).read_bytes()
   sums.append(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+rel.as_posix())
  (dst/'API-SOURCE-SHA256SUMS').write_text('\n'.join(sums)+'\n')
- (dst/'README.md').write_text('''# sui-code Native SDK 0.4.1 / Core API 4 · UI catalog 0.5.3
+ (dst/'README.md').write_text('''# sui-code Native SDK 0.4.2 / Core API 4 · UI catalog 0.5.4
 
 This standalone JVM SDK copies the exact production Kotlin verifier, independent loaders, authorization API, native recipe/dataflow interpreter and design model. API-SOURCE-SHA256SUMS records byte identity. It does not emulate Android services or embed runtimes.
 
@@ -43,7 +43,7 @@ With JDK21 (Android SDK is not required):
 ./gradlew run --args="docs/specifications/examples/packages/illegal-plugin.suic"
 ```
 
-Build a local development package with `python3 tools/sui_packages/pack.py SOURCE OUTPUT.suic` or `.suik`. The provided examples include actual runnable Basic resources and a native interactive statistics Kit. Read both formal specifications in docs/specifications before adding capabilities. Advanced/special features belong in `.suik`.
+Build a local development package with `python3 tools/sui_packages/pack.py SOURCE OUTPUT.suic` or `.suik`. The provided examples include actual runnable Basic resources and a native interactive statistics Kit, language IDE cards, utility cards and independent localization cards. Read both formal specifications in docs/specifications before adding capabilities. Advanced/special features belong in `.suik`.
 
 PackageTool verifies SHA-256 and any present signature; the standalone CLI does not pin a publisher, so its trust label is unverified. The Android app pins native-library/official-p256.der and separately verifies the official library. Do not add a key to a trust store merely because a package includes it. Official private keys, Android signing keys, installed Ubuntu and user data are excluded.
 

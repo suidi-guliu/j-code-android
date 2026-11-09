@@ -45,5 +45,5 @@ for descriptor in list((base/'examples').glob('*/ide/*.json'))+list((root/'local
   strings=json.loads((descriptor.parent.parent/d['resource']).read_text())
   jsonschema.Draft202012Validator(resources).validate(strings)
   for key,value in strings.items():assert set(re.findall(r'\{([a-z][a-zA-Z0-9]*)\}',value))==set(re.findall(r'\{([a-z][a-zA-Z0-9]*)\}',keys[key]))
-assert "0.4.0" in doc and "0.4.0" in ui
+assert "0.4.2" in doc and "0.4.2" in ui
 print(f"PASS: schemas, embedded schema/manifest snapshots, {count} valid descriptors, illegal example rejected")

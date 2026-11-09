@@ -6,13 +6,13 @@ import kotlinx.serialization.json.*
 import kotlin.test.*
 
 class ChineseLanguageKitTest {
-    private val archive=File("../../localization/releases/sui-code-zh-hans-1.0.0.suik")
+    private val archive=File("../../localization/releases/sui-code-zh-hans-1.0.1.suik")
     @Test fun shippedCompletePackIsIndependentAndEveryPublishedKeyHasValidChinese() {
         val bytes=archive.readBytes()
         assertEquals("SUIKPKG\u0000",bytes.copyOfRange(0,8).toString(Charsets.UTF_8))
         val pack=PackageVerifier().verify(bytes,"suik")
         assertEquals("dev.suicode.localization.zh-hans",pack.id)
-        assertEquals("1.0.0",pack.version)
+        assertEquals("1.0.1",pack.version)
         assertFalse(pack.official)
         assertEquals(setOf(Capability.LOCALIZATION),pack.permissions)
         assertTrue(pack.manifest.getValue("dependencies").jsonArray.isEmpty())
