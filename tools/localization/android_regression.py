@@ -152,7 +152,7 @@ def import_kit(chinese=False):
  if not matches(tree,'sui-code test packages'):
   for label in ['Show roots','Show navigation drawer','Open navigation drawer']:
    if matches(tree,label):tap(label);break
- tap('sui-code test packages',scroll=True,pane=True)
+ tap('sui-code test packages',scroll=True)
  tap(a.kit.name,scroll=True)
  review()
  note('REAL_SAF_IMPORT_AND_REVIEW_PASS (read-only test DocumentsProvider; shipped Kit bytes)')
