@@ -382,7 +382,7 @@ class ProotManager(private val context: Context) {
         }
         
         // Bind mounts
-        for (bind in binds) {
+        for (bind in RuntimeMounts.ordered(binds)) {
             args.addAll(listOf("-b", "${bind.host}:${bind.target}"))
         }
         

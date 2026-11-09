@@ -62,16 +62,14 @@ class JavaQuickRunController(private val context: Context,private val distro: Di
                 val actual=File(path)
                 sourcePath=actual.path
                 val token=UUID.randomUUID().toString()
-                val mount=QuickRunFileMount.forFile(actual,project)
-                // Project build outputs persist: use the same guest path as LSP/DAP, never a task alias.
-                val stableProject=project?.canonicalPath?.let(WorkspaceHostPaths::hostToGuest)
-                val mapped=stableProject!=null && stableProject!=project.canonicalPath
-                val guestSource=if(mapped) WorkspaceHostPaths.hostToGuest(actual.path) else mount.guestFile
-                val guestProject=if(mapped) stableProject!! else project?.canonicalFile?.relativeTo(mount.hostDirectory)?.invariantSeparatorsPath?.let { "/sui-quickrun"+if(it.isEmpty()) "" else "/$it" } ?: mount.guestDirectory
-                val taskBinds=if(mapped) emptyList() else listOf(DistroBind(mount.hostDirectory.path,"/sui-quickrun"))
+                val paths=withContext(Dispatchers.IO) { NativeTaskPaths.resolve(actual,project,runtime.binds) }
+                val guestSource=paths.guestSource
+                val guestProject=paths.guestDirectory
+                val taskBinds=paths.binds
+                val access=distro.validateTaskDirectory(paths)
+                check(access.succeeded) { "E_TASK_MAPPING: host=${paths.directory}; guest=$guestProject; Ubuntu user=${runtime.user}; ${access.internalError ?: access.stderr.ifBlank { "directory/source access check failed" }}" }
                 val resourceDirectory="/tmp/sui-package-$token"
                 resourcePath=File(distro.activeRootfsPath(),resourceDirectory.removePrefix("/"))
-                check(File(distro.activeRootfsPath(),"sui-quickrun").let { it.isDirectory || it.mkdirs() }) { "Cannot prepare task mount" }
                 recipe.resources().forEach { (name,bytes) -> check(distro.stageGuestBytes("$resourceDirectory/$name",bytes)) { "Cannot stage authenticated package resource" } }
                 val scriptPath="/tmp/sui-native-task-$token.sh"
                 stagedScript=File(distro.activeRootfsPath(),scriptPath.removePrefix("/"))

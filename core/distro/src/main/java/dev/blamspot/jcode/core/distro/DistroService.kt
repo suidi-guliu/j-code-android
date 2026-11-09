@@ -1248,9 +1248,16 @@ class DistroService(
     }
 
     /** Cancellable preparation for a reviewed Kit; never used for apt/dpkg installation. */
-    suspend fun execOwned(command: String,workdir: String,owner: String,timeoutMs: Long=300_000L): ExecResult = withContext(Dispatchers.IO) {
+    suspend fun execOwned(command: String,workdir: String,owner: String,timeoutMs: Long=300_000L): ExecResult = execOwnedBound(command,workdir,owner,timeoutMs,null)
+
+    suspend fun validateTaskDirectory(paths: NativeTaskPaths): ExecResult = execOwnedBound(
+        "test -d ${shellQuote(paths.guestDirectory)} && test -r ${shellQuote(paths.guestDirectory)} && test -x ${shellQuote(paths.guestDirectory)} && test -r ${shellQuote(paths.guestSource)}",
+        "/tmp", "sui-kit:task-path-probe", 15000, paths.binds,
+    )
+
+    private suspend fun execOwnedBound(command: String,workdir: String,owner: String,timeoutMs: Long,binds: List<DistroBind>?): ExecResult = withContext(Dispatchers.IO) {
         require(owner.startsWith("sui-kit:"))
-        val process=spawnStdioProcess(command,workdir=workdir,owner=owner) ?: return@withContext ExecResult(internalError="Cannot start Kit preparation",exitCode=1)
+        val process=spawnStdioProcessBound(command,workdir,null,"",owner,binds) ?: return@withContext ExecResult(internalError="Cannot start Kit preparation",exitCode=1)
         val stdout=StringBuffer();val stderr=StringBuffer()
         fun drain(input: java.io.InputStream,target: StringBuffer)=Thread {
             runCatching { input.bufferedReader().useLines { lines -> lines.forEach { line -> synchronized(target) { if(target.length<2*1024*1024) target.append(line).append('\n') } } } }
@@ -1945,7 +1952,9 @@ class DistroService(
         // everything the process forks, which is how [GuestProcessTree] finds the tree again to end
         // it — a proot tree cannot be reached through the launcher alone.
         owner: String? = null,
-    ): Process? {
+    ): Process? = spawnStdioProcessBound(command,workdir,userOverride,extraPath,owner,null)
+
+    private fun spawnStdioProcessBound(command: String, workdir: String, userOverride: String?, extraPath: String, owner: String?, binds: List<DistroBind>?): Process? {
         val runtime = _environmentState.value.runtime
         val distroId = runtime.selectedDistro.id
         val arch = runtime.selectedDistro.arch
@@ -1965,7 +1974,7 @@ class DistroService(
         val prootArgs = prootManager.buildShellCommand(
             rootfsPath = rootfsPath,
             shellCommand = command,
-            binds = runtime.binds,
+            binds = binds ?: runtime.binds,
             env = env,
             workdir = workdir,
             user = user,

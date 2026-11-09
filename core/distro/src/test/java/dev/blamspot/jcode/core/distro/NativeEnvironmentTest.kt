@@ -26,7 +26,7 @@ class NativeEnvironmentTest {
             val script = plan(language).script("/tmp/sui-env-cancel-test")
             assertTrue(script.contains("AllowUnauthenticated=false"))
             assertTrue(script.indexOf("--download-only") < script.indexOf("--no-download"))
-            assertTrue(script.indexOf("check_cancel",script.indexOf("--no-download")) < script.indexOf("mv -f"))
+            assertTrue(script.indexOf("check_cancel",script.indexOf("--no-download")) < script.indexOf("commit_environment \"${'$'}ENV_FILE\"",script.indexOf("--no-download")))
             assertFalse(script.contains("java.env")); assertFalse(script.contains("apt-get upgrade")); assertFalse(script.contains("apt-get remove"))
         }
     }
@@ -67,7 +67,7 @@ class NativeEnvironmentTest {
     @Test fun installerCompilesRealGccSmokeBeforeActivatingAndLeavesJavaAlone() = Fixture().use { f ->
         f.managed.mkdirs()
         val javaEnv = java.io.File(f.managed,"java.env").apply { writeText("export JAVA_HOME=/existing/jdk\n") }
-        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path))
+        val (exit,out) = f.execute(plan(NativeEnvironment.C).copy(upgrade=true).script(f.cancel.path))
         assertEquals(0,exit,out)
         assertTrue(java.io.File(f.managed,"c.env").readText().contains("SUI_C=/usr/bin/gcc"))
         assertEquals("export JAVA_HOME=/existing/jdk\n",javaEnv.readText())
@@ -75,13 +75,13 @@ class NativeEnvironmentTest {
         assertTrue(f.calls.readText().contains("--no-download"))
     }
     @Test fun cancelledDownloadNeverRunsDpkgInstallOrPublishesEnvironment() = Fixture().use { f ->
-        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path),mapOf("CANCEL_DOWNLOAD" to "1"))
+        val (exit,out) = f.execute(plan(NativeEnvironment.C).copy(upgrade=true).script(f.cancel.path),mapOf("CANCEL_DOWNLOAD" to "1"))
         assertEquals(130,exit,out)
         assertFalse(f.calls.readText().contains("--no-download"))
         assertFalse(java.io.File(f.managed,"c.env").exists())
     }
     @Test fun cancellationDuringInstallWaitsForItsSafeCompletion() = Fixture().use { f ->
-        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path),mapOf("CANCEL_INSTALL" to "1"))
+        val (exit,out) = f.execute(plan(NativeEnvironment.C).copy(upgrade=true).script(f.cancel.path),mapOf("CANCEL_INSTALL" to "1"))
         assertEquals(130,exit,out)
         assertTrue(java.io.File(f.root,"packages-completed").isFile)
         assertFalse(java.io.File(f.managed,"c.env").exists())
@@ -89,7 +89,7 @@ class NativeEnvironmentTest {
     @Test fun failedAuthenticatedDownloadDoesNotReplaceThePreviousEnvironment() = Fixture().use { f ->
         f.managed.mkdirs()
         val previous = java.io.File(f.managed,"c.env").apply { writeText("export SUI_C=/missing/old/compiler\n") }
-        val (exit,out) = f.execute(plan(NativeEnvironment.C).script(f.cancel.path),mapOf("FAIL_DOWNLOAD" to "1"))
+        val (exit,out) = f.execute(plan(NativeEnvironment.C).copy(upgrade=true).script(f.cancel.path),mapOf("FAIL_DOWNLOAD" to "1"))
         assertEquals(100,exit,out)
         assertEquals("export SUI_C=/missing/old/compiler\n",previous.readText())
     }
@@ -100,6 +100,61 @@ class NativeEnvironmentTest {
         assertEquals(0,exit,out)
         assertFalse(f.calls.exists())
         assertEquals("export SUI_C=/usr/bin/gcc\n",previous.readText())
+    }
+
+    @Test fun installedGccWithoutAConfigurationIsReusedWithoutApt() = Fixture().use { f ->
+        val (exit,out)=f.execute(plan(NativeEnvironment.C).script(f.cancel.path))
+        assertEquals(0,exit,out);assertFalse(f.calls.exists())
+        assertTrue(java.io.File(f.managed,"c.env").isFile)
+        assertFalse(java.nio.file.Files.isSymbolicLink(java.io.File(f.managed,"c.env").toPath()))
+    }
+    @Test fun danglingCSelectionIsReplacedByARegularFileAndCppIsPreserved() = Fixture().use { f ->
+        f.managed.mkdirs()
+        val c=java.io.File(f.managed,"c.env")
+        java.nio.file.Files.createSymbolicLink(c.toPath(),java.io.File(f.managed,"deleted-install/c.env").toPath())
+        val cpp=java.io.File(f.managed,"cpp.env").apply { writeText("export SUI_CPP=/usr/bin/g++\n") }
+        val before=cpp.readBytes()
+        val (exit,out)=f.execute(plan(NativeEnvironment.Cpp).script(f.cancel.path))
+        assertEquals(0,exit,out);assertFalse(f.calls.exists());assertContentEquals(before,cpp.readBytes())
+        assertTrue(c.isFile);assertFalse(java.nio.file.Files.isSymbolicLink(c.toPath()))
+        assertTrue(c.readText().contains("SUI_C=/usr/bin/gcc"))
+        assertTrue(java.io.File(f.managed,".environment-backups").listFiles()!!.any { java.nio.file.Files.isSymbolicLink(it.toPath()) })
+    }
+    @Test fun configurationDirectoryIsNeverRemovedOrOverwritten() = Fixture().use { f ->
+        val dir=java.io.File(f.managed,"c.env").apply { mkdirs() }
+        val user=java.io.File(dir,"user.txt").apply { writeText("keep") }
+        val (exit,out)=f.execute(plan(NativeEnvironment.C).script(f.cancel.path))
+        assertEquals(73,exit,out);assertTrue(out.contains("E_ENV_CONFIG_TYPE"));assertEquals("keep",user.readText());assertFalse(f.calls.exists())
+    }
+    @Test fun validUserSelectedCompilerAndConfigurationSymlinkRemainUnchanged() = Fixture().use { f ->
+        f.managed.mkdirs()
+        val custom=java.io.File(f.root,"user selection.env").apply { writeText("# custom\nexport SUI_C=/usr/bin/gcc\n") }
+        val env=java.io.File(f.managed,"c.env")
+        java.nio.file.Files.createSymbolicLink(env.toPath(),custom.toPath())
+        val (exit,out)=f.execute(plan(NativeEnvironment.C).script(f.cancel.path))
+        assertEquals(0,exit,out);assertTrue(java.nio.file.Files.isSymbolicLink(env.toPath()));assertEquals("# custom\nexport SUI_C=/usr/bin/gcc\n",custom.readText());assertFalse(f.calls.exists())
+    }
+
+    @Test fun unreadableConfigurationIsDiagnosedWithoutDestroyingItsContents() = Fixture().use { f ->
+        f.managed.mkdirs()
+        val env=java.io.File(f.managed,"c.env").apply { writeText("user data\n") }
+        java.nio.file.Files.setPosixFilePermissions(env.toPath(),emptySet())
+        try {
+            val (exit,out)=f.execute(plan(NativeEnvironment.C).script(f.cancel.path))
+            assertEquals(77,exit,out);assertTrue(out.contains("E_ENV_CONFIG_PERMISSION"));assertTrue(env.exists());assertFalse(f.calls.exists())
+        } finally { env.setReadable(true,true);env.setWritable(true,true) }
+        assertEquals("user data\n",env.readText())
+    }
+    @Test fun failedCppConfigurationCommitRestoresThePreviousDanglingCLink() = Fixture().use { f ->
+        f.managed.mkdirs()
+        val env=java.io.File(f.managed,"c.env")
+        val old=java.io.File(f.managed,"deleted-temporary-selection").toPath()
+        java.nio.file.Files.createSymbolicLink(env.toPath(),old)
+        f.tool("mv", "for arg in \"\$@\"; do case \"\$arg\" in */cpp.env) exit 73 ;; esac; done; exec /bin/mv \"\$@\"")
+        val (exit,out)=f.execute(plan(NativeEnvironment.Cpp).script(f.cancel.path))
+        assertEquals(73,exit,out);assertTrue(out.contains("Environment rollback"))
+        assertEquals(old,java.nio.file.Files.readSymbolicLink(env.toPath()))
+        assertFalse(java.io.File(f.managed,"cpp.env").exists());assertFalse(f.calls.exists())
     }
 
 }

@@ -21,6 +21,18 @@ class NativeProvidersTest {
             assertTrue(verifier.verify(File(library,"v1/$name.suik").readBytes(),"suik",dependencies).official)
         }
     }
+    @Test fun projectRecipesStageTheirAuthenticatedSiblingResources() {
+        val dependencies=mapOf("dev.suicode.java.basic" to "1.0.0","dev.suicode.ccpp.basic" to "1.0.0","dev.suicode.python.basic" to "1.0.0")
+        for(name in listOf("Java","C_CPP","Python")) {
+            val pack=verifier.verify(File(library,"v1/$name.suik").readBytes(),"suik",dependencies)
+            val session=IdeKitLoader().activate(pack,Consent(pack.digest,pack.permissions,false),mapOf(Operation.BUILD to CoreBackend { Reply(true,"AUTHORIZED") }))
+            val recipe=NativeRecipe.forComponent(pack,session,"build")
+            assertEquals(pack.resourcePaths().toSet(),recipe.resources().keys)
+            if(name=="C_CPP") assertTrue("resources/migrate-build.sh" in recipe.resources())
+            assertTrue(recipe.script("/workspace/中文 project", "/tmp/sui-package-test", "/workspace/中文 project").contains("E_TASK_PATH"))
+            session.close()
+        }
+    }
     @Test fun cAndCppShareOnePackageWithCaseSensitiveExtensions() {
         val p=basic("C_CPP");val registry=NativeProviders();registry.register(p,session(p))
         assertEquals("c",registry.resolve("hello.c")!!.languageId)

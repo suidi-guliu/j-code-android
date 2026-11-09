@@ -3,8 +3,8 @@ package dev.blamspot.jcode.core.distro
 /** Fixed Ubuntu packages, never marketplace extensions or arbitrary shell entered by a user. */
 enum class NativeEnvironment(val key: String, val title: String, val packages: List<String>, val tool: String, val variable: String) {
     C("c", "C (GCC)", listOf("gcc", "libc6-dev"), "gcc", "SUI_C"),
-    Cpp("cpp", "C/C++ (GCC, G++, GDB, CMake, Ninja)", listOf("gcc", "g++", "libc6-dev", "gdb", "cmake", "ninja-build"), "g++", "SUI_CPP"),
-    Python("python", "Python 3", listOf("python3", "python3-venv", "python3-pip"), "python3", "SUI_PYTHON");
+    Cpp("cpp", "C/C++ (GCC, G++)", listOf("gcc", "g++", "libc6-dev"), "g++", "SUI_CPP"),
+    Python("python", "Python 3", listOf("python3"), "python3", "SUI_PYTHON");
 
     val catalogId get() = "sui-$key"
     fun queryScript(): String = """
@@ -29,7 +29,7 @@ enum class NativeEnvironment(val key: String, val title: String, val packages: L
             ${shellQuote(toolPath)} "${'$'}TMP/main.${if (this == C) "c" else "cpp"}" -o "${'$'}TMP/program"
             [ "${'$'}("${'$'}TMP/program")" = SUI_NATIVE_READY ]
         """.trimIndent()
-        Python -> "${shellQuote(toolPath)} -c 'import sys; assert sys.version_info.major == 3; print(\"SUI_NATIVE_READY\")'\n${shellQuote(toolPath)} -m venv \"\$TMP/venv\""
+        Python -> "${shellQuote(toolPath)} -c 'import sys; assert sys.version_info.major == 3; print(\"SUI_NATIVE_READY\")'"
     }
 }
 
@@ -52,66 +52,110 @@ data class NativeInstallPlan(val language: NativeEnvironment, val packages: List
     fun script(cancelFile: String): String {
         require(cancelFile.matches(Regex("/tmp/sui-env-cancel-[a-zA-Z0-9-]+")))
         val lang = language
-        val completeToolchain = if(lang == NativeEnvironment.Cpp) "test -x /usr/bin/gcc && test -x /usr/bin/gdb && test -x /usr/bin/cmake && test -x /usr/bin/ninja" else "true"
         val existingSmoke = lang.smoke("/usr/bin/${lang.tool}").replace(shellQuote("/usr/bin/${lang.tool}"), "\"\$SELECTED\"")
         return """
             set -eu
             umask 022
             ENV_FILE=/opt/sui-code/${lang.key}.env
             CANCEL=${shellQuote(cancelFile)}
-            check_cancel() { [ ! -f "${'$'}CANCEL" ] || { echo 'Cancelled at a safe boundary. Package operations already completed are retained; previous environment selection is unchanged.'; exit 130; }; }
+            check_cancel() { [ ! -f "${'$'}CANCEL" ] || { echo 'Cancelled at a safe boundary; existing selections are retained.'; exit 130; }; }
             mkdir -p /opt/sui-code
             TMP=${'$'}(mktemp -d /opt/sui-code/.${lang.key}-install-XXXXXX)
-            trap 'rm -rf -- "${'$'}TMP"' EXIT
+            ENV_STAGE=''
+            cleanup() {
+                status=${'$'}?
+                if [ "${'$'}status" -ne 0 ] && [ -f "${'$'}TMP/committed" ]; then
+                    while IFS=' ' read -r target backup; do
+                        if [ "${'$'}backup" = missing ]; then rm -f -- "${'$'}target";
+                        else cp -P -- "${'$'}backup" "${'$'}target.rollback-${'$'}${'$'}" && mv -fT -- "${'$'}target.rollback-${'$'}${'$'}" "${'$'}target"; fi
+                    done < "${'$'}TMP/committed"
+                    echo '[Environment rollback] Previous configuration restored; verified installed packages retained.' >&2
+                fi
+                [ -z "${'$'}ENV_STAGE" ] || rm -f -- "${'$'}ENV_STAGE"
+                rm -rf -- "${'$'}TMP"
+                exit "${'$'}status"
+            }
+            trap cleanup EXIT
+            configuration_kind() {
+                if [ -L "${'$'}1" ]; then if [ -f "${'$'}1" ] && [ -r "${'$'}1" ]; then echo readable-symlink; else echo broken-or-unreadable-symlink; fi
+                elif [ -d "${'$'}1" ]; then echo directory;
+                elif [ -f "${'$'}1" ]; then if [ -r "${'$'}1" ]; then echo readable-file; else echo unreadable-file; fi
+                elif [ -e "${'$'}1" ]; then echo invalid-file-type; else echo missing; fi
+            }
+            validate_target() {
+                case "${'$'}(configuration_kind "${'$'}1")" in
+                    directory|invalid-file-type) echo "[E_ENV_CONFIG_TYPE] Refusing to replace configuration directory or special file: ${'$'}1" >&2; return 73 ;;
+                    unreadable-file) echo "[E_ENV_CONFIG_PERMISSION] Cannot safely back up unreadable configuration: ${'$'}1; restore read permission and retry." >&2; return 77 ;;
+                esac
+            }
+            commit_environment() {
+                target=${'$'}1; content=${'$'}2
+                validate_target "${'$'}target"
+                check_cancel
+                ENV_STAGE=${'$'}(mktemp "${'$'}target.new-XXXXXX")
+                printf '%s\n' "${'$'}content" > "${'$'}ENV_STAGE"
+                chmod 644 "${'$'}ENV_STAGE"
+                backup=missing
+                if [ -e "${'$'}target" ] || [ -L "${'$'}target" ]; then
+                    mkdir -p /opt/sui-code/.environment-backups
+                    backup="/opt/sui-code/.environment-backups/${'$'}(basename "${'$'}target").${'$'}(basename "${'$'}TMP")"
+                    cp -P -- "${'$'}target" "${'$'}backup"
+                    echo "[Environment backup] ${'$'}backup"
+                fi
+                # Same-parent rename replaces the symlink itself. Never hard-link a temporary file:
+                # PRoot --link2symlink would turn that link into a dangling selection on cleanup.
+                mv -fT -- "${'$'}ENV_STAGE" "${'$'}target"
+                ENV_STAGE=''
+                printf '%s %s\n' "${'$'}target" "${'$'}backup" >> "${'$'}TMP/committed"
+                test -f "${'$'}target" && test -r "${'$'}target"
+            }
+            validate_target "${'$'}ENV_FILE"
+            echo "[Environment configuration] ${'$'}ENV_FILE: ${'$'}(configuration_kind "${'$'}ENV_FILE")"
             check_cancel
             ${if(lang==NativeEnvironment.Cpp) """
+            validate_target /opt/sui-code/c.env
             ensure_c_environment() {
-                if [ ! -e /opt/sui-code/c.env ]; then
-                    /usr/bin/gcc --version
-                    printf '%s\n' 'export SUI_C=/usr/bin/gcc' > "${'$'}TMP/c.env"
-                    chmod 644 "${'$'}TMP/c.env"
-                    ln "${'$'}TMP/c.env" /opt/sui-code/c.env || test -e /opt/sui-code/c.env
+                c_tool=''
+                if [ -f /opt/sui-code/c.env ] && [ -r /opt/sui-code/c.env ]; then
+                    c_tool=${'$'}( . /opt/sui-code/c.env && printf '%s' "${'$'}{SUI_C:-}" ) || c_tool=''
                 fi
+                if [ -n "${'$'}c_tool" ] && [ -x "${'$'}c_tool" ] && "${'$'}c_tool" --version; then
+                    SELECTED_C="${'$'}c_tool"
+                else SELECTED_C=/usr/bin/gcc; fi
+                if ! ( ${NativeEnvironment.C.smoke("/usr/bin/gcc").replace(shellQuote("/usr/bin/gcc"), "\"${'$'}SELECTED_C\"")} ); then return 1; fi
+                if [ "${'$'}{1:-commit}" = commit ] && [ "${'$'}SELECTED_C" != "${'$'}c_tool" ]; then commit_environment /opt/sui-code/c.env 'export SUI_C=/usr/bin/gcc'; fi
+                return 0
             }
             """.trimIndent() else "ensure_c_environment() { :; }"}
             PRESERVED_TOOL=''
-            if [ -r "${'$'}ENV_FILE" ]; then
-                . "${'$'}ENV_FILE"
-                SELECTED="${'$'}{${lang.variable}:-}"
-                if [ -n "${'$'}SELECTED" ] && [ -x "${'$'}SELECTED" ] && "${'$'}SELECTED" --version; then
-                    $existingSmoke
-                    check_cancel
-                    if ${if(upgrade) "false" else "true"} && $completeToolchain; then
-                        ensure_c_environment
-                        echo 'Existing managed ${lang.title} is usable and preserved. No packages or environment files changed.'
-                        exit 0
-                    fi
-                    PRESERVED_TOOL="${'$'}SELECTED"
-                fi
+            if [ -f "${'$'}ENV_FILE" ] && [ -r "${'$'}ENV_FILE" ]; then
+                PRESERVED_TOOL=${'$'}( . "${'$'}ENV_FILE" && printf '%s' "${'$'}{${lang.variable}:-}" ) || PRESERVED_TOOL=''
             fi
-            echo '1/4 Repairing only pending package configuration, if any'
-            sudo -n dpkg --configure -a
-            check_cancel
-            echo '2/4 Downloading reviewed Ubuntu packages; apt verifies signed metadata and package hashes'
-            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false -o Acquire::AllowInsecureRepositories=false -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 --download-only ${if(upgrade) "" else "--no-upgrade"} install $specifications
-            check_cancel
-            echo '3/4 Installing downloaded packages; cancellation waits for dpkg to finish safely'
-            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false --no-download ${if(upgrade) "" else "--no-upgrade"} install $specifications
-            check_cancel
-            echo '4/4 Verifying tool and compiling/running a smoke program before activation'
-            /usr/bin/${lang.tool} --version
-            ${lang.smoke("/usr/bin/${lang.tool}")}
-            ${if(lang==NativeEnvironment.Cpp) "/usr/bin/gcc --version; /usr/bin/gdb --version; /usr/bin/cmake --version; /usr/bin/ninja --version" else "true"}
-            check_cancel
-            ensure_c_environment
-            if [ -n "${'$'}PRESERVED_TOOL" ]; then
-                echo 'Existing compiler selection retained; missing toolchain components were added.'
+            SELECTED="${'$'}PRESERVED_TOOL"
+            usable_tool() { [ -x "${'$'}SELECTED" ] && "${'$'}SELECTED" --version && ( $existingSmoke ); }
+            if ! usable_tool; then PRESERVED_TOOL=''; SELECTED=/usr/bin/${lang.tool}; fi
+            if usable_tool && ensure_c_environment check && ${if(upgrade) "false" else "true"}; then
+                ensure_c_environment commit
+                if [ -z "${'$'}PRESERVED_TOOL" ]; then commit_environment "${'$'}ENV_FILE" 'export ${lang.variable}=/usr/bin/${lang.tool}'; fi
+                echo 'SUI_NATIVE_READY — existing ${lang.title} verified; no packages downloaded; valid custom selections preserved.'
                 exit 0
             fi
-            printf '%s\n' 'export ${lang.variable}=/usr/bin/${lang.tool}' > "${'$'}TMP/environment"
-            chmod 644 "${'$'}TMP/environment"
-            mv -f "${'$'}TMP/environment" "${'$'}ENV_FILE"
-            echo 'SUI_NATIVE_READY — ${lang.title}. Existing JDKs and system defaults were not replaced.'
+            echo '1/4 Repairing pending package configuration'
+            sudo -n dpkg --configure -a
+            check_cancel
+            echo '2/4 Downloading reviewed Ubuntu packages using authenticated metadata'
+            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false -o Acquire::AllowInsecureRepositories=false -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 --download-only ${if(upgrade) "" else "--no-upgrade"} install $specifications
+            check_cancel
+            echo '3/4 Installing downloaded packages; cancellation waits for dpkg'
+            sudo -n apt-get -y -o APT::Get::AllowUnauthenticated=false --no-download ${if(upgrade) "" else "--no-upgrade"} install $specifications
+            check_cancel
+            echo '4/4 Compiling and running the verification program before activation'
+            /usr/bin/${lang.tool} --version
+            ${lang.smoke("/usr/bin/${lang.tool}")}
+            check_cancel
+            ensure_c_environment
+            if [ -z "${'$'}PRESERVED_TOOL" ]; then commit_environment "${'$'}ENV_FILE" 'export ${lang.variable}=/usr/bin/${lang.tool}'; fi
+            echo 'SUI_NATIVE_READY — ${lang.title}; existing tool selections and unrelated environments retained.'
         """.trimIndent()
     }
 

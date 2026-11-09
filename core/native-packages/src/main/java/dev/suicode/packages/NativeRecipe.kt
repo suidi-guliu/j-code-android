@@ -8,9 +8,9 @@ open class NativeRecipe internal constructor(
     private val prepare: JsonArray,private val run: JsonArray,private val inputs: Map<String,String> = emptyMap()
 ) {
     fun authorize(): Reply = session.authorize(Request(operation,componentId,emptyMap()))
-    fun resources(): Map<String,ByteArray> = (prepare.flatMap { it.jsonArray }+run).map { it.jsonPrimitive.content }
-        .filter { it.startsWith("\${resource:") && it.endsWith("}") }
-        .map { it.removePrefix("\${resource:").removeSuffix("}") }.distinct().associateWith { path ->
+    // A referenced script can read sibling scripts, configuration, templates and data. Stage the
+    // authenticated resource tree, not just the argv entry point; no resource executes on staging.
+    fun resources(): Map<String,ByteArray> = pack.resourcePaths().associateWith { path ->
             if(!path.startsWith("resources/") || path.split('/').any { it in setOf(".","..") }) fail("E_PATH",path)
             pack.content(path)
         }
@@ -34,7 +34,8 @@ open class NativeRecipe internal constructor(
         }
         fun command(value: JsonElement)=value.jsonArray.joinToString(" ") { quote(expand(it.jsonPrimitive.content)) }
         return buildString {
-            append("#!/bin/bash\nset -u\nexport TMPDIR=${quote(resourceDirectory+"/tmp")}\nmkdir -p -- \"\$TMPDIR\" || exit 73\ncd -- ${quote(project)} || exit 66\n")
+            append("#!/bin/bash\nset -u\nexport TMPDIR=${quote(resourceDirectory+"/tmp")}\nmkdir -p -- \"\$TMPDIR\" || exit 73\n")
+            append("if ! test -d ${quote(project)} || ! test -r ${quote(project)} || ! cd -- ${quote(project)}; then printf '%s\\n' ${quote("[E_TASK_PATH] Guest working directory is absent or inaccessible: $project; check Project mount mapping.")} >&2; exit 66; fi\n")
             prepare.forEach { append(command(it)+" || { echo '[Native compilation/preparation failed]' >&2; exit 65; }\n") }
             append(command(run)+"\nresult=\$?\nexit \"\$result\"\n")
         }
