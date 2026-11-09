@@ -175,7 +175,16 @@ def ui_lifecycle():
 
 (a.evidence/'platform.txt').write_text(adb('shell','getprop').stdout)
 adb('shell','wm size 1280x800');adb('shell','wm density 160');adb('shell','settings put system font_scale 1.0')
+# Boot completion can precede user unlock / emulated shared-storage readiness.
+adb('shell','input keyevent KEYCODE_WAKEUP');adb('shell','wm dismiss-keyguard',check=False);adb('shell','input keyevent 82')
+deadline=time.monotonic()+60
+while True:
+ r=adb('shell','mkdir -p /sdcard/Download',check=False)
+ if r.returncode==0:break
+ assert time.monotonic()<deadline,'Owned AVD shared storage not ready: '+r.stdout+r.stderr
+ time.sleep(2)
 adb('push',a.kit,'/sdcard/Download/'+a.kit.name)
+adb('shell','am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/'+a.kit.name,check=False)
 if a.mode=='upgrade':
  install(root/'.delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk');alive('v052-original-first-frame')
  adb('shell','am force-stop '+pkg);adb('push',a.inputs/'payload.tar','/data/local/tmp/sui-zh-payload.tar');runas('tar -xf /data/local/tmp/sui-zh-payload.tar');hashes('v052-seeded')
