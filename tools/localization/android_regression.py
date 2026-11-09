@@ -161,9 +161,14 @@ def card_action(label,chinese):
   tree=xml();owners=[]
   for n in tree.iter('node'):
    subtree=list(n.iter('node'))
-   if any(kitid in c.attrib.get('text','') for c in subtree) and any(c.attrib.get('text')==label for c in subtree):owners.append((len(subtree),n))
+   records=[c for c in subtree if c.attrib.get('text','').startswith(kitid+'\n')]
+   if records:
+    record_bottom=min(bounds(c)[3] for c in records)
+    # A partially visible card must not borrow Disable/Uninstall from the preceding Kit.
+    actions=[c for c in subtree if c.attrib.get('text')==label and bounds(c)[1]>=record_bottom]
+    if actions:owners.append((len(subtree),actions))
   if owners:
-   owner=min(owners,key=lambda t:t[0])[1];target=next(n for n in owner.iter('node') if n.attrib.get('text')==label);tap_node(target);return
+   actions=min(owners,key=lambda t:t[0])[1];tap_node(min(actions,key=lambda n:bounds(n)[1]));return
   assert time.monotonic()<deadline,'Package action not visible for '+kitid+': '+label
   swipe(False)
 
