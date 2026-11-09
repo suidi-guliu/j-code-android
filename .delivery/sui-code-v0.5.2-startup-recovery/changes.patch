@@ -1,0 +1,1178 @@
+diff --git a/.github/workflows/deliver-startup-v0.5.2.yml b/.github/workflows/deliver-startup-v0.5.2.yml
+new file mode 100644
+index 0000000..3b78b51
+--- /dev/null
++++ b/.github/workflows/deliver-startup-v0.5.2.yml
+@@ -0,0 +1,175 @@
++name: Verify startup upgrade and deliver sui-code 0.5.2
++on:
++  push:
++    branches: [sui-code/v0.5.2-startup-recovery]
++    paths:
++      - '.github/workflows/deliver-startup-v0.5.2.yml'
++      - '.delivery/sui-code-v0.5.2-startup-recovery/**'
++      - 'tools/startup/**'
++  workflow_dispatch:
++permissions:
++  contents: read
++jobs:
++  startup-and-deliver:
++    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5.2-startup-recovery'
++    runs-on: ubuntu-24.04
++    timeout-minutes: 45
++    env:
++      EXPECTED_APK_SHA256: 05ded85495070c8e4735fd3c539f1da02ea29ada120af70c47d9811a04abf3b5
++      EXPECTED_APK_BYTES: '87061016'
++    steps:
++      - uses: actions/checkout@v5
++      - uses: actions/setup-java@v5
++        with:
++          distribution: temurin
++          java-version: '21'
++      - name: Verify immutable APK, original signer and preserved older deliveries
++        shell: bash
++        run: |
++          set -euo pipefail
++          root=.delivery/sui-code-v0.5.2-startup-recovery
++          (cd "$root" && sha256sum --check --strict SHA256SUMS)
++          for old in sui-code-native-0.4 sui-code-v0.5 sui-code-v0.5-ui-polish; do
++            (cd ".delivery/$old" && sha256sum --check --strict SHA256SUMS)
++          done
++          apk="$root/sui-code-v0.5.2-startup-debug.apk"
++          test "$(stat -c %s "$apk")" = "$EXPECTED_APK_BYTES"
++          printf '%s  %s\n' "$EXPECTED_APK_SHA256" "$apk" | sha256sum --check --strict
++          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
++          old_cert=$("$signer" verify --print-certs .delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk | awk '/certificate SHA-256 digest:/ {print $NF}')
++          new_cert=$("$signer" verify --print-certs "$apk" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          test "$old_cert" = "$new_cert"
++          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
++          "$(dirname "$signer")/aapt" dump badging "$apk" > "$RUNNER_TEMP/startup-apk-badging.txt"
++          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070805' versionName='0.5.2'" "$RUNNER_TEMP/startup-apk-badging.txt"
++          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/startup-apk-badging.txt"
++      - name: Verify original Launcher resources and unpack signed test inputs
++        shell: python
++        run: |
++          import pathlib,zipfile,os
++          root=pathlib.Path('.delivery/sui-code-v0.5.2-startup-recovery')
++          with zipfile.ZipFile('.delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk') as old,zipfile.ZipFile(root/'sui-code-v0.5.2-startup-debug.apk') as new:
++              names=[n for n in old.namelist() if 'ic_launcher' in n]
++              assert names and sorted(names)==sorted(n for n in new.namelist() if 'ic_launcher' in n)
++              for name in names: assert old.read(name)==new.read(name),name
++          target=pathlib.Path(os.environ['RUNNER_TEMP'])/'startup-inputs'
++          target.mkdir()
++          with zipfile.ZipFile(root/'android-test-inputs.zip') as z:
++              for name in ['payload.tar','payload-sha256.json','probe.jar','startup-androidTest.apk']:
++                  (target/name).write_bytes(z.read(name))
++      - name: Prepare hardware accelerated Android 16 Emulators
++        shell: bash
++        run: |
++          set -euo pipefail
++          test -c /dev/kvm
++          sudo chmod a+rw /dev/kvm
++          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-36;google_apis;x86_64' > "$RUNNER_TEMP/sdk-install.log" 2>&1
++          "$ANDROID_HOME/emulator/emulator" -accel-check
++          export ANDROID_AVD_HOME="$RUNNER_TEMP/startup-avds"
++          mkdir -p "$ANDROID_AVD_HOME"
++          for name in sui-startup-upgrade sui-startup-fresh; do
++            printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n "$name" -k 'system-images;android-36;google_apis;x86_64' -d pixel_c --force
++          done
++          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
++      - name: Reproduce original crash, verify data-preserving upgrade and clean startup
++        shell: bash
++        run: |
++          set -euo pipefail
++          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
++          evidence="$RUNNER_TEMP/android-startup-evidence"
++          mkdir -p "$evidence"
++          adb start-server
++          for mode in upgrade fresh; do
++            if [ "$mode" = upgrade ]; then port=5554; else port=5556; fi
++            emulator -avd "sui-startup-$mode" -port "$port" -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader -memory 2048 -cores 2 -skin 1280x800 -camera-back none -camera-front none > "$evidence/emulator-$mode.log" 2>&1 &
++            emulator_pid=$!
++            trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
++            serial="emulator-$port"
++            ready=false
++            for attempt in $(seq 1 120); do
++              if adb -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; then ready=true; break; fi
++              sleep 5
++            done
++            test "$ready" = true
++            if [ "$mode" = upgrade ]; then
++              adb -s "$serial" push "$RUNNER_TEMP/startup-inputs/probe.jar" /data/local/tmp/probe.jar
++              adb -s "$serial" push .delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk /data/local/tmp/original.apk
++              if adb -s "$serial" shell 'CLASSPATH=/data/local/tmp/probe.jar:/data/local/tmp/original.apk app_process /system/bin AndroidUiTextProbe' > "$evidence/original-dex.log" 2>&1; then echo 'Original broken DEX unexpectedly passed'; exit 1; fi
++              grep 'PatternSyntaxException' "$evidence/original-dex.log"
++              adb -s "$serial" push .delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk /data/local/tmp/fixed.apk
++              adb -s "$serial" shell 'CLASSPATH=/data/local/tmp/probe.jar:/data/local/tmp/fixed.apk app_process /system/bin AndroidUiTextProbe' > "$evidence/fixed-dex.log" 2>&1
++              grep 'SHIPPING_DEX_ENGLISH_STARTUP_PASS' "$evidence/fixed-dex.log"
++            fi
++            python3 tools/startup/emulator_regression.py --serial "$serial" --mode "$mode" --fixtures "$RUNNER_TEMP/startup-inputs" --fixed .delivery/sui-code-v0.5.2-startup-recovery/sui-code-v0.5.2-startup-debug.apk --tests "$RUNNER_TEMP/startup-inputs/startup-androidTest.apk" --evidence "$evidence/$mode"
++            adb -s "$serial" emu kill || true
++            wait "$emulator_pid" || true
++            trap - EXIT
++          done
++      - name: Attach actual Android evidence and runtime receipt
++        shell: python
++        run: |
++          import pathlib,json,os,zipfile,hashlib
++          evidence=pathlib.Path(os.environ['RUNNER_TEMP'])/'android-startup-evidence'
++          for mode in ['upgrade','fresh']:
++              result=json.loads((evidence/mode/'result.json').read_text())
++              assert result['result']=='PASS' and result['instrumentation_tests']==4
++          root=pathlib.Path('.delivery/sui-code-v0.5.2-startup-recovery')
++          with zipfile.ZipFile(root/'android-startup-evidence.zip','w',zipfile.ZIP_DEFLATED) as z:
++              for p in evidence.rglob('*'):
++                  if p.is_file(): z.write(p,p.relative_to(evidence))
++          url=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
++          receipt='\n\n## GitHub Android startup validation receipt\n\nActual Android16 x86_64 Emulators with ARM64 native bridge: v0.5 normal first frame, v0.5.1 Activity PatternSyntaxException reproduced, signed v0.5.2 data-preserving upgrade and separate clean install passed; repeated startup, malformed UI preferences, missing/corrupt language resources and 8 Android instrumentation cases passed. 13 fixture payload hashes retained. Runtime directories are synthetic retention sentinels, not an executed Ubuntu/JDK installation. No ARM64 physical-device acceptance is claimed.\n\nRun: '+url+'\n'
++          with (root/'report.md').open('a') as out: out.write(receipt)
++          metadata=json.loads((root/'apk-metadata.json').read_text());metadata['android_startup_run']=url;metadata['android_emulator_startup']='PASS';metadata['android_instrumentation_cases']=8
++          (root/'apk-metadata.json').write_text(json.dumps(metadata,indent=2)+'\n')
++          (root/'SHA256SUMS').write_text('\n'.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name for p in sorted(root.iterdir()) if p.name!='SHA256SUMS')+'\n')
++      - name: Upload one verified startup repair APK and complete delivery
++        id: upload
++        uses: actions/upload-artifact@v4
++        with:
++          name: sui-code-v0.5.2-startup-recovery
++          path: .delivery/sui-code-v0.5.2-startup-recovery/*
++          include-hidden-files: true
++          if-no-files-found: error
++          compression-level: 0
++          retention-days: 30
++      - name: Download uploaded Artifact for byte-for-byte verification
++        uses: actions/download-artifact@v4
++        with:
++          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
++          path: ${{ runner.temp }}/startup-roundtrip
++          merge-multiple: true
++      - name: Verify roundtrip and publish actual download entry
++        shell: bash
++        env:
++          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
++        run: |
++          set -euo pipefail
++          (cd "$RUNNER_TEMP/startup-roundtrip" && sha256sum --check --strict SHA256SUMS)
++          for source in .delivery/sui-code-v0.5.2-startup-recovery/*; do cmp "$source" "$RUNNER_TEMP/startup-roundtrip/$(basename "$source")"; done
++          {
++            echo '## Startup recovery verified'
++            echo 'Actual Android16 Emulator startup, retained-data upgrade, clean install and 8 instrumentation cases passed. Not physical ARM64 acceptance.'
++            printf '[Download verified Artifact](%s)\n\nAPK SHA-256: `%s`\n' "$ARTIFACT_URL" "$EXPECTED_APK_SHA256"
++          } >> "$GITHUB_STEP_SUMMARY"
++      - name: Expose actionable startup diagnostics
++        if: failure()
++        shell: python
++        run: |
++          import pathlib,os
++          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'android-startup-evidence'
++          rows=[]
++          for p in list(root.glob('*/failure.txt'))+list(root.glob('*/instrumentation.txt'))+list(root.glob('emulator-*.log')):
++              if p.exists(): rows.append(p.name+': '+p.read_text(errors='replace')[-2200:])
++          text='\n'.join(rows)[-7000:]
++          if text: print('::error title=Android test diagnostics::'+text.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
++      - name: Retain failure diagnostics without distributing an unverified APK
++        if: failure()
++        uses: actions/upload-artifact@v4
++        with:
++          name: startup-verification-failure-diagnostics
++          path: |
++            ${{ runner.temp }}/android-startup-evidence/
++            ${{ runner.temp }}/sdk-install.log
++          if-no-files-found: warn
++          retention-days: 30
+diff --git a/.github/workflows/verify-startup-v0.5.2.yml b/.github/workflows/verify-startup-v0.5.2.yml
+new file mode 100644
+index 0000000..b84a877
+--- /dev/null
++++ b/.github/workflows/verify-startup-v0.5.2.yml
+@@ -0,0 +1,97 @@
++name: Verify sui-code v0.5.2 startup recovery
++on:
++  push:
++    branches: [sui-code/v0.5.2-startup-recovery]
++    paths:
++      - 'core/**'
++      - 'app/src/**'
++      - 'feature/**'
++      - 'native-library/**'
++      - 'docs/specifications/**'
++      - 'tools/sui_packages/**'
++      - 'tools/ui/**'
++      - 'tools/startup/**'
++      - 'tools/device/**'
++      - '.github/workflows/verify-startup-v0.5.2.yml'
++  workflow_dispatch:
++permissions:
++  contents: read
++jobs:
++  contracts:
++    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5.2-startup-recovery'
++    runs-on: ubuntu-24.04
++    timeout-minutes: 30
++    steps:
++      - uses: actions/checkout@v5
++      - uses: actions/setup-java@v5
++        id: runtime
++        with:
++          distribution: temurin
++          java-version: '27'
++      - name: Retain verified Java runtime for real source execution tests
++        run: echo "SUI_QUICKRUN_TEST_JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
++      - uses: actions/setup-java@v5
++        with:
++          distribution: temurin
++          java-version: '21'
++      - uses: gradle/actions/setup-gradle@v4
++      - uses: actions/setup-python@v6
++        with:
++          python-version: '3.12'
++      - name: Check compilers, schemas and documentation
++        run: |
++          set -euo pipefail
++          gcc --version
++          g++ --version
++          script --version
++          python -m pip install -r tools/sui_packages/requirements-dev.txt
++          python tools/sui_packages/check_specifications.py
++          python tools/ui/verify_launcher.py
++      - name: Unit and Linux x64 integration tests (not ARM64 acceptance)
++        shell: bash
++        run: |
++          set -euo pipefail
++          # JVM tests do not load ARM64 JNI. The actual APK is built with all native tasks in Codex Cloud.
++          # Keep this job focused on host contracts instead of requiring a second Rust cross toolchain.
++          bash gradlew --no-daemon --max-workers=4 -x :native:ripgrep-ffi:cargoBuildDebugJniLibs -x :native:wasmtime-ffi:cargoBuildDebugJniLibs :core:native-packages:testDebugUnitTest :core:fs:testDebugUnitTest :core:search:testDebugUnitTest :core:distro:testDebugUnitTest :core:design:testDebugUnitTest :core:editor:testDebugUnitTest :core:term:testDebugUnitTest :core:debug:testDebugUnitTest :core:lsp:testDebugUnitTest :app:testDebugUnitTest 2>&1 | tee native-verification.log
++      - name: Publish concrete test and build diagnostics
++        if: always()
++        shell: python
++        run: |
++          import pathlib, os, xml.etree.ElementTree as ET
++          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
++              out.write('## Native contract verification\n\n')
++              for pattern in ['core/*/build/test-results/testDebugUnitTest/TEST-*.xml','app/build/test-results/testDebugUnitTest/TEST-*.xml']:
++                  for file in pathlib.Path('.').glob(pattern):
++                      root=ET.parse(file).getroot()
++                      out.write(f"- {root.get('name')}: {root.get('tests')} tests, {root.get('failures')} failures\n")
++                      for failure in root.iter('failure'):
++                          out.write('```text\n'+(failure.text or '')[-4000:]+'\n```\n')
++              log=pathlib.Path('native-verification.log')
++              if log.exists():
++                  tail='\n'.join(log.read_text().splitlines()[-100:])
++                  out.write('\n### Gradle tail\n```text\n'+tail+'\n```\n')
++                  if 'BUILD FAILED' in tail:
++                      encoded=tail[-7000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
++                      print('::error title=Native Gradle diagnostics::'+encoded)
++      - name: Verify development packages and reject the illegal plugin
++        run: |
++          set -euo pipefail
++          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/minimal.suic"
++          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/minimal-kit.suik"
++          bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/zh-hans-kit.suik"
++          if bash gradlew --no-daemon :core:native-packages:validatePackage -PsuiPackage="$PWD/docs/specifications/examples/packages/illegal-plugin.suic" > "$RUNNER_TEMP/illegal.log" 2>&1; then
++            echo 'Illegal plugin was accepted'; exit 1
++          fi
++          grep 'E_BOUNDARY' "$RUNNER_TEMP/illegal.log"
++      - name: Upload test evidence
++        if: always()
++        uses: actions/upload-artifact@v4
++        with:
++          name: sui-code-v0.5.2-startup-tests
++          path: |
++            core/*/build/test-results/testDebugUnitTest/
++            app/build/test-results/testDebugUnitTest/
++            native-verification.log
++          if-no-files-found: warn
++          retention-days: 30
+diff --git a/README.md b/README.md
+index 11ca687..538af4d 100644
+--- a/README.md
++++ b/README.md
+@@ -8,6 +8,10 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开
+ - 自有签名扩展库、本地导入、权限审阅、启停/更新/回滚；无 JCode 或 VS Code 市场替代入口。
+ - sui-code 原生 Light/Dark 设计系统及尺寸驱动的文件栏、编辑器、底部 Terminal。
+ 
++## v0.5.2 启动修复
++
++修复Android ICU导致默认英文首屏崩溃的表达式，保留UI与全部用户环境。[启动修复报告](docs/sui-code-startup-recovery-0.5.2.md)。最终APK由独立AVD验证保留数据升级与全新启动后交付，不宣称ARM64平板已验收。
++
+ ## v0.5.1 UI polish
+ 
+ 本轮保留原v0.5图标，提供自适应可调侧栏、Project-only创建入口、Files/Find搜索分工和API4 `.suik` 本地化基础设施。完整中文翻译包另行交付。[本轮报告](docs/sui-code-ui-polish-0.5.1.md) · [下载整合APK、源码、SDK及测试证据](https://github.com/suidi-guliu/j-code-android/actions/runs/42496587688/artifacts/13623357817)（登录GitHub，Artifact保留30天）。
+@@ -36,4 +40,4 @@ bash gradlew :core:native-packages:testDebugUnitTest :core:distro:testDebugUnitT
+ bash gradlew :app:assembleDebug
+ ```
+ 
+-默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070804；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
++默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070805；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index ba093dd..ed8ff93 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -10,7 +10,7 @@ plugins {
+ // open release train (see docs/specifications/09-platform/02-build-variants-and-release.md), and
+ // merges no longer move it. The release scripts parse this line, and `-PjcodeVersionName=…`
+ // overrides it to add the pre-release label a Beta build carries (e.g. 1.7.7-beta.1).
+-val jcodeVersion = "0.5.1"
++val jcodeVersion = "0.5.2"
+ 
+ val jcodeVersionName: String =
+     (project.findProperty("jcodeVersionName") as? String)?.trim()?.takeIf { it.isNotBlank() }
+@@ -96,7 +96,7 @@ android {
+         applicationId = jcodeApplicationId
+         minSdk = 33
+         targetSdk = 33
+-        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: 1070804
++        versionCode = providers.gradleProperty("suiVersionCode").orNull?.toInt()?.also { require(it > 0) } ?: 1070805
+         versionName = jcodeVersionName
+ 
+         buildConfigField("String", "UPDATE_CHANNEL", "\"$jcodeUpdateChannel\"")
+diff --git a/app/src/androidTest/assets/zh-hans-kit.suik b/app/src/androidTest/assets/zh-hans-kit.suik
+new file mode 100644
+index 0000000000000000000000000000000000000000..0ddb6fec9c2fab841aaf4218bdc26268bad9a932
+GIT binary patch
+literal 1338
+zcmWFz_4E$#c4uH<WPk!zwE%Bs77-wi1Bex4Y-8>`-U?(f0#yhA>Ew*m<m}?o++w}r
+zj6@?-Gu?9seOU~77!KHnE@8ZJqceFo^R0p;X|Yb*mqp(fR>@sBkZ~mT7ek7P1LIn)
+z)n4rhj5C_Lt4w7W&3x0M&YJWWgh}69G_9yg=69j}`u@M)w&q{w)@O75m^sI4mc#a(
+zJHa}8nwIVeIdRlkQ*|0!wd}eRGd&!FPHm4(KUVjr@?_(r%^QQVeR3xXT{)7t`Slc;
+zNliA@J^}4g@4AyN9PtyH5P8b>+uO?cjs3z;tm^FI@4x+Z{~r^o7d=_4g7Sf0s|8|^
+z7c)~*^@~f2GV{`l^|Ffd^Hzs>oz&4g;ko9E_Zi>NO+i)r);&CV@1%d(np(59fB(+w
+zTV5?S@0)+kzLe{eYwy1QUZV9<W2x%1Cn~CH>C9J`J!AZ7`SWC_rNZ1$$z5`tl}8;G
+zF1qsQ&!t5v6BK$P*UZn%n7Eujbn*1iIrEo?oMvS}bsU!;YXdJZ?3V#CFVJzhiFui6
+zsl_E=mxWH)o5!pu(DK`c_0}&Z8O^I(J*TTpI<0Y(>)SiCHde;;pYC<vb;@*9MGd6V
+zzTGxXNRv1(@R8y1X@-fe=T9^2*rqBfv2fj=7n9UC*H)XC9GJlzDsf=xjL8$Wa6Nu5
+z`6Z|?E8X9JtLU_yx8Bcknfs>tjPK=i>$D(6mG(ye8xg+K*E8Cr3i&^pQS~Hr<+_4>
+zR&GBIT#{)1xMlf-qAPC39~Z7|Wm8@$X;Qn)q4&(|LrznDv^7j)tbMf9e1&(<3#=6T
+zq_*IU_PG?JU32&LuVM{bX}#qy>$c@j3omMHeG~B~SJ%3h^BCXe)Y6YfW>v2Lce?!k
+z?79;nO4nB<wYN-tyWdsg>pZW$g86SY-#zg3Av<cgovSK&Ee{N{2|z3j47Z}x;{4L0
+z<kVvQOhb!2{i+OIkHkDk{Dw~O^*ZbzbM*T>r%lsj4hUED&ge6YSUyQ#e5rs|pfYDm
+z#+@yW!56|7dTJ-}rrz3p#m8u8t8pR6j+sZ_?=^q_@jbVCmiP;$THXbm?M|lhSGRRv
+zv@NTZ`Ej*GQRdHQnUxn7>`QuE@cI?=eOuv{Qx+@TUiRCrc`LB^gMN=Qf4sHD+0zLz
+zwSFGkv@UF`n(_8c;m<EYyJpXoz3g$jP*3uc=7mhh_;)ieNW2lh|GuVo`t`nebxTv{
+zlR~o@OsDmmAN{qub;IF^&*tf|oLbA4n50cQd-BY)L#-<F3*&a>S4bwFe>jPc$GO!@
+z*wb9pOY^#qM%jUlD-Cw+P>MXF7=7r5nL_9FbBSK(nPx3*^1k-LO679&Dc`NJN8ZU+
+zmfAer%vQZWz?+dtgc)~<01R9(XaI&ZX8C}w8$Gi@^fE9sFg^w{(X$@9ZuH!M&<(O3
+iC2yc>MNbe2tvi_TCXWDbRyL4g79a$blLA1BfdK$5<p3=J
+
+literal 0
+HcmV?d00001
+
+diff --git a/app/src/androidTest/java/dev/blamspot/jcode/StartupRuntimeTest.kt b/app/src/androidTest/java/dev/blamspot/jcode/StartupRuntimeTest.kt
+new file mode 100644
+index 0000000..1fb81d7
+--- /dev/null
++++ b/app/src/androidTest/java/dev/blamspot/jcode/StartupRuntimeTest.kt
+@@ -0,0 +1,104 @@
++package dev.blamspot.jcode
++
++import androidx.test.ext.junit.runners.AndroidJUnit4
++import androidx.test.platform.app.InstrumentationRegistry
++import androidx.test.core.app.ActivityScenario
++import dev.suicode.packages.UiTranslations
++import dev.suicode.packages.UiTextKeys
++import dev.blamspot.jcode.startup.StartupPreferences
++import dev.blamspot.jcode.startup.StartupDiagnostics
++import org.junit.Test
++import org.junit.Assert.*
++import org.junit.runner.RunWith
++import java.util.regex.Pattern
++import java.util.regex.PatternSyntaxException
++
++/** Runs with Android libcore/ICU, unlike JVM regex tests. Never clears target app data or rootfs. */
++@RunWith(AndroidJUnit4::class)
++class StartupRuntimeTest {
++    @Test fun androidRejectsFormerRegexAndNewEnglishRendererWorksForEveryKey() {
++        try { Pattern.compile("\\{([a-z][a-zA-Z0-9]*)}");fail("Android must reproduce the former ICU syntax failure") }
++        catch(expected: PatternSyntaxException) { android.util.Log.i("SuiStartupTest","Former v0.5.1 expression rejected by actual Android ICU",expected) }
++        val ui=UiTranslations()
++        for((key,english) in UiTextKeys.english) {
++            val args=when { "{count}" in english -> mapOf("count" to "1");"{scope}" in english -> mapOf("scope" to "test");else -> emptyMap() }
++            assertTrue(ui.text(key,args).isNotBlank())
++        }
++    }
++    @Test fun actualActivityReachesContentOnRepeatedColdActivityStarts() {
++        val instrument=InstrumentationRegistry.getInstrumentation()
++        repeat(3) {
++            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
++                instrument.waitForIdleSync()
++                scenario.onActivity { activity ->
++                    assertTrue(activity.window.decorView.width>0)
++                    assertTrue(activity.window.decorView.height>0)
++                    assertFalse(activity.isFinishing)
++                }
++            }
++        }
++    }
++    @Test fun preferencesAndLocalizationFailureAreOptionalAndLogged() {
++        val context=InstrumentationRegistry.getInstrumentation().targetContext
++        val language=context.getSharedPreferences("sui-native-ui-language",0)
++        val pane=context.getSharedPreferences("sui-workbench-layout",0)
++        val oldLanguage=language.all["selection-v1"]
++        val oldPane=pane.all["content-width-v1"]
++        try {
++            assertTrue(language.edit().putInt("selection-v1",7).commit())
++            assertTrue(pane.edit().putString("content-width-v1","broken").commit())
++            assertNull(StartupPreferences.language(context))
++            assertTrue(StartupPreferences.paneWidth(context,pane).isNaN())
++            assertEquals(7,language.all["selection-v1"])
++            assertEquals("broken",pane.all["content-width-v1"])
++        } finally {
++            // Restore only the two owned test keys, preserving all unrelated preferences.
++            fun restore(p:android.content.SharedPreferences,key:String,value:Any?) {
++                val e=p.edit()
++                when(value) { null -> e.remove(key);is String -> e.putString(key,value);is Float -> e.putFloat(key,value);is Int -> e.putInt(key,value);is Boolean -> e.putBoolean(key,value);is Long -> e.putLong(key,value);is Set<*> -> e.putStringSet(key,value.filterIsInstance<String>().toSet());else -> error("Unsupported fixture value") }
++                check(e.commit())
++            }
++            restore(language,"selection-v1",oldLanguage);restore(pane,"content-width-v1",oldPane)
++        }
++    }
++    @Test fun damagedOrMissingLanguageArchiveFallsBackWithoutRemovingOtherPackages() = kotlinx.coroutines.runBlocking {
++        val instrument=InstrumentationRegistry.getInstrumentation()
++        val context=instrument.targetContext
++        val host=dev.suicode.nativehost.NativePackageHost.get(context)
++        host.restore()
++        val bytes=instrument.context.assets.open("zh-hans-kit.suik").use { it.readBytes() }
++        val pack=dev.suicode.packages.PackageVerifier().verify(bytes,"suik")
++        org.junit.Assume.assumeFalse("Do not replace an existing user-owned example",host.rows.value.any { it.record.id==pack.id })
++        val previous=host.rows.value.associate { it.record.id to it.record.digest }
++        val prefs=context.getSharedPreferences("sui-native-ui-language",0)
++        val old=prefs.all["selection-v1"]
++        val archive=java.io.File(context.filesDir,"sui-code/native-packages/${pack.digest}.suik")
++        var installed=false
++        try {
++            host.install(dev.suicode.nativehost.PackagePreview(bytes,"suik",pack,"instrumentation-only fixture"),pack.permissions,true)
++            installed=true
++            val bundle=host.localizations.value.single { it.packageId==pack.id }
++            host.selectUiLanguage(bundle.selectionId)
++            assertEquals("文件",UiTranslations(host.localizations.value,host.selectedUiLanguage.value).text("nav.files"))
++            val damaged=bytes.clone().also { it[it.size/2]=(it[it.size/2].toInt() xor 1).toByte() }
++            archive.writeBytes(damaged);host.restore()
++            assertEquals("Files",UiTranslations(host.localizations.value,host.selectedUiLanguage.value).text("nav.files"))
++            assertTrue(archive.readBytes().contentEquals(damaged));assertNotNull(host.error.value)
++            assertTrue(archive.delete());host.restore()
++            assertEquals("Files",UiTranslations(host.localizations.value,host.selectedUiLanguage.value).text("nav.files"))
++            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
++                instrument.waitForIdleSync()
++                scenario.onActivity { assertFalse(it.isFinishing);assertTrue(it.window.decorView.width>0) }
++            }
++            for((id,digest) in previous) assertEquals(digest,host.rows.value.single { it.record.id==id }.record.digest)
++        } finally {
++            if(installed) { archive.parentFile?.mkdirs();archive.writeBytes(bytes);host.uninstall(pack.id) }
++            host.selectUiLanguage(null)
++            val e=prefs.edit()
++            when(old) { null -> e.remove("selection-v1");is String -> e.putString("selection-v1",old);is Int -> e.putInt("selection-v1",old);is Float -> e.putFloat("selection-v1",old);is Long -> e.putLong("selection-v1",old);is Boolean -> e.putBoolean("selection-v1",old);is Set<*> -> e.putStringSet("selection-v1",old.filterIsInstance<String>().toSet()) }
++            check(e.commit())
++        }
++        Unit
++    }
++
++}
+diff --git a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+index 7721be6..d01ce06 100644
+--- a/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
++++ b/app/src/main/java/dev/blamspot/jcode/JCodeShell.kt
+@@ -2188,7 +2188,7 @@ private fun JCodeShell(
+     val paneDensity=LocalDensity.current
+     var measuredWorkbenchWidth by remember { mutableFloatStateOf(configuration.screenWidthDp.toFloat()) }
+     val panePrefs=remember(appContext) { appContext.getSharedPreferences("sui-workbench-layout",Context.MODE_PRIVATE) }
+-    var requestedPaneWidth by remember { mutableFloatStateOf(panePrefs.getFloat("content-width-v1",Float.NaN)) }
++    var requestedPaneWidth by remember { mutableFloatStateOf(dev.blamspot.jcode.startup.StartupPreferences.paneWidth(appContext,panePrefs)) }
+     val paneBounds=dev.blamspot.jcode.design.WorkbenchPaneSizing.bounds(measuredWorkbenchWidth,paneDensity.fontScale,requestedPaneWidth)
+     val usesModalWorkspace = paneBounds.modal || windowInfo.heightClass == JCodeWindowHeightClass.Compact
+     val isPortraitMobileMode = usesModalWorkspace && windowInfo.widthClass == JCodeWindowWidthClass.Compact
+@@ -4130,7 +4130,7 @@ private fun JCodeShell(
+                         dev.blamspot.jcode.workbench.WorkbenchPaneResize(paneBounds,
+                             onWidth={requestedPaneWidth=it},
+                             onDelta={delta -> val live=dev.blamspot.jcode.design.WorkbenchPaneSizing.bounds(measuredWorkbenchWidth,paneDensity.fontScale,requestedPaneWidth); requestedPaneWidth=(live.width+delta).coerceIn(live.minimum,live.maximum)},
+-                            onCommit={panePrefs.edit().putFloat("content-width-v1",requestedPaneWidth).apply()},
++                            onCommit={dev.blamspot.jcode.startup.StartupPreferences.savePaneWidth(appContext,panePrefs,requestedPaneWidth)},
+                             modifier=Modifier.align(Alignment.CenterStart).padding(start=leftSidebarWidth-12.dp).zIndex(2f))
+                     }
+                 }
+diff --git a/app/src/main/java/dev/blamspot/jcode/MainActivity.kt b/app/src/main/java/dev/blamspot/jcode/MainActivity.kt
+index 15d64fc..3a00fab 100644
+--- a/app/src/main/java/dev/blamspot/jcode/MainActivity.kt
++++ b/app/src/main/java/dev/blamspot/jcode/MainActivity.kt
+@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
+     private val mouseContextClick = MouseContextClick(::dispatchReplayedTouch)
+ 
+     override fun onCreate(savedInstanceState: Bundle?) {
++        dev.blamspot.jcode.startup.StartupDiagnostics.install(applicationContext)
+         setTheme(R.style.Theme_JCode)
+         super.onCreate(savedInstanceState)
+         if(BuildConfig.DEBUG) heartbeat=MainThreadHeartbeat()
+@@ -76,7 +77,7 @@ class MainActivity : ComponentActivity() {
+             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+         }
+         setContent {
+-            dev.suicode.nativehost.NativeLocalizationProvider { JCodeRoot(viewModel = viewModel) }
++            JCodeRoot(viewModel = viewModel)
+         }
+     }
+ 
+@@ -175,6 +176,10 @@ class MainActivity : ComponentActivity() {
+ 
+ @Composable
+ private fun JCodeRoot(viewModel: MainViewModel) {
++    val context=androidx.compose.ui.platform.LocalContext.current
++    androidx.compose.runtime.LaunchedEffect(Unit) {
++        dev.blamspot.jcode.startup.StartupDiagnostics.event(context,"root.composed")
++    }
+     val windowInfo by rememberJCodeWindowInfo()
+     val densityMode = if (windowInfo.hasPhysicalKeyboard) DensityMode.Compact else DensityMode.Comfortable
+     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+@@ -196,8 +201,10 @@ private fun JCodeRoot(viewModel: MainViewModel) {
+         uiIconSet = uiIconSet,
+         fileIconSet = fileIconSet,
+     ) {
+-        WithoutExtractedIme {
+-            JCodeApp(viewModel = viewModel, modifier = Modifier)
++        dev.suicode.nativehost.NativeLocalizationProvider(viewModel.nativePackages) {
++            WithoutExtractedIme {
++                JCodeApp(viewModel = viewModel, modifier = Modifier)
++            }
+         }
+     }
+ }
+diff --git a/app/src/main/java/dev/blamspot/jcode/startup/StartupDiagnostics.kt b/app/src/main/java/dev/blamspot/jcode/startup/StartupDiagnostics.kt
+new file mode 100644
+index 0000000..706306a
+--- /dev/null
++++ b/app/src/main/java/dev/blamspot/jcode/startup/StartupDiagnostics.kt
+@@ -0,0 +1,46 @@
++package dev.blamspot.jcode.startup
++
++import android.content.Context
++import android.util.Log
++import java.io.File
++import java.util.concurrent.Executors
++import java.util.concurrent.ConcurrentHashMap
++import java.util.concurrent.atomic.AtomicBoolean
++
++/** Private bounded diagnostic journal. Never rewrites preferences, package state, projects or rootfs. */
++object StartupDiagnostics {
++    private const val TAG="SuiStartup"
++    private val installed=AtomicBoolean(false)
++    private val reported=ConcurrentHashMap.newKeySet<String>()
++    private val writer=Executors.newSingleThreadExecutor { task -> Thread(task,"sui-startup-journal").apply { isDaemon=true } }
++    fun install(context: Context) {
++        if(!installed.compareAndSet(false,true)) return
++        val app=context.applicationContext
++        val previous=Thread.getDefaultUncaughtExceptionHandler()
++        Thread.setDefaultUncaughtExceptionHandler { thread,error ->
++            Log.e(TAG,"Uncaught failure on ${thread.name}",error)
++            write(app,"FATAL ${thread.name}",error.stackTraceToString())
++            previous?.uncaughtException(thread,error)
++        }
++        event(app,"activity.create Android=${android.os.Build.VERSION.SDK_INT} ABI=${android.os.Build.SUPPORTED_ABIS.joinToString()} version=${dev.blamspot.jcode.BuildConfig.VERSION_NAME}")
++    }
++    fun event(context: Context,stage: String) {
++        Log.i(TAG,stage)
++        writer.execute { write(context.applicationContext,stage,"") }
++    }
++    fun report(context: Context,stage: String,error: Exception) {
++        // At most one full copy for the same optional failure per process; no automatic retry loop.
++        val key="$stage:${error.javaClass.name}:${error.message}"
++        if(!reported.add(key)) return
++        Log.e(TAG,stage,error)
++        writer.execute { write(context.applicationContext,stage,error.stackTraceToString()) }
++    }
++    @Synchronized private fun write(context: Context,stage: String,trace: String) {
++        try {
++            val root=File(context.filesDir,"sui-code/diagnostics").apply { mkdirs() }
++            val log=File(root,"startup.log")
++            if(log.length()>128*1024) log.renameTo(File(root,"startup.previous.log"))
++            java.io.FileOutputStream(log,log.length()<=128*1024).bufferedWriter().use { it.write("${java.time.Instant.now()} $stage\n${trace.take(128*1024)}\n") }
++        } catch(e: Exception) { Log.e(TAG,"Could not persist startup journal",e) }
++    }
++}
+diff --git a/app/src/main/java/dev/blamspot/jcode/startup/StartupPreferences.kt b/app/src/main/java/dev/blamspot/jcode/startup/StartupPreferences.kt
+new file mode 100644
+index 0000000..0bd46a1
+--- /dev/null
++++ b/app/src/main/java/dev/blamspot/jcode/startup/StartupPreferences.kt
+@@ -0,0 +1,23 @@
++package dev.blamspot.jcode.startup
++
++import android.content.Context
++import android.content.SharedPreferences
++
++/** Only optional UI state gets a default; shared files are retained for diagnosis/user recovery. */
++object StartupPreferences {
++    fun language(context: Context): String? = try {
++        UiPreferenceValues.language(context.getSharedPreferences("sui-native-ui-language",Context.MODE_PRIVATE).all["selection-v1"]) { StartupDiagnostics.report(context,"localization.preference",it) }
++    } catch(e: Exception) { StartupDiagnostics.report(context,"localization.preference.read",e);null }
++    fun paneWidth(context: Context,prefs: SharedPreferences): Float = try {
++        UiPreferenceValues.paneWidth(prefs.all["content-width-v1"]) { StartupDiagnostics.report(context,"layout.preference",it) }
++    } catch(e: Exception) { StartupDiagnostics.report(context,"layout.preference.read",e);Float.NaN }
++    fun saveLanguage(context: Context,selection: String?) {
++        try { context.getSharedPreferences("sui-native-ui-language",Context.MODE_PRIVATE).edit().putString("selection-v1",selection).apply() }
++        catch(e: Exception) { StartupDiagnostics.report(context,"localization.preference.write",e) }
++    }
++    fun savePaneWidth(context: Context,prefs: SharedPreferences,value: Float) {
++        if(!value.isFinite() || value<=0f) return
++        try { prefs.edit().putFloat("content-width-v1",value).apply() }
++        catch(e: Exception) { StartupDiagnostics.report(context,"layout.preference.write",e) }
++    }
++}
+diff --git a/app/src/main/java/dev/blamspot/jcode/startup/UiPreferenceValues.kt b/app/src/main/java/dev/blamspot/jcode/startup/UiPreferenceValues.kt
+new file mode 100644
+index 0000000..79b0df5
+--- /dev/null
++++ b/app/src/main/java/dev/blamspot/jcode/startup/UiPreferenceValues.kt
+@@ -0,0 +1,15 @@
++package dev.blamspot.jcode.startup
++
++/** Pure non-critical UI preference decoder; wrong values never become a startup ClassCastException. */
++object UiPreferenceValues {
++    fun language(value: Any?,invalid: (Exception)->Unit): String? = when {
++        value==null -> null
++        value is String && value.length<=512 -> value
++        else -> { invalid(IllegalArgumentException("Expected a UI language String, found ${value.javaClass.simpleName}"));null }
++    }
++    fun paneWidth(value: Any?,invalid: (Exception)->Unit): Float = when {
++        value==null -> Float.NaN
++        value is Float && value.isFinite() && value>0f -> value
++        else -> { invalid(IllegalArgumentException("Invalid optional panel-width value (${value.javaClass.simpleName})"));Float.NaN }
++    }
++}
+diff --git a/app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt b/app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt
+index 76d0f08..6572eb1 100644
+--- a/app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt
++++ b/app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt
+@@ -9,14 +9,21 @@ import androidx.compose.ui.unit.dp
+ import dev.blamspot.jcode.design.LocalUiTranslations
+ import dev.blamspot.jcode.design.uiText
+ import dev.suicode.packages.UiTranslations
++import kotlinx.coroutines.flow.combine
++import kotlinx.coroutines.CancellationException
++import dev.blamspot.jcode.startup.StartupDiagnostics
+ 
+ @Composable
+-fun NativeLocalizationProvider(content: @Composable ()->Unit) {
++fun NativeLocalizationProvider(host: NativePackageHost,content: @Composable ()->Unit) {
+     val context=LocalContext.current
+-    val host=remember(context) { NativePackageHost.get(context) }
+-    val bundles by host.localizations.collectAsState()
+-    val selection by host.selectedUiLanguage.collectAsState()
+-    val strings=remember(bundles,selection) { UiTranslations(bundles,selection) }
++    var strings by remember(host) { mutableStateOf(UiTranslations()) }
++    LaunchedEffect(host) {
++        host.localizations.combine(host.selectedUiLanguage) { bundles,selection ->
++            try { UiTranslations(bundles,selection) }
++            catch(e: CancellationException) { throw e }
++            catch(e: Exception) { StartupDiagnostics.report(context,"localization.snapshot",e);UiTranslations() }
++        }.collect { strings=it }
++    }
+     CompositionLocalProvider(LocalUiTranslations provides strings,content=content)
+ }
+ 
+diff --git a/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt b/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
+index ac0e212..78f42ed 100644
+--- a/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
++++ b/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
+@@ -34,14 +34,13 @@ class NativePackageHost private constructor(private val context: Context) {
+     private val mutation=Mutex()
+     private val mutableRows=MutableStateFlow<List<NativePackageRow>>(emptyList())
+     val rows=mutableRows.asStateFlow()
+-    private val languagePrefs=context.getSharedPreferences("sui-native-ui-language",Context.MODE_PRIVATE)
+-    private val mutableLanguage=MutableStateFlow(languagePrefs.getString("selection-v1",null))
++    private val mutableLanguage=MutableStateFlow(dev.blamspot.jcode.startup.StartupPreferences.language(context))
+     val selectedUiLanguage=mutableLanguage.asStateFlow()
+     private val mutableLocalizations=MutableStateFlow<List<LocalizationBundle>>(emptyList())
+     val localizations=mutableLocalizations.asStateFlow()
+     fun selectUiLanguage(selection: String?) {
+         require(selection==null || mutableLocalizations.value.any { it.selectionId==selection }) { "Unavailable language package" }
+-        languagePrefs.edit().putString("selection-v1",selection).apply();mutableLanguage.value=selection
++        dev.blamspot.jcode.startup.StartupPreferences.saveLanguage(context,selection);mutableLanguage.value=selection
+     }
+     private val mutableError=MutableStateFlow<String?>(null)
+     val error=mutableError.asStateFlow()
+@@ -194,15 +193,18 @@ class NativePackageHost private constructor(private val context: Context) {
+     }
+     private fun publish() {
+         mutableRows.value=store.records().mapNotNull { record ->
+-            runCatching { NativePackageRow(record,store.load(record.id)) }.onFailure { error -> mutableError.value="${record.id}: ${error.message}" }.getOrNull()
++            runCatching { NativePackageRow(record,store.load(record.id)) }.onFailure { error -> if(error is Exception) dev.blamspot.jcode.startup.StartupDiagnostics.report(context,"native-packages.load.${record.id}",error);mutableError.value="${record.id}: ${error.message}" }.getOrNull()
+         }
+         mutableLocalizations.value=mutableRows.value.filter { it.record.enabled && sessions.containsKey(it.record.id) && Capability.LOCALIZATION in it.record.grants }
+-            .flatMap { LocalizationResources.forPack(it.pack) }.sortedWith(compareBy({it.locale},{it.packageId}))
++            .flatMap { row ->
++                try { LocalizationResources.forPack(row.pack) }
++                catch(e: Exception) { dev.blamspot.jcode.startup.StartupDiagnostics.report(context,"localization.package.${row.record.id}",e);mutableError.value="Language resources unavailable: ${row.record.id}: ${e.message}";emptyList() }
++            }.sortedWith(compareBy({it.locale},{it.packageId}))
+     }
+     private suspend fun action(block: ()->Unit) = withContext(Dispatchers.IO) {
+         mutation.withLock {
+             try { mutableError.value=null;block();reconcile();publish() }
+-            catch(e: Exception) { mutableError.value=e.message ?: "Native package operation failed";runCatching { publish() };throw e }
++            catch(e: Exception) { dev.blamspot.jcode.startup.StartupDiagnostics.report(context,"native-packages.operation",e);mutableError.value=e.message ?: "Native package operation failed";runCatching { publish() };throw e }
+         }
+     }
+     companion object {
+diff --git a/app/src/test/java/dev/blamspot/jcode/StartupPreferenceTest.kt b/app/src/test/java/dev/blamspot/jcode/StartupPreferenceTest.kt
+new file mode 100644
+index 0000000..d55b63d
+--- /dev/null
++++ b/app/src/test/java/dev/blamspot/jcode/StartupPreferenceTest.kt
+@@ -0,0 +1,28 @@
++package dev.blamspot.jcode
++import dev.blamspot.jcode.startup.UiPreferenceValues
++import dev.blamspot.jcode.design.WorkbenchPaneSizing
++import org.junit.Test
++import org.junit.Assert.*
++class StartupPreferenceTest {
++    @Test fun missingV05PreferencesNeedNoMigration() {
++        assertNull(UiPreferenceValues.language(null) { throw it })
++        val width=UiPreferenceValues.paneWidth(null) { throw it }
++        assertTrue(width.isNaN());assertEquals(360f,WorkbenchPaneSizing.bounds(1200f,1f,width).width,0f)
++    }
++    @Test fun wrongPreferenceTypesFallBackAndReportWithoutMutatingInput() {
++        val saved=mapOf<String,Any>("selection-v1" to 42,"content-width-v1" to "broken")
++        val errors=mutableListOf<Exception>()
++        assertNull(UiPreferenceValues.language(saved["selection-v1"],errors::add))
++        assertTrue(UiPreferenceValues.paneWidth(saved["content-width-v1"],errors::add).isNaN())
++        assertEquals(2,errors.size);assertEquals(42,saved["selection-v1"]);assertEquals("broken",saved["content-width-v1"])
++    }
++    @Test fun infiniteNegativeAndExtremePanelPreferencesCannotCreateInvalidBounds() {
++        for(value in listOf(Float.NaN,Float.POSITIVE_INFINITY,-1f,0f,Float.MAX_VALUE)) {
++            val width=UiPreferenceValues.paneWidth(value) {}
++            for(screen in listOf(0f,40f,600f,1200f)) {
++                val b=WorkbenchPaneSizing.bounds(screen,2f,width)
++                assertTrue(b.width.isFinite());assertTrue(b.width>=0 && b.minimum<=b.maximum)
++            }
++        }
++    }
++}
+diff --git a/core/native-packages/src/main/java/dev/suicode/packages/Localization.kt b/core/native-packages/src/main/java/dev/suicode/packages/Localization.kt
+index b5d3e1b..25e0af2 100644
+--- a/core/native-packages/src/main/java/dev/suicode/packages/Localization.kt
++++ b/core/native-packages/src/main/java/dev/suicode/packages/Localization.kt
+@@ -40,12 +40,6 @@ data class LocalizationBundle(val packageId: String,val locale: String,val displ
+ 
+ /** Parsed only from authenticated payload bytes; no paths, classes, HTML or scripts are evaluated. */
+ object LocalizationResources {
+-    private val placeholder=Regex("\\{([a-z][a-zA-Z0-9]*)}")
+-    private fun parameters(value: String): Set<String> {
+-        val stripped=placeholder.replace(value,"")
+-        if('{' in stripped || '}' in stripped) fail("E_LOCALIZATION","Malformed placeholder")
+-        return placeholder.findAll(value).map { it.groupValues[1] }.toSet()
+-    }
+     fun parse(bytes: ByteArray): Map<String,String> {
+         if(bytes.size>65536) fail("E_LOCALIZATION","Translation resource exceeds 64 KiB")
+         val d=jsonObject(bytes)
+@@ -53,7 +47,7 @@ object LocalizationResources {
+         return d.mapValues { (key,value) ->
+             val fallback=UiTextKeys.english[key] ?: fail("E_LOCALIZATION","Unknown or protected key: $key")
+             val text=(value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: fail("E_LOCALIZATION","String required: $key")
+-            if(text.length !in 1..2048 || unsafe(text) || parameters(text)!=parameters(fallback)) fail("E_LOCALIZATION","Invalid text/placeholders: $key")
++            if(text.length !in 1..2048 || unsafe(text) || UiPlaceholders.parameters(text)!=UiPlaceholders.parameters(fallback)) fail("E_LOCALIZATION","Invalid text/placeholders: $key")
+             text
+         }
+     }
+@@ -69,9 +63,39 @@ class UiTranslations(bundles: List<LocalizationBundle> = emptyList(),selection:
+     private val entries=bundles.singleOrNull { it.selectionId==selection }?.entries.orEmpty().toMap()
+     fun text(key: String,arguments: Map<String,String> = emptyMap()): String {
+         val english=UiTextKeys.english[key] ?: throw IllegalArgumentException("Unknown UI key $key")
+-        val expected=Regex("\\{([a-z][a-zA-Z0-9]*)}").findAll(english).map { it.groupValues[1] }.toSet()
++        val expected=UiPlaceholders.parameters(english)
+         require(arguments.keys==expected) { "Placeholder arguments differ for $key" }
+-        // Replace by match, so replacement values cannot inject additional formatting placeholders.
+-        return Regex("\\{([a-z][a-zA-Z0-9]*)}").replace(entries[key] ?: english) { arguments.getValue(it.groupValues[1]) }
++        return UiPlaceholders.render(entries[key] ?: english,arguments)
++    }
++}
++
++/** Literal scanner shared by verification and rendering. Android ICU and JVM regex differ on `}`. */
++internal object UiPlaceholders {
++    private data class Slot(val start: Int,val end: Int,val name: String)
++    private fun slots(text: String): List<Slot> {
++        val out=mutableListOf<Slot>()
++        var index=0
++        while(index<text.length) {
++            when(text[index]) {
++                '}' -> fail("E_LOCALIZATION","Unmatched closing placeholder brace")
++                '{' -> {
++                    val end=text.indexOf('}',index+1)
++                    if(end<0) fail("E_LOCALIZATION","Unclosed placeholder")
++                    val name=text.substring(index+1,end)
++                    if(name.isEmpty() || name[0] !in 'a'..'z' || name.any { it !in 'a'..'z' && it !in 'A'..'Z' && it !in '0'..'9' }) fail("E_LOCALIZATION","Invalid placeholder name")
++                    out+=Slot(index,end+1,name);index=end
++                }
++            }
++            index++
++        }
++        return out
++    }
++    fun parameters(text: String): Set<String> = slots(text).map { it.name }.toSet()
++    fun render(text: String,arguments: Map<String,String>): String = buildString {
++        var previous=0
++        for(slot in slots(text)) {
++            append(text,previous,slot.start);append(arguments.getValue(slot.name));previous=slot.end
++        }
++        append(text,previous,text.length)
+     }
+ }
+diff --git a/core/native-packages/src/test/java/dev/suicode/packages/LocalizationTest.kt b/core/native-packages/src/test/java/dev/suicode/packages/LocalizationTest.kt
+index b387c9d..a8cf6d8 100644
+--- a/core/native-packages/src/test/java/dev/suicode/packages/LocalizationTest.kt
++++ b/core/native-packages/src/test/java/dev/suicode/packages/LocalizationTest.kt
+@@ -6,6 +6,37 @@ import kotlin.test.*
+ class LocalizationTest {
+     private val example=File("../../docs/specifications/examples/packages/zh-hans-kit.suik")
+     private fun parse(s: String)=LocalizationResources.parse((canonical(Json.parseToJsonElement(s))+"\n").toByteArray())
++    @Test fun freshEnglishStartupRendersEveryCoreKeyWithoutAnyTranslationPackage() {
++        val text=UiTranslations()
++        for((key,english) in UiTextKeys.english) {
++            val args=UiPlaceholders.parameters(english).associateWith { "1" }
++            assertTrue(text.text(key,args).isNotBlank())
++        }
++    }
++    @Test fun literalScannerRejectsMalformedAndNestedBracesAndNeverFormatsArgumentData() {
++        for(text in listOf("}","{","{{count}}","{Bad}","{has-dash}","{}")) assertFailsWith<PackageFailure> { UiPlaceholders.parameters(text) }
++        assertEquals(setOf("count"),UiPlaceholders.parameters("{count} / {count}"))
++        assertEquals("$\\{other} / $\\{other}",UiPlaceholders.render("{count} / {count}",mapOf("count" to "$\\{other}")))
++    }
++    @Test fun api3OfficialPackagesAndApi4ResourcesCoexistAfterStoreReopen() {
++        val root=Files.createTempDirectory("v05-upgrade-store")
++        val installed=mutableMapOf<String,Pair<String,String>>()
++        val verifier=PackageVerifier()
++        var store=PackageStore(root,verifier)
++        try {
++            for(kind in listOf("suic","suik")) for(language in listOf("Java","C_CPP","Python")) {
++                val bytes=File("../../native-library/v1/$language.$kind").readBytes()
++                val p=store.inspect(bytes,kind)
++                store.install(bytes,kind,Consent(p.digest,p.permissions,true));store.enable(p.id,emptyMap())
++                installed[p.id]=p.version to p.digest
++            }
++            store.close();store=PackageStore(root,verifier)
++            for((id,expected) in installed) { assertEquals(expected.first,store.load(id).version);assertEquals(expected.second,store.load(id).digest) }
++            val p=store.inspect(example.readBytes(),"suik");store.install(example.readBytes(),"suik",Consent(p.digest,p.permissions,true));store.enable(p.id,emptyMap())
++            assertEquals(7,store.records().size)
++            for((id,expected) in installed) assertEquals(expected.second,store.load(id).digest)
++        } finally { store.close();root.toFile().deleteRecursively() }
++    }
+     @Test fun realSuikHasNoEnvironmentDependencyAndLoadsTranslations() {
+         val pack=PackageVerifier().verify(example.readBytes(),"suik")
+         assertEquals(setOf(Capability.LOCALIZATION),pack.permissions)
+diff --git a/docs/specifications/SUIC-SUIK-Development-Specification.md b/docs/specifications/SUIC-SUIK-Development-Specification.md
+index 2e2e69d..f8352af 100644
+--- a/docs/specifications/SUIC-SUIK-Development-Specification.md
++++ b/docs/specifications/SUIC-SUIK-Development-Specification.md
+@@ -1197,3 +1197,7 @@ Packages页面提供界面语言选择和来源ID。安装只增加可选资源
+ ### 29.4 安全、测试与兼容
+ 
+ localization仅可提供纯数据；禁止全局主题覆盖、HTML/View/DEX/JS注入和安全确认文案篡改。完整性/签名状态沿用标准包协议；未签名样例显示未验证且必须确认。权限检查在宿主生命周期而非仅靠Schema，插件越界仍E_BOUNDARY。无环境、下载或执行依赖的语言包审阅计划为零工具步骤；与已启用Java/C_CPP/Python Kit并存。测试覆盖安装/启用/禁用/卸载后资源回退、两来源冲突、占位符、错误key/locale/资源大小及损坏包；规范工具同步验证完整Schema及包样例。旧接口未弃用；后续开放键/新增回退机制必须同步SDK、规范、校验工具和测试。
++
++### 29.5 Android启动兼容性修正（2026-11-09，API4接口及包格式不变）
++
++Core占位符验证和渲染使用同一字面扫描器，不依赖Android ICU与JVM不同的正则宽容行为。包括默认英文在内的所有键必须在Android libcore上覆盖；不能以仅JVM通过替代首屏验证。NativeLocalizationProvider复用现有ViewModel的NativePackageHost，不在主题/主界面前另建Host；可选资源快照异常记录完整诊断并回退英文，UI子树的实际编程异常不被全局try/catch吞掉。语言与宽度的可选偏好若类型错误，保留文件及原值、记录错误并使用默认值；不会删除包状态、Ubuntu或用户文件。损坏包归档仍按既有校验拒绝，完整错误进入启动日志，不尝试自动卸载/重装或无限恢复。
+diff --git a/docs/sui-code-startup-recovery-0.5.2.md b/docs/sui-code-startup-recovery-0.5.2.md
+new file mode 100644
+index 0000000..166c184
+--- /dev/null
++++ b/docs/sui-code-startup-recovery-0.5.2.md
+@@ -0,0 +1,91 @@
++# sui-code v0.5.2 启动紧急修复报告
++
++基线：`sui-code/v0.5-ui-polish` / `f6bf5ad29e8e8ddabdc0b546357e4ec70c29a1b1`。修复分支：`sui-code/v0.5.2-startup-recovery`。P0仅修启动与补测试/诊断，不继续UI设计或三语言功能开发；main、官方上游及旧v0.4/v0.5/v0.5.1交付目录保持不变。
++
++## 1. 已复现的实际错误与证据边界
++
++在Android16 x86_64模拟器（提供ARM64 native bridge）的ART/libcore上，直接以原始已交付v0.5.1 APK的DEX运行`UiTranslations.text("nav.files", emptyMap())`，得到：
++
++```text
++SHIPPING_DEX_ENGLISH_STARTUP_FAILED
++java.util.regex.PatternSyntaxException: Syntax error in regexp pattern near index 22
++\{([a-z][a-zA-Z0-9]*)}
++ at com.android.icu.util.regex.PatternNative.compileImpl(Native Method)
++ at java.util.regex.Pattern.compile(Pattern.java:921)
++ at kotlin.text.Regex.<init>(Regex.kt:90)
++ at dev.suicode.packages.UiTranslations.text(Localization.kt:72)
++```
++
++原表达式未转义结尾右花括号。OpenJDK正则允许这一写法，Android的ICU拒绝；所以此前JVM测试通过不能证明Android首屏可用。默认英文也会进入该函数，不需要用户安装或选择中文包。v0.5.1的Run file/导航等首屏文字会调用此路径。这是已验证的真实崩溃点，不是凭用户描述猜测异常。
++
++修复版同一实际APK DEX在相同Android运行时返回`SHIPPING_DEX_ENGLISH_STARTUP_PASS: Files`。Linux ICU76也独立复现旧式U_REGEX_RULE_SYNTAX，但只作为辅助证据，不冒充Android结果。
++
++没有用户平板logcat，不能证明该设备仅有这一问题，也不能宣称用户真实ARM64设备闪退已解决。首屏与保留数据升级由最终Actions的独立KVM模拟器验证强制把关；只有通过才上传最终Artifact，具体结果附运行回执。
++
++## 2. 实际修复
++
++1. **去除平台差异**：Core占位符验证/渲染共用字面扫描器，按ASCII命名槽解析与一次性替换，不再依赖ICU/JVM的正则宽容行为。保留资源键、占位符集合、安全校验、英文回退与API4/包格式。
++2. **初始化顺序**：MainActivity恢复由JCodeRoot正常创建ViewModel；NativeLocalizationProvider在既有主题下复用同一NativePackageHost，不在主界面前额外构造Host。可选快照构建失败记录完整异常并回退英文；协程取消重新抛出；不包裹吞掉整个UI子树异常。
++3. **可选偏好**：新增语言选择、第二栏宽度从不受信任的SharedPreferences值进行类型/范围检查，缺省/错类型/非有限值安全回退。保留原文件与坏值，不清DataStore、包状态或用户目录；写入仍由用户操作触发。
++4. **坏资源隔离**：单个语言归档损坏/缺失按原校验拒绝、保留错误和文件，资源列表回退。包恢复/读取异常进入诊断，不自动卸载、覆盖、重装或无限重试。原API3六个官方包及存储格式不变。
++5. **启动诊断**：`SuiStartup`记录生命周期阶段与完整异常栈；未捕获异常先写诊断再交还Android原处理器，不把真实致命错误假装成成功。私有`files/sui-code/diagnostics/startup.log`有界轮转；同类可选异常每进程只记录一次。只读采集脚本`tools/device/collect-startup-diagnostics.sh`不清日志、不强停、不卸载或重装。
++
++## 3. 启动差异审计
++
++已比较v0.5.0到v0.5.1的MainActivity/JCodeRoot、NativePackageHost构造/restore、MainViewModel初始化、本地化、偏好、布局模型与资源。
++
++- AndroidManifest、Application声明、图标、包身份在v0.5.1 UI修整中没有导致此次差异的更换；本修复继续保留。
++- WorkbenchPaneSizing对缺省、NaN、无穷、极大/负值及窄屏给出有限非负边界；没有复现其纯数学计算异常。新增可选偏好类型错误确可在此前getFloat/getString处导致ClassCastException，已独立保护，不混称用户根因。
++- NativePackageHost旧存储格式没有变，API1/2/3与API4兼容；本地化不应要求Ubuntu/JDK或在首屏执行脚本。
++- core/fs、core/distro、core/lsp、core/debug、core/term及三语言原始包/安装环境未改；第二栏拖动/持久化、Files/Find改进、Project、Run/Debug/Overview、底部终端继续保留。
++
++## 4. 测试
++
++云端JVM：**254例，0失败**。fs26、distro66、native-packages64、design61、editor3、term4、lsp1、debug1、search3、app25。新增全部Core英文键、槽解析、旧API3六包重开与API4共存、坏偏好保留/默认值及极端布局输入覆盖；三语言基础文件执行使用真实Linux测试工具/JDK27，不能当ARM64实机验收。
++
++[独立GitHub JVM回归](https://github.com/suidi-guliu/j-code-android/actions/runs/42551247185)。Schema89个声明、非法包拒绝及9个Launcher源资源基线校验继续通过。
++
++Android测试已编译4个方法：旧ICU表达式与修复英文渲染、真实Activity重复启动、坏SharedPreferences保留、语言包启用后损坏/缺失的回退及首屏。最终交付工作流在两个独立AVD分别执行（共8例），并包含：
++
++- 原v0.5正常首屏、真实UI创建可选Project；真实六个API3包与项目文件配置夹具。
++- 保留数据覆盖安装原v0.5.1并采集实际Activity崩溃。
++- 覆盖修复版、三次冷进程启动、坏UI偏好启动及Project继续可见。
++- 13个旧包/源码/配置/环境路径哨兵SHA256保留；新AVD全新安装；截图、层级、logcat、诊断和仪器测试结果。
++
++**环境路径哨兵只是保留数据夹具，不是运行过的Ubuntu/JDK。** 不会据此宣称真实Ubuntu24.04/JDK/GCC/Python运行通过。云端宿主/dev/kvm不存在；本地TCG模拟器可运行ART探针，但Framework包管理启动严重受限，因此使用GitHub KVM完成Activity测试。Artifact中的运行时回执记录实际通过情况，失败时只保留诊断，不分发未经启动验证的APK。
++
++## 5. 构建、签名与图标
++
++ARM64完整Debug构建成功，另有开发用instrumentation测试APK。对外修复版只有一个：
++
++- 文件：`sui-code-v0.5.2-startup-debug.apk`
++- 大小：**87,061,016字节**
++- 包名：`dev.suicode.ide.debug`
++- versionName / versionCode：`0.5.2 / 1070805`，高于v0.5.1的1070804。
++- 原签名证书SHA256：`62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0`，已实际与v0.5.1比较一致。
++- APK内15个Launcher资源与原v0.5.1逐字节相同（该版已恢复v0.5原图标），不设计新图标。
++- 主APK构建源码：`4caff73cd264fa3b9c0cf3f4624da4e1da968b27`；其后的测试/交付提交不改此APK。
++
++```text
++APK SHA-256
++05ded85495070c8e4735fd3c539f1da02ea29ada120af70c47d9811a04abf3b5
++```
++
++满足相同身份/证书和更高版本的覆盖安装条件；没有数据迁移/清理或环境重装代码。旧v0.4/v0.5/v0.5.1全部SHA256SUMS单独核验。升级数据实机结果仍需用户平板确认，不要求卸载或清数据。
++
++## 6. 下载与交付内容
++
++[启动验证及整合交付工作流](https://github.com/suidi-guliu/j-code-android/actions/workflows/deliver-startup-v0.5.2.yml)。成功运行的Artifacts提供`sui-code-v0.5.2-startup-recovery`，登录GitHub下载，保留30天。只有Android升级/全新启动验证通过后才上传，并再次下载逐字节回验。
++
++包含主APK、report.md、changes.patch、源码、SDK、文件清单、构建/测试证据、Android截图/日志和开发用测试输入。instrumentation APK封装在测试输入zip中，是开发验证工具，不是另一个中间应用版本，也不要求用户安装。运行时报告/元数据及SHA256SUMS由Actions追加真实结果，主APK不重构或重新签名。
++
++[原生扩展规范](https://github.com/suidi-guliu/j-code-android/blob/sui-code/v0.5.2-startup-recovery/docs/specifications/SUIC-SUIK-Development-Specification.md)仍为API4/包格式1.0，已追加Android兼容实现说明，接口和安全边界不变。
++
++## 7. 仍需用户ARM64平板确认
++
++模拟器不是MediaTek真实ARM64设备；没有该平板logcat，不能宣布实机故障消失。最终APK只用于这轮启动恢复验收，不提前推进UI或三语言完整功能验收。
++
++1. 备份重要文件后直接覆盖安装；不要卸载、清数据或重新安装Ubuntu。签名冲突立即停止。
++2. 点击图标确认首屏出现、退出/重开3次，确认图标、Project、文件、扩展、原Ubuntu/JDK路径及偏好仍在。
++3. 确认第二栏、Files/Find、Languages、Run/Debug/Overview及底部终端仍可访问；不要求立刻重测全部语言。
++4. 若仍闪退，保留安装和数据；后续能连接ADB时运行只读诊断采集脚本。新包会尽可能留下完整异常阶段与栈，不反复自动重启。
+diff --git a/tools/device/collect-startup-diagnostics.sh b/tools/device/collect-startup-diagnostics.sh
+new file mode 100755
+index 0000000..202d372
+--- /dev/null
++++ b/tools/device/collect-startup-diagnostics.sh
+@@ -0,0 +1,12 @@
++#!/usr/bin/env bash
++# Read-only collection; no clear-data, uninstall, force-stop, logcat clear or rootfs changes.
++set -euo pipefail
++output=${1:-sui-startup-diagnostics}
++mkdir -p "$output"
++adb devices -l > "$output/devices.txt"
++adb shell dumpsys package dev.suicode.ide.debug > "$output/package.txt"
++adb logcat -d -v threadtime -s AndroidRuntime SuiStartup SuiStartupTest SuiPerformance > "$output/logcat.txt"
++for name in startup.log startup.previous.log; do
++  adb exec-out run-as dev.suicode.ide.debug cat "files/sui-code/diagnostics/$name" > "$output/$name" 2> "$output/$name.error" || true
++done
++printf 'Saved startup diagnostics to %s\n' "$output"
+diff --git a/tools/startup/.gitignore b/tools/startup/.gitignore
+new file mode 100644
+index 0000000..7a60b85
+--- /dev/null
++++ b/tools/startup/.gitignore
+@@ -0,0 +1,2 @@
++__pycache__/
++*.pyc
+diff --git a/tools/startup/AndroidUiTextProbe.java b/tools/startup/AndroidUiTextProbe.java
+new file mode 100644
+index 0000000..8b53c0f
+--- /dev/null
++++ b/tools/startup/AndroidUiTextProbe.java
+@@ -0,0 +1,22 @@
++import java.lang.reflect.InvocationTargetException;
++import java.util.Collections;
++import java.util.List;
++
++/** adb shell CLASSPATH=probe.jar:shipping.apk app_process /system/bin AndroidUiTextProbe
++ * Exercises the actual shipping DEX on Android ART/libcore, not JVM or a rewritten test renderer.
++ */
++public final class AndroidUiTextProbe {
++    public static void main(String[] args) throws Exception {
++        Class<?> type=Class.forName("dev.suicode.packages.UiTranslations");
++        Object ui=type.getConstructor(List.class,String.class).newInstance(Collections.emptyList(),null);
++        try {
++            Object text=type.getMethod("text",String.class,java.util.Map.class).invoke(ui,"nav.files",Collections.emptyMap());
++            if(!"Files".equals(text)) throw new AssertionError("Unexpected English fallback: "+text);
++            System.out.println("SHIPPING_DEX_ENGLISH_STARTUP_PASS: "+text);
++        } catch(InvocationTargetException failure) {
++            System.err.println("SHIPPING_DEX_ENGLISH_STARTUP_FAILED");
++            failure.getCause().printStackTrace();
++            System.exit(10);
++        }
++    }
++}
+diff --git a/tools/startup/build_upgrade_fixture.py b/tools/startup/build_upgrade_fixture.py
+new file mode 100644
+index 0000000..db3fd44
+--- /dev/null
++++ b/tools/startup/build_upgrade_fixture.py
+@@ -0,0 +1,31 @@
++#!/usr/bin/env python3
++"""Owned-emulator fixture: real API3 archives/state plus explicitly synthetic runtime sentinels.
++api3-state.json was generated by the production PackageStore, not by an alternate store serializer.
++No installed JDK/Ubuntu distribution is embedded or claimed.
++"""
++from pathlib import Path
++import argparse,hashlib,json,tarfile,io
++root=Path(__file__).resolve().parents[2]
++def build(output):
++ output.mkdir(parents=True,exist_ok=True)
++ state=(root/'tools/startup/fixtures/api3-state.json').read_bytes()
++ files={'files/sui-code/native-packages/state.json':state}
++ for item in json.loads(state).values():
++  name=item['digest']+'.'+item['kind']
++  candidates=[p for p in (root/'native-library/v1').glob('*.'+item['kind']) if hashlib.sha256(p.read_bytes()).hexdigest()==item['digest']]
++  assert len(candidates)==1,name
++  files['files/sui-code/native-packages/'+name]=candidates[0].read_bytes()
++ files.update({
++  'files/workspace/projects/Startup Project/中文 + Hello.java':b'public class Hello { public static void main(String[] args) { System.out.println("preserve"); } }\n',
++  'files/workspace/projects/Startup Project/.jcode/run.yaml':b'runs:\n  - name: legacy task\n    command: echo preserved\n',
++  'files/distros/fixture-v05/rootfs/opt/sui-code/java.env':b'export JAVA_HOME=/opt/sui-code/jdks/temurin-existing\n',
++  'files/distros/fixture-v05/rootfs/opt/sui-code/jdks/temurin-existing/SUI_TEST_SENTINEL':b'JDK retention sentinel, not an installed executable JDK\n',
++  'files/distros/fixture-v05/rootfs/opt/sui-code/python.env':b'# retained Python configuration sentinel\n',
++  'files/distros/fixture-v05/rootfs/opt/sui-code/c.env':b'# retained C configuration sentinel\n'})
++ with tarfile.open(output/'payload.tar','w') as archive:
++  for name,data in files.items():
++   entry=tarfile.TarInfo(name);entry.size=len(data);entry.mode=0o600;archive.addfile(entry,io.BytesIO(data))
++ (output/'payload-sha256.json').write_text(json.dumps({name:hashlib.sha256(data).hexdigest() for name,data in files.items()},ensure_ascii=False,indent=2)+'\n')
++ print('Built',len(files),'data-retention fixture files')
++if __name__=='__main__':
++ p=argparse.ArgumentParser();p.add_argument('output',type=Path);build(p.parse_args().output)
+diff --git a/tools/startup/emulator_regression.py b/tools/startup/emulator_regression.py
+new file mode 100644
+index 0000000..326038e
+--- /dev/null
++++ b/tools/startup/emulator_regression.py
+@@ -0,0 +1,109 @@
++#!/usr/bin/env python3
++"""Actual shipping APK startup regression on an OWNED, initially empty Android Emulator only.
++Never runs on a physical device, never uninstalls/clears app data, never recreates installed Ubuntu.
++Use a separate fresh AVD for --mode fresh. ARM64 shipping APK runs using Google's native bridge.
++"""
++from pathlib import Path
++import argparse,subprocess,time,hashlib,json,shlex,sys,traceback,xml.etree.ElementTree as ET
++p=argparse.ArgumentParser();p.add_argument('--serial',required=True);p.add_argument('--mode',choices=['upgrade','fresh'],required=True);p.add_argument('--fixtures',type=Path,required=True);p.add_argument('--fixed',type=Path,required=True);p.add_argument('--tests',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True)
++a=p.parse_args();a.evidence.mkdir(parents=True,exist_ok=True)
++repo=Path(__file__).resolve().parents[2];pkg='dev.suicode.ide.debug';activity=pkg+'/dev.blamspot.jcode.MainActivity';log=[]
++def failure_hook(kind,error,tb):
++ text=''.join(traceback.format_exception(kind,error,tb))
++ (a.evidence/'failure.txt').write_text(text)
++ try:
++  r=subprocess.run(['adb','-s',a.serial,'logcat','-b','crash','-d','-v','brief'],text=True,capture_output=True,timeout=30)
++  (a.evidence/'failure-crash.log').write_text(r.stdout+r.stderr)
++ except Exception: pass
++ print('::error title=Android startup regression::'+text[-6500:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'),flush=True)
++ traceback.print_exception(kind,error,tb)
++sys.excepthook=failure_hook
++
++def note(s):
++ print(s,flush=True);log.append(s);(a.evidence/'steps.log').write_text('\n'.join(log)+'\n')
++def adb(*args,check=True,timeout=120,binary=False,input=None):
++ r=subprocess.run(['adb','-s',a.serial,*map(str,args)],capture_output=True,text=not binary,input=input,timeout=timeout)
++ if check and r.returncode:raise RuntimeError(f'adb {args}: {r.stdout!r} {r.stderr!r}')
++ return r
++assert a.serial.startswith('emulator-') and adb('shell','getprop ro.kernel.qemu').stdout.strip()=='1','Refuse to modify a physical device'
++assert not adb('shell','pm path '+pkg,check=False).stdout.strip(),'Use a new owned AVD; target app already installed'
++platform=adb('shell','getprop').stdout;(a.evidence/'platform.txt').write_text(platform)
++note('Platform: Android emulator; not ARM64 physical acceptance')
++adb('shell','wm size 1280x800');adb('shell','wm density 160')
++def install(path):
++ result=adb('install','--no-streaming','-r',path,timeout=240);note('INSTALL '+str(path)+': '+result.stdout.strip());assert 'Success' in result.stdout
++ adb('shell',f'pm grant {pkg} android.permission.POST_NOTIFICATIONS',check=False)
++def shellrun(command,**kwargs):return adb('shell','run-as '+pkg+' sh -c '+shlex.quote(command),**kwargs)
++def snapshot(name):
++ (a.evidence/(name+'.png')).write_bytes(adb('exec-out','screencap -p',binary=True).stdout)
++ adb('shell','uiautomator dump --compressed /data/local/tmp/sui-startup-ui.xml',timeout=90)
++ xml=adb('shell','cat /data/local/tmp/sui-startup-ui.xml').stdout;(a.evidence/(name+'.xml')).write_text(xml)
++ return xml
++def alive(name,project=False):
++ adb('shell','am force-stop '+pkg)
++ result=adb('shell','am start -W -n '+activity,timeout=180);(a.evidence/(name+'-start.txt')).write_text(result.stdout+result.stderr)
++ time.sleep(5)
++ assert adb('shell','pidof '+pkg).stdout.strip(),'Activity process did not survive'
++ xml=snapshot(name)
++ assert any(label in xml for label in ['Run file','Internal Files','sui-code','Files']),'No recognizable app content in first frame'
++ if project:assert 'PreservedProject' in xml,'Registered Project not present after restart'
++ note('FIRST_FRAME_PASS '+name)
++ return xml
++def hashes(label):
++ expected=json.loads((a.fixtures/'payload-sha256.json').read_text())
++ for path,digest in expected.items():
++  result=adb('shell','run-as '+pkg+' sha256sum '+shlex.quote(path)).stdout
++  assert result.split()[0]==digest,(label,path,result,digest)
++ note('DATA_HASH_PASS '+label+' '+str(len(expected))+' files')
++def click(xml,predicate):
++ for node in ET.fromstring(xml).iter('node'):
++  if predicate(node.attrib):
++   import re
++   n=list(map(int,re.findall(r'\d+',node.attrib['bounds'])));adb('shell',f'input tap {(n[0]+n[2])//2} {(n[1]+n[3])//2}');time.sleep(1);return
++ raise AssertionError('UI target missing')
++if a.mode=='upgrade':
++ install(repo/'.delivery/sui-code-v0.5/sui-code-v0.5-debug.apk')
++ alive('v050-fresh')
++ adb('shell','am force-stop '+pkg)
++ adb('push',a.fixtures/'payload.tar','/data/local/tmp/sui-startup-payload.tar')
++ shellrun('tar -xf /data/local/tmp/sui-startup-payload.tar')
++ hashes('v050-before-open')
++ xml=alive('v050-with-data')
++ # Register a real optional Project using the original v0.5 UI, not direct SQLite edits.
++ click(xml,lambda n:n.get('content-desc')=='Add project')
++ xml=snapshot('v050-create-project')
++ click(xml,lambda n:n.get('class')=='android.widget.EditText')
++ adb('shell','input text PreservedProject');time.sleep(1)
++ xml=snapshot('v050-project-name');click(xml,lambda n:n.get('text')=='Create')
++ time.sleep(3);alive('v050-registered-project',project=True);hashes('v050-registered')
++ adb('shell','am force-stop '+pkg)
++ install(repo/'.delivery/sui-code-v0.5-ui-polish/sui-code-v0.5.1-ui-polish-debug.apk')
++ adb('shell','am start -W -n '+activity,check=False,timeout=180);time.sleep(7)
++ crash=adb('logcat','-b','crash','-d','-v','threadtime').stdout;(a.evidence/'v051-original-crash.log').write_text(crash)
++ assert 'PatternSyntaxException' in crash and 'UiTranslations.text' in crash,'Original Activity did not reproduce the expected shipping crash'
++ note('ORIGINAL_V051_ACTIVITY_CRASH_REPRODUCED')
++ hashes('v051-after-crash')
++ adb('shell','am force-stop '+pkg)
++install(a.fixed)
++for i in range(3):alive(a.mode+'-fixed-'+str(i+1),project=a.mode=='upgrade')
++if a.mode=='upgrade':hashes('fixed-after-three-starts')
++# A real Android preference type mismatch must not block composition; original inputs are retained.
++adb('shell','am force-stop '+pkg)
++for name,xml in [('sui-native-ui-language','<?xml version="1.0" encoding="utf-8"?><map><int name="selection-v1" value="7"/><string name="untouched">keep</string></map>'),('sui-workbench-layout','<?xml version="1.0" encoding="utf-8"?><map><string name="content-width-v1">broken</string><string name="untouched">keep</string></map>')]:
++ shellrun('mkdir -p shared_prefs; printf %s '+shlex.quote(xml)+' > shared_prefs/'+name+'.xml')
++alive(a.mode+'-bad-ui-preferences',project=a.mode=='upgrade')
++assert 'broken' in shellrun('cat shared_prefs/sui-workbench-layout.xml').stdout
++assert 'untouched' in shellrun('cat shared_prefs/sui-native-ui-language.xml').stdout
++note('BAD_UI_PREFERENCES_FALLBACK_PASS (files retained)')
++install(a.tests)
++result=adb('shell','am instrument -w -r -e class dev.blamspot.jcode.StartupRuntimeTest dev.suicode.ide.debug.test/androidx.test.runner.AndroidJUnitRunner',timeout=1200)
++(a.evidence/'instrumentation.txt').write_text(result.stdout+result.stderr)
++assert 'OK (4 tests)' in result.stdout,result.stdout
++note('ANDROID_INSTRUMENTATION_PASS 4 tests')
++if a.mode=='upgrade':hashes('after-instrumentation')
++(a.evidence/'logcat.txt').write_text(adb('logcat','-d','-v','threadtime','-s','AndroidRuntime','SuiStartup','SuiStartupTest').stdout)
++for name in ['startup.log','startup.previous.log']:
++ r=shellrun('cat files/sui-code/diagnostics/'+name,check=False)
++ if r.returncode==0:(a.evidence/name).write_text(r.stdout)
++(a.evidence/'result.json').write_text(json.dumps({'mode':a.mode,'result':'PASS','physical_arm64':False,'instrumentation_tests':4},indent=2)+'\n')
++note('COMPLETE '+a.mode)
+diff --git a/tools/startup/fixtures/api3-state.json b/tools/startup/fixtures/api3-state.json
+new file mode 100644
+index 0000000..749a55a
+--- /dev/null
++++ b/tools/startup/fixtures/api3-state.json
+@@ -0,0 +1 @@
++{"dev.suicode.ccpp.basic":{"allowUnverified":true,"digest":"5078786630c41d32aa6c8c350754ae542f47444f4f4b562ca33ada7a39d1906d","enabled":true,"grants":["file.read","process.run"],"kind":"suic","previous":null,"signer":"4f95c4008a1bf1c3c1b538b4f4f2e8a2026be8957d9cf6e01ea0beb9e114a1ef","version":"1.1.0"},"dev.suicode.ccpp.kit":{"allowUnverified":true,"digest":"e5e7332e4d3999f4fa554bd07eb8f8c5baf030526e17f81178f6b6b54ff8dc96","enabled":true,"grants":["debug.dap","file.read","file.write","language.lsp","process.run","project.read","ui.panel"],"kind":"suik","previous":null,"signer":"4f95c4008a1bf1c3c1b538b4f4f2e8a2026be8957d9cf6e01ea0beb9e114a1ef","version":"1.1.0"},"dev.suicode.java.basic":{"allowUnverified":true,"digest":"14d03cfa5f45d84fa09eaddeb7f6ed47d54139d6f2902c2805ca9e8c4995180f","enabled":true,"grants":["file.read","process.run"],"kind":"suic","previous":null,"signer":"4f95c4008a1bf1c3c1b538b4f4f2e8a2026be8957d9cf6e01ea0beb9e114a1ef","version":"1.1.0"},"dev.suicode.java.kit":{"allowUnverified":true,"digest":"d272da44fd590dca03d19004d709f76a746a45ac5ecbc9f47c1a9bded80fc9b1","enabled":true,"grants":["debug.dap","file.read","file.write","language.lsp","process.run","project.read","ui.panel"],"kind":"suik","previous":null,"signer":"4f95c4008a1bf1c3c1b538b4f4f2e8a2026be8957d9cf6e01ea0beb9e114a1ef","version":"1.1.0"},"dev.suicode.python.basic":{"allowUnverified":true,"digest":"383424667686e4210a035311443bfb3308ab4636db5c1d555c2b9e400db15dc6","enabled":true,"grants":["file.read","process.run"],"kind":"suic","previous":null,"signer":"4f95c4008a1bf1c3c1b538b4f4f2e8a2026be8957d9cf6e01ea0beb9e114a1ef","version":"1.1.0"},"dev.suicode.python.kit":{"allowUnverified":true,"digest":"36bc8e9aa38adeb0cc5f43635137a56c0b4130c14cec89f186a2b53857909131","enabled":true,"grants":["debug.dap","file.read","file.write","language.lsp","process.run","project.read","ui.panel"],"kind":"suik","previous":null,"signer":"4f95c4008a1bf1c3c1b538b4f4f2e8a2026be8957d9cf6e01ea0beb9e114a1ef","version":"1.1.0"}}

@@ -1,0 +1,18 @@
+{
+  "apk_file": "sui-code-v0.5.2-startup-debug.apk",
+  "bytes": 87061016,
+  "sha256": "05ded85495070c8e4735fd3c539f1da02ea29ada120af70c47d9811a04abf3b5",
+  "applicationId": "dev.suicode.ide.debug",
+  "versionName": "0.5.2",
+  "versionCode": 1070805,
+  "abis": [
+    "arm64-v8a"
+  ],
+  "certificate_sha256": "62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0",
+  "v051_signer_matches": true,
+  "compiled_launcher_resources_unchanged": 15,
+  "apk_build_source_commit": "4caff73cd264fa3b9c0cf3f4624da4e1da968b27",
+  "baseline_commit": "f6bf5ad29e8e8ddabdc0b546357e4ec70c29a1b1",
+  "physical_arm64_tested": false,
+  "source_archive_commit": "fb5d19dd0d6a807658be636659eaa132d9685a77"
+}
