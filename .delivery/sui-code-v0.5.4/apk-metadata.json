@@ -1,0 +1,27 @@
+{
+  "versionName": "0.5.4",
+  "versionCode": 1070807,
+  "applicationId": "dev.suicode.ide.debug",
+  "abis": [
+    "arm64-v8a"
+  ],
+  "certificate_sha256": "62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0",
+  "source_build_commit": "47cac88b4da4c7c27e6fea8372d476cb6afb52ca",
+  "apk": {
+    "file": "sui-code-v0.5.4-debug.apk",
+    "bytes": 92226893,
+    "sha256": "3f606b8b2c8f7bcfbcd5b9872fd25f0117f5cd18321bff58b7905e63710f7606"
+  },
+  "language_pack": {
+    "file": "sui-code-zh-hans-1.0.1.suik",
+    "bytes": 19316,
+    "sha256": "da707d37d8e9bfcfb5afff25104614fc8792041d69a36038d4f6b162e1fcb5b4"
+  },
+  "specification": "0.4.2",
+  "core_api": 4,
+  "language_resources": 783,
+  "original_translations_preserved": 732,
+  "jvm_tests": 192,
+  "android_result": "PENDING_CI",
+  "physical_arm64_tested": false
+}

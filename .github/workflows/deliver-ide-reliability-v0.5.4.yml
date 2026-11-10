@@ -1,0 +1,153 @@
+name: Verify Android 16 IDE management and deliver sui-code 0.5.4
+on:
+  push:
+    branches: [sui-code/v0.5.4-ide-reliability-management]
+    paths:
+      - '.github/workflows/deliver-ide-reliability-v0.5.4.yml'
+      - '.delivery/sui-code-v0.5.4/**'
+      - 'tools/ide_reliability/android_regression.py'
+      - 'tools/ide_reliability/run_emulator.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-and-deliver:
+    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5.4-ide-reliability-management'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify delivery hashes, immutable history, ARM64 identity and upgrade certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=.delivery/sui-code-v0.5.4
+          (cd "$root" && sha256sum --check --strict SHA256SUMS)
+          for old in sui-code-native-0.4 sui-code-v0.5 sui-code-v0.5-ui-polish sui-code-v0.5.2-startup-recovery sui-code-v0.5.3-zh-hans; do
+            (cd ".delivery/$old" && sha256sum --check --strict SHA256SUMS)
+          done
+          apk="$root/sui-code-v0.5.4-debug.apk"
+          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          old_cert=$("$signer" verify --print-certs .delivery/sui-code-v0.5.3-zh-hans/sui-code-v0.5.3-debug.apk | awk '/certificate SHA-256 digest:/ {print $NF}')
+          new_cert=$("$signer" verify --print-certs "$apk" | awk '/certificate SHA-256 digest:/ {print $NF}')
+          test "$old_cert" = "$new_cert"
+          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
+          "$(dirname "$signer")/aapt" dump badging "$apk" > "$RUNNER_TEMP/v054-apk-badging.txt"
+          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070807' versionName='0.5.4'" "$RUNNER_TEMP/v054-apk-badging.txt"
+          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/v054-apk-badging.txt"
+      - name: Verify official user artwork and extract read-only Android test inputs
+        shell: python
+        run: |
+          import pathlib,zipfile,os,json,hashlib
+          root=pathlib.Path('.delivery/sui-code-v0.5.4')
+          asset=pathlib.Path('design/user-assets/sui-code-app-icon.svg')
+          assert hashlib.sha256(asset.read_bytes()).hexdigest()=='39003c5686cdeaf2e09d018c17787f883667815d43227a8dd38b9b54634a60c3'
+          for section in ['apk','language_pack']:
+              item=json.loads((root/'apk-metadata.json').read_text())[section];p=root/item['file']
+              assert p.stat().st_size==item['bytes'] and hashlib.sha256(p.read_bytes()).hexdigest()==item['sha256']
+          assert (root/'sui-code-zh-hans-1.0.1.suik').read_bytes()==pathlib.Path('localization/releases/sui-code-zh-hans-1.0.1.suik').read_bytes()
+          with zipfile.ZipFile(root/'sui-code-v0.5.4-debug.apk') as apk:
+              assert any('sui_launcher_foreground' in n for n in apk.namelist())
+              assert not any('sui-code-zh-hans' in n for n in apk.namelist()),'Translation archive must remain independent'
+          target=pathlib.Path(os.environ['RUNNER_TEMP'])/'v054-inputs';target.mkdir()
+          with zipfile.ZipFile(root/'android-test-inputs.zip') as z:
+              for n in ['payload.tar','payload-sha256.json','legacy-state.json','startup-androidTest.apk']:(target/n).write_bytes(z.read(n))
+      - name: Prepare two hardware accelerated Android 16 AVDs
+        id: avds
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-36;google_apis;x86_64' > "$RUNNER_TEMP/v054-sdk-install.log" 2>&1
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/v054-avds"
+          mkdir -p "$ANDROID_AVD_HOME"
+          for name in sui-v054-upgrade sui-v054-fresh; do
+            printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n "$name" -k 'system-images;android-36;google_apis;x86_64' -d pixel_c --force
+          done
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+      - name: Android 16 retained-data upgrade, Chinese lifecycle and production UI tests
+        run: bash tools/ide_reliability/run_emulator.sh upgrade
+      - name: Android 16 fresh startup, UI searches, extension cards and adaptive icons
+        if: ${{ !cancelled() && steps.avds.outcome == 'success' }}
+        run: bash tools/ide_reliability/run_emulator.sh fresh
+      - name: Require actual Android success and assemble source and evidence
+        shell: python
+        run: |
+          import pathlib,json,os,zipfile,hashlib,subprocess
+          evidence=pathlib.Path(os.environ['RUNNER_TEMP'])/'v054-android-evidence'
+          for mode in ['upgrade','fresh']:
+              result=json.loads((evidence/mode/'result.json').read_text())
+              assert result['result']=='PASS' and result['android_instrumentation_tests']==15
+          root=pathlib.Path('.delivery/sui-code-v0.5.4');commit=os.environ['GITHUB_SHA']
+          paths=[p for p in subprocess.check_output(['git','ls-tree','--name-only',commit],text=True).splitlines() if p!='.delivery']
+          subprocess.run(['git','archive','--format=zip','--prefix=sui-code-v0.5.4/','-o',str(root/'source.zip'),commit,*paths],check=True)
+          baseline='862cbae35d14954cb87eb03097c0d9dddf5c38ac'
+          subprocess.run(['git','fetch','--depth=1','origin',baseline],check=True)
+          (root/'changes.patch').write_bytes(subprocess.check_output(['git','diff','--binary',baseline,commit,'--','.',':(exclude).delivery']))
+          (root/'modified-files.txt').write_text(subprocess.check_output(['git','diff','--name-status',baseline,commit,'--','.',':(exclude).delivery'],text=True))
+          with zipfile.ZipFile(root/'android-evidence.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for p in evidence.rglob('*'):
+                  if p.is_file():z.write(p,p.relative_to(evidence))
+          url=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          receipt='\n\n## Actual Android16 CI receipt\n\nPASS: retained-data upgrade from the original v0.5.3 APK, old API3 packages/files/configuration and original Chinese1.0.0 archive retained; real SAF import and reviewed1.0.1 update, immediate Chinese switching, restart persistence, disable/enable and uninstall fallback, portrait/font130. Thirty Android instrumentation cases (including production Languages/Packages searches, official/third-party cards, unsigned consent and framework-rendered adaptive icons) and two original Project metadata checks passed in two owned Android16 x86_64 AVDs with ARM64 native bridge. Not physical ARM64 acceptance. Runtime paths in the upgrade fixture contain synthetic retention sentinels, not executable Ubuntu/JDK installations. Real task/LSP/DAP evidence is separately identified as Linux x64.\n\nRun: '+url+'\n'
+          report=(root/'report.md').read_text().replace('**待 CI 验收**','**Android16 CI 通过**').replace('待 CI','Android16 CI 通过（ARM64 真机待验）').replace('Android CI 待验','Android16 CI 通过（ARM64 真机待验）')
+          (root/'report.md').write_text(report+receipt)
+          meta=json.loads((root/'apk-metadata.json').read_text());meta.update(source_archive_commit=commit,android_run=url,android_result='PASS',android_instrumentation_tests=30,project_checks=2,physical_arm64_tested=False)
+          (root/'apk-metadata.json').write_text(json.dumps(meta,indent=2)+'\n')
+          (root/'SHA256SUMS').write_text('\n'.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name for p in sorted(root.iterdir()) if p.name!='SHA256SUMS')+'\n')
+      - name: Upload one integrated APK, independent language Kit, official packages and reports
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sui-code-v0.5.4-ide-reliability-management
+          path: .delivery/sui-code-v0.5.4/*
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Download uploaded Artifact for independent byte verification
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
+          path: ${{ runner.temp }}/v054-roundtrip
+          merge-multiple: true
+      - name: Verify uploaded file sizes and SHA-256 and publish real download entry
+        shell: bash
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/v054-roundtrip" && sha256sum --check --strict SHA256SUMS)
+          for source in .delivery/sui-code-v0.5.4/*; do cmp "$source" "$RUNNER_TEMP/v054-roundtrip/$(basename "$source")"; done
+          {
+            echo '## Integrated sui-code v0.5.4 verified delivery'
+            printf '[Download APK, independent Chinese Kit, official packages, SDK and evidence](%s)\n' "$ARTIFACT_URL"
+            echo 'Android16 emulator + ARM64 native bridge, not physical ARM64 tablet acceptance.'
+            cat .delivery/sui-code-v0.5.4/SHA256SUMS
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Expose actionable Android failure diagnostics
+        if: failure()
+        shell: python
+        run: |
+          import pathlib,os
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'v054-android-evidence';rows=[]
+          for p in root.rglob('*.txt'):
+              if p.name in ['failure.txt','startup-android.txt','full-kit-android.txt','package-management-ui.txt','launcher-icons.txt']:
+                  rows.append(str(p.relative_to(root))+': '+p.read_text(errors='replace')[-6000:])
+          if rows:print('::error title=Android v0.5.4 diagnostics::'+'\n'.join(rows)[-20000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
+      - name: Preserve diagnostics without delivering an unverified APK
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0.5.4-android-failure-diagnostics
+          path: |
+            ${{ runner.temp }}/v054-android-evidence/
+            ${{ runner.temp }}/v054-sdk-install.log
+          if-no-files-found: warn
+          retention-days: 30
