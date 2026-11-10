@@ -1,4 +1,5 @@
 A	.github/workflows/deliver-ide-reliability-v0.5.4.yml
+M	README.md
 M	app/build.gradle.kts
 A	app/src/androidTest/assets/sui-code-zh-hans-1.0.1.suik
 A	app/src/androidTest/assets/v054/Python.suic

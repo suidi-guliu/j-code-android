@@ -22,6 +22,11 @@
   "language_resources": 783,
   "original_translations_preserved": 732,
   "jvm_tests": 195,
-  "android_result": "PENDING_CI",
-  "physical_arm64_tested": false
+  "android_result": "PASS",
+  "physical_arm64_tested": false,
+  "android_run": "https://github.com/suidi-guliu/j-code-android/actions/runs/42744903416",
+  "artifact_url": "https://github.com/suidi-guliu/j-code-android/actions/runs/42744903416/artifacts/13731581394",
+  "android_instrumentation_tests": 30,
+  "project_checks": 2,
+  "source_archive_commit": "0826710c58c918a4e70c4bb4207343a9e3a3e81a"
 }

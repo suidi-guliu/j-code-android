@@ -1,6 +1,6 @@
 # sui-code v0.5.4 综合修复与扩展管理交付报告
 
-本报告的初始 Android 状态为 **待 CI 验收**。只有文末存在成功工作流的实际验收回执，才表示 Android16 模拟器已通过。真实联想 ARM64 平板尚未进行 v0.5.4 验收，不能把以下 Ubuntu x64 或 Android x86_64/ARM64 native bridge 测试称为真实平板测试。
+本报告的初始 Android 状态为 **Android16 CI 通过**。只有文末存在成功工作流的实际验收回执，才表示 Android16 模拟器已通过。真实联想 ARM64 平板尚未进行 v0.5.4 验收，不能把以下 Ubuntu x64 或 Android x86_64/ARM64 native bridge 测试称为真实平板测试。
 
 ## 1. 实现内容及根因
 
@@ -29,27 +29,27 @@ Languages 只管理 JDK/GCC/G++/Python，复用原环境管理器；不加载 Ki
 | Python Build/Test/Run 正常 | 共用调度器、Python `project-task.sh` | 实际 Python 工程 Build/Test/Run、单文件及重复执行通过 |
 | Project 路径挂载修复 | `RuntimePaths.kt`、`ProjectPathRegistry.kt`、`ProotManager.kt`、`DistroService.kt` | 7 个路径单元测试；空挂载失败复现、正确绑定恢复、特殊路径真实执行通过 |
 | c.env 异常安全修复 | `NativeEnvironment.kt`、`NativeEnvironmentManager.kt` | 6 个实际现代 Termux PRoot `--link2symlink` 场景通过：正常、缺失、失效链接、不可读、目录、后续提交失败回滚 |
-| GCC/G++ 状态检测正确 | `NativeLanguageCenter.kt`、`NativeKitSetup.verify` | 已安装编译器实际编译/执行，修复均未调用 apt；配置异常与工具存在分别显示；Android UI 待 CI |
+| GCC/G++ 状态检测正确 | `NativeLanguageCenter.kt`、`NativeKitSetup.verify` | 已安装编译器实际编译/执行，修复均未调用 apt；配置异常与工具存在分别显示；Android UI Android16 CI 通过（ARM64 真机待验） |
 | Java 智能补全正常 | `LspController.kt`、`LspSession.kt`、Java LSP 适配器 | 实际 JDT LS：System.out、println、ArrayList、自定义类成员、工程跳转、保存/关闭/重开通过；另验证没有 Java Debug 时 JDT 单独可用 |
 | C/C++ 智能补全正常 | 同一控制器、C_CPP 适配器与编译数据库迁移 | 实际 clangd：C printf、STL cout、add、自定义头文件/跨文件跳转、特殊路径、重开通过；数据库 directory 均实际可访问，无临时 QuickRun 路径污染 |
 | Python 补全回归正常 | 同一控制器、原 pylsp 适配器 | 实际 pylsp Path、项目符号跳转、文档修改/重开通过；增加可选 autopep8 后端后真实格式化编辑响应也通过；未改动原补全自动触发规则 |
 | Debug 断点回归正常 | 原 `NativeDebugPlans` / `DebugController`，共用路径映射 | Java Debug、LLDB18、debugpy 实际断点、栈/变量、单步、继续、输出及结束通过；Linux x64 直接协议测试，不冒充 Android PRoot 调试 |
-| Languages 仅管理官方语言环境 | `NativeLanguageCenter.kt`、原 JDK/native 环境页面 | 源码无 NativePackageHost/Kit 探测或 Kit 日志；独立搜索和环境详情接通，Android UI 待 CI |
-| IDE Kit 组件管理集中到 Packages | `NativePackageCenter.kt`、`NativePackageCard.kt`、`NativeKitSetup.kt` | 旧 LSP/DAP 管理动作转到 Packages；实际安装资源仅经统一计划执行，Android UI 待 CI |
+| Languages 仅管理官方语言环境 | `NativeLanguageCenter.kt`、原 JDK/native 环境页面 | 源码无 NativePackageHost/Kit 探测或 Kit 日志；独立搜索和环境详情接通，Android UI Android16 CI 通过（ARM64 真机待验） |
+| IDE Kit 组件管理集中到 Packages | `NativePackageCenter.kt`、`NativePackageCard.kt`、`NativeKitSetup.kt` | 旧 LSP/DAP 管理动作转到 Packages；实际安装资源仅经统一计划执行，Android UI Android16 CI 通过（ARM64 真机待验） |
 | IDE Kit 支持逐组件可选安装 | `KitRequirements.kt`、`NativePackageReview.kt`、安装资源 | DAG 闭包/环/非法 ID 测试通过；真实 JDT-only、Java Debug-only、Maven-only 部署通过；遗漏组件未被安装；强制修复提交失败回滚通过 |
 | 安装及检测日志不跨页面重复 | `InstallationLogArchive.kt`、`InstallationLogHistory.kt` | 环境/IDE 两种归属索引；重启重读、分类隔离、65536 字节有界读取测试通过；历史未索引 Ubuntu 日志保留 |
-| 中文 .suik 在 IDE Kit Library 有独立卡片 | 已签名官方目录、独立 localization Manifest、统一卡片 | 生产目录/hash/包验证通过；无运行环境计划、未签名确认、启停卸载回退已有单元测试；Android UI 待 CI |
-| 第三方 .suic/.suik 有统一规格卡片 | `PackageCards.kt`、`NativePackageCard.kt` | 真正模板和打包文件通过生产 SDK；Android 普通插件/普通 Kit 动态卡片测试已编译，待 CI |
-| 第三方语言 Kit 统一字段，未声明项灰色 | `LanguageKitSlot`、统一 renderer | 校验不存在/类型不符引用并拒绝；Python 第三方样例只声明 Runtime/LSP，其他槽保留为 Not provided；Android UI 待 CI |
+| 中文 .suik 在 IDE Kit Library 有独立卡片 | 已签名官方目录、独立 localization Manifest、统一卡片 | 生产目录/hash/包验证通过；无运行环境计划、未签名确认、启停卸载回退已有单元测试；Android UI Android16 CI 通过（ARM64 真机待验） |
+| 第三方 .suic/.suik 有统一规格卡片 | `PackageCards.kt`、`NativePackageCard.kt` | 真正模板和打包文件通过生产 SDK；Android 普通插件/普通 Kit 动态卡片测试已编译，Android16 CI 通过（ARM64 真机待验） |
+| 第三方语言 Kit 统一字段，未声明项灰色 | `LanguageKitSlot`、统一 renderer | 校验不存在/类型不符引用并拒绝；Python 第三方样例只声明 Runtime/LSP，其他槽保留为 Not provided；Android UI Android16 CI 通过（ARM64 真机待验） |
 | 非语言类别支持受限自定义字段 | `PackageCards.kt`、`third-party-utility-card` | 仅 Text/HTTPS；拒绝 HTML/JS、不安全链接和虚构命令；真实项目统计命令引用通过验证 |
 | .suik 卡片类别声明及 Schema 完成 | `card.schema.json`、SUIC/SUIK Manifest Schema、生产 verifier | Core4 最低版本、旧包默认、职责边界、非法类别/恶意字段测试通过；标签不影响权限与签名 |
 | 官方规范和 SDK 同步更新 | 两个规范0.4.2、14个实际生产 API 源文件、三个新模板 | Schema/嵌入快照/94 个描述符检查通过；独立 JVM SDK 编译成功；有效示例通过，非法 .suic 被 E_BOUNDARY 拒绝 |
-| Languages 搜索正常 | `NativeLanguageCenter.kt` | 中英名称/编译器/已安装/版本即时本地筛选、清除及空状态；生产 Compose UI 测试待 CI |
-| Packages 搜索正常 | `NativePackageCenter.kt` | 官方/第三方/类型/发布者/版本/状态/中文资源本地筛选、跨标签保留、清除及空状态；生产 Compose UI 测试待 CI |
-| 中文切换及重启持久化正常 | 原 `NativeLocalization`、中文1.0.1、原首选项 ID | 保留732旧值，783键完整校验；单元启停/存储重开/回退通过；Android真实 SAF/覆盖更新/冷启动生命周期待 CI |
-| 原文件、工程、插件、环境保留 | 无数据清理迁移；保留旧目录、state、版本及签名 | 所有旧交付未改动；API3共存、原档案和配置单元测试通过；准备了原v0.5.3 APK+真实旧插件/中文包+文件/项目/运行环境保留哨兵的升级场景，Android CI 待验 |
-| Android 启动无回归闪退 | 保留v0.5.2字面量占位符解析和可降级启动 | JVM渲染通过；Android16实际ICU旧错误重现/新解析/重复Activity启动/损坏偏好和资源回退测试待 CI |
-| 正式应用图标替换 | 原 SVG、透明 PNG、六个 adaptive launcher 入口 | SVG SHA固定且未改变；背景#151922、单独透明前景，无重复背景；机械等比例安全区转换；资源编译通过；Android mask/48/96/216px及桌面显示待 CI；联想桌面待真机 |
+| Languages 搜索正常 | `NativeLanguageCenter.kt` | 中英名称/编译器/已安装/版本即时本地筛选、清除及空状态；生产 Compose UI 测试Android16 CI 通过（ARM64 真机待验） |
+| Packages 搜索正常 | `NativePackageCenter.kt` | 官方/第三方/类型/发布者/版本/状态/中文资源本地筛选、跨标签保留、清除及空状态；生产 Compose UI 测试Android16 CI 通过（ARM64 真机待验） |
+| 中文切换及重启持久化正常 | 原 `NativeLocalization`、中文1.0.1、原首选项 ID | 保留732旧值，783键完整校验；单元启停/存储重开/回退通过；Android真实 SAF/覆盖更新/冷启动生命周期Android16 CI 通过（ARM64 真机待验） |
+| 原文件、工程、插件、环境保留 | 无数据清理迁移；保留旧目录、state、版本及签名 | 所有旧交付未改动；API3共存、原档案和配置单元测试通过；准备了原v0.5.3 APK+真实旧插件/中文包+文件/项目/运行环境保留哨兵的升级场景，Android16 CI 通过（ARM64 真机待验） |
+| Android 启动无回归闪退 | 保留v0.5.2字面量占位符解析和可降级启动 | JVM渲染通过；Android16实际ICU旧错误重现/新解析/重复Activity启动/损坏偏好和资源回退测试Android16 CI 通过（ARM64 真机待验） |
+| 正式应用图标替换 | 原 SVG、透明 PNG、六个 adaptive launcher 入口 | SVG SHA固定且未改变；背景#151922、单独透明前景，无重复背景；机械等比例安全区转换；资源编译通过；Android mask/48/96/216px及桌面显示Android16 CI 通过（ARM64 真机待验）；联想桌面待真机 |
 
 ## 3. 自动化测试证据
 
@@ -111,3 +111,17 @@ GitHub Actions工作流：`deliver-ide-reliability-v0.5.4.yml`，通过后才上
 首轮 Run https://github.com/suidi-guliu/j-code-android/actions/runs/42739177332 未发布APK Artifact。升级场景自动化未正确清空 Packages 搜索字段；全新场景15项 instrumentation通过后，桌面点击被Android首次Taskbar教程遮挡。已修正实际搜索控件定位和系统浮层处理，未将首轮计为通过。
 
 第二轮 Run https://github.com/suidi-guliu/j-code-android/actions/runs/42742398725 已成功完成保留数据升级与全新安装、30项 instrumentation、2项Project检查和Artifact上传后下载字节核验。最终候选在此后加入审核前被动探测安全修复，因此本APK仍须新的完整Android CI验收回执；前一轮成功不冒充当前二进制通过。
+
+
+## 最终候选的实际 Android16 CI 回执
+
+本APK的保留数据升级与全新安装两组场景通过，30项Android instrumentation及2项原Project登记检查通过；真实SAF和来源/权限确认、中文选择/重启/启停/卸载回退、多次冷启动、130%字体和竖屏、官方/第三方卡片、两个独立搜索、真实Android Adaptive Icon渲染及系统Launcher点击通过。两个Android16 x86_64 AVD使用ARM64 native bridge，不是真实ARM64平板。升级环境工具路径为保留哨兵，未冒充已执行Ubuntu工具；真实Ubuntu任务/LSP/DAP结果单独列在前文。上传后的Artifact已由同一工作流重新下载，全部大小和SHA-256逐字节验证通过。
+
+[运行与构建/测试日志](https://github.com/suidi-guliu/j-code-android/actions/runs/42744903416) · [最终Artifact下载](https://github.com/suidi-guliu/j-code-android/actions/runs/42744903416/artifacts/13731581394)（登录GitHub，保留30天）。公开仓库中同一APK和中文包另有永久版本直链：
+
+- https://raw.githubusercontent.com/suidi-guliu/j-code-android/0826710/.delivery/sui-code-v0.5.4/sui-code-v0.5.4-debug.apk
+- https://raw.githubusercontent.com/suidi-guliu/j-code-android/0826710/.delivery/sui-code-v0.5.4/sui-code-zh-hans-1.0.1.suik
+
+本轮真实工程/LSP/DAP集成测试使用交付的三套1.2.0 IDE Kit。覆盖安装APK会保留原Kit；请在Packages → IDE Kit Library审核更新Java、C/C++、Python Kit至1.2.0，或导入official-packages.zip中的对应.suik。更新复用已经安装且检测正常的工具，无需卸载Kit、Basic插件、Ubuntu、JDK、GCC/G++或Python。中文1.0.1可同ID覆盖更新，保留原732条翻译；该包仍为未签名。
+
+生产APK源码为339017321e43f5fc3d7c98ff7e031a86ff6ad56c；Android CI/Artifact源码归档为0826710。后续回执文档提交不更改上述已验证APK。原始Artifact内报告也包含工作流生成的实际验收回执；本仓库报告补充下载入口及Kit更新步骤。

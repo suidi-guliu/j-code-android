@@ -160,6 +160,31 @@ index 0000000..382fc8d
 +            ${{ runner.temp }}/v054-sdk-install.log
 +          if-no-files-found: warn
 +          retention-days: 30
+diff --git a/README.md b/README.md
+index 0e35dd0..7a1e3bf 100644
+--- a/README.md
++++ b/README.md
+@@ -8,6 +8,14 @@ Android ARM64 平板原生多语言 IDE，基于 JCode 的许可源码继续开
+ - 自有签名扩展库、本地导入、权限审阅、启停/更新/回滚；无 JCode 或 VS Code 市场替代入口。
+ - sui-code 原生 Light/Dark 设计系统及尺寸驱动的文件栏、编辑器、底部 Terminal。
+ 
++## v0.5.4 IDE reliability and package management
++
++[下载整合APK、独立中文包、官方Kit、SDK及测试证据](https://github.com/suidi-guliu/j-code-android/actions/runs/42744903416/artifacts/13731581394) · [Actions日志](https://github.com/suidi-guliu/j-code-android/actions/runs/42744903416) · [25项逐项验收报告](.delivery/sui-code-v0.5.4/report.md)。Artifact需登录GitHub、保留30天；报告同时提供APK与中文包的版本固定直链。
++
++修复Project任务挂载与c.env安全修复、统一Java/C++ LSP路径；Languages专管运行环境，Packages统一管理基础插件、IDE Kit及可选组件，提供官方/第三方统一卡片、独立中文包卡片和两页搜索。使用用户正式SVG替换图标，保持原背景色。覆盖升级后在Packages审核更新三套IDE Kit至1.2.0，复用现有工具；中文1.0.1保留原732条翻译。
++
++195项JVM测试通过；实际Ubuntu24.04 x64三语言任务/LSP/DAP/配置/交互/停止测试通过；Android16两组AVD的30项instrumentation、2项Project检查及升级/中文生命周期通过。ARM64平板尚待集中验收，不把x64或模拟器结果称为真机通过。包名、原签名、用户文件及工具环境均按兼容升级设计保留，不要求卸载或清数据。
++
+ ## v0.5.3 简体中文语言包
+ 
+ [下载APK、独立中文包及完整证据](https://github.com/suidi-guliu/j-code-android/actions/runs/42594545561/artifacts/13663238265) · [独立中文包直链](https://raw.githubusercontent.com/suidi-guliu/j-code-android/589f7f923dc9a205feb51d646b26b4166e177e36/localization/releases/sui-code-zh-hans-1.0.0.suik)（Artifact需登录，保留30天）。
+@@ -46,4 +54,4 @@ bash gradlew :core:native-packages:testDebugUnitTest :core:distro:testDebugUnitT
+ bash gradlew :app:assembleDebug
+ ```
+ 
+-默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070806；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
++默认 Debug 身份为 `dev.suicode.ide.debug`、versionCode1070807；签名必须使用与已安装版本相同的私钥。不要在没有核对实际签名证书的情况下卸载旧版。签名私钥不包含在源码、SDK 或 Artifact 中。
 diff --git a/app/build.gradle.kts b/app/build.gradle.kts
 index 3b701d6..d81b1b6 100644
 --- a/app/build.gradle.kts
