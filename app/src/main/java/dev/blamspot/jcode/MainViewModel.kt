@@ -314,6 +314,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         nativePackages.onDeactivated = { id -> viewModelScope.launch(Dispatchers.Main.immediate) { javaQuickRun.stopPackage(id); debugController.stopPackage(id) } }
+        nativePackages.onServicesReload = { id -> viewModelScope.launch {
+            lspController.shutdownPackages(setOf(id))
+            lspController.retryOpenDocuments()
+        } }
         TerminalSessionHost.manager(appContext).onTaskComplete = { sessionId, payload ->
             setupTerminalRunner.handleTaskComplete(sessionId, payload)
             javaQuickRun.complete(sessionId, payload)

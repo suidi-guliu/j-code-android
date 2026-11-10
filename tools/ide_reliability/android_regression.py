@@ -17,10 +17,16 @@ def note(message):
  print(message,flush=True);steps.append(message);(a.evidence/'steps.log').write_text('\n'.join(steps)+'\n')
 def fail_hook(kind,error,tb):
  text=''.join(traceback.format_exception(kind,error,tb))
+ if last_xml:
+  try:
+   inputs=[n.attrib for n in ET.fromstring(last_xml).iter('node') if n.attrib.get('class')=='android.widget.EditText']
+   text+='\nLIVE_SEARCH_INPUTS '+json.dumps(inputs,ensure_ascii=False)[:2000]
+  except Exception:pass
  (a.evidence/'failure.txt').write_text(text)
  try:
   log=adb('logcat','-d','-v','brief',timeout=30).stdout
   (a.evidence/'failure-logcat.txt').write_text(log)
+  if last_xml:(a.evidence/'failure-ui.xml').write_text(last_xml)
   lines=log.splitlines();fatal=[]
   for i,line in enumerate(lines):
    if 'FATAL EXCEPTION' in line or ('Fatal signal' in line and pkg in line):fatal.extend(lines[max(0,i-2):i+45])
@@ -179,11 +185,19 @@ def select_language(chinese):
  tap('关闭' if chinese else 'Close')
  wait_text('运行文件' if chinese else 'Run file')
  checkpoint('language-selected-'+('zh' if chinese else 'en'),['运行文件','概览','文件','扩展包'] if chinese else ['Run file','Overview','Files','Packages'])
+def package_search_editor(tree):
+ editors=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
+ preferred=[n for n in editors if any(term in ' '.join(n.attrib.get(k,'') for k in ['text','content-desc','hint','hint-text']) for term in ['Search packages','搜索扩展包'])]
+ assert editors,'The real Packages search editor must be available'
+ return preferred[0] if preferred else max(editors,key=lambda n:bounds(n)[0])
 def card_action(label,chinese):
  open_packages(chinese);tap('已安装' if chinese else 'Installed')
- tree=xml();editors=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
- assert editors,'The real Packages search editor must be available'
- tap_node(editors[0]);adb('shell','input keycombination 113 29');adb('shell','input text '+kitid);adb('shell','input keyevent 4');time.sleep(.7)
+ tree=xml();package_search_editor(tree)
+ # Use the product's actual Clear control; global editor shortcuts must not affect fixture input.
+ if matches(tree,'Clear'):tap('Clear')
+ elif matches(tree,'清除'):tap('清除')
+ tree=xml();tap_node(package_search_editor(tree));adb('shell','input text '+kitid);adb('shell','input keyevent 4');time.sleep(.7)
+ note('PACKAGE_ID_FILTER '+kitid)
  # A unique ID search prevents borrowing a lifecycle action from an adjacent Kit.
  tap(label,scroll=True)
 
@@ -251,7 +265,19 @@ for size in [48,96,216]:
 adb('shell','input keyevent 3');time.sleep(1)
 adb('shell',f'input swipe {WIDTH//2} {HEIGHT-35} {WIDTH//2} 150 400');time.sleep(1)
 wait_text('sui-code',scroll=True);checkpoint('system-launcher-user-icon',['sui-code'])
-tap('sui-code');wait_text('Run file');checkpoint('launched-via-official-user-icon',['Run file'])
+tap('sui-code')
+launch_deadline=time.monotonic()+50
+while True:
+ tree=xml()
+ if matches(tree,'Run file'):break
+ if matches(tree,'Slow-swipe up to show the Taskbar'):
+  checkpoint('android-system-taskbar-first-use-tutorial')
+  adb('shell','input keyevent 4');time.sleep(.5)
+  if matches(xml(),'Slow-swipe up to show the Taskbar'):adb('shell',f'input tap {WIDTH//2} 160')
+  note('DISMISSED_ANDROID_SYSTEM_TASKBAR_TUTORIAL')
+ assert time.monotonic()<launch_deadline,'Actual Launcher tap did not reveal the app workbench'
+ time.sleep(.5)
+checkpoint('launched-via-official-user-icon',['Run file'])
 note('ANDROID_FRAMEWORK_ADAPTIVE_AND_ACTUAL_LAUNCHER_DISPLAY_PASS')
 (a.evidence/'logcat.txt').write_text(adb('logcat','-d','-v','threadtime','-s','AndroidRuntime','SuiStartup','SuiStartupTest','SuiPerformance').stdout)
 for name in ['startup.log','startup.previous.log']:

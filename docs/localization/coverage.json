@@ -1,16 +1,16 @@
 {
   "display_bound_key_sites": 850,
-  "unbound_display_literal_sites": 373,
-  "scanned_display_literal_coverage_percent": 69.5,
+  "unbound_display_literal_sites": 374,
+  "scanned_display_literal_coverage_percent": 69.44,
   "catalog_keys": 783,
   "translated_keys": 783,
   "catalog_translation_percent": 100.0,
   "key_reference_sites": 940,
   "referenced_keys": 740,
-  "remaining_literal_sites": 644,
+  "remaining_literal_sites": 645,
   "literal_categories": {
     "verbatim-technical-or-resource-id": 256,
-    "unbound-gap": 373,
+    "unbound-gap": 374,
     "protected-host-English": 15
   },
   "physical_arm64_tested": false,

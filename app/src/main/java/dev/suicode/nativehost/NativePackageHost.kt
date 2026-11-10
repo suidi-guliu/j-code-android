@@ -30,6 +30,7 @@ class NativePackageHost private constructor(private val context: Context) {
     val providers=NativeProviders()
     val setup by lazy { NativeKitSetup(context,this,dev.blamspot.jcode.core.distro.DistroServiceLocator.distroService(context)) }
     var onDeactivated: (String)->Unit = {}
+    var onServicesReload: (String)->Unit = {}
     private val sessions=java.util.concurrent.ConcurrentHashMap<String,CoreSession>()
     private val mutation=Mutex()
     private val mutableRows=MutableStateFlow<List<NativePackageRow>>(emptyList())
@@ -145,10 +146,12 @@ class NativePackageHost private constructor(private val context: Context) {
         } finally { connection.disconnect() }
     }
     suspend fun install(preview: PackagePreview,grants: Set<Capability>,allowUnverified: Boolean)=action {
+        val previous=rows.value.firstOrNull { it.record.id==preview.pack.id }?.record
         store.install(preview.bytes,preview.suffix,Consent(preview.pack.digest,grants,allowUnverified))
         onDeactivated(preview.pack.id)
         activate(preview.pack.id)
         publish()
+        if(requiresServiceReload(previous,rows.value.firstOrNull { it.record.id==preview.pack.id }?.record,preview.pack.declarations().any { it.type=="lsp" })) onServicesReload(preview.pack.id)
     }
     suspend fun installedPreview(id: String): PackagePreview = withContext(Dispatchers.IO) {
         val pack=store.load(id)

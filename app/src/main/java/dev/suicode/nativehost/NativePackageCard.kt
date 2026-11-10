@@ -86,7 +86,11 @@ import kotlinx.serialization.json.*
                         TextButton(enabled=!setup.busy,onClick={revision++}) { Text(strings.text("files.refresh")) }
                     }
                     pack.declarations().filter { it.type=="lsp" }.forEach { component ->
-                        val server=component.descriptor.getValue("arguments").jsonObject.getValue("serverId").jsonPrimitive.content
+                        val server=component.descriptor.getValue("arguments").jsonObject["serverId"]?.jsonPrimitive?.content
+                        if(server.isNullOrBlank()) {
+                            Text("E_COMPONENT: ${component.id}/serverId",color=MaterialTheme.colorScheme.error)
+                            return@forEach
+                        }
                         Text("$server · ${serverStates[server] ?: strings.text("management.notRunning")}")
                         FlowRow {
                             TextButton(onClick={restartServer(server)}) { Text(strings.text("management.restartServer")) }
