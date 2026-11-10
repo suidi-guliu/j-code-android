@@ -1,9 +1,4 @@
 Picked up JAVA_TOOL_OPTIONS:  -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts
-Starting a Gradle Daemon, 1 busy Daemon could not be reused, use --status for details
-
-> Configure project :app
-Unable to initialize metrics, ensure /home/agent/.android is writable, details: /home/agent/.android/analytics.settings (Read-only file system)
-
 > Task :app:preBuild UP-TO-DATE
 > Task :app:preDebugBuild UP-TO-DATE
 > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
@@ -56,7 +51,7 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 
 > Task :native:ripgrep-ffi:cargoBuildDebugJniLibs
     Building arm64-v8a (aarch64-linux-android)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
      Copying libraries to /workspace/j-code-android/native/ripgrep-ffi/build/generated/cargoJniLibs/debug
 
 > Task :core:search:preDebugBuild
@@ -421,15 +416,26 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :core:debug:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :core:config:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :core:distro:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:distro:kspDebugKotlin UP-TO-DATE
+> Task :core:distro:compileDebugKotlin UP-TO-DATE
 > Task :core:distro:javaPreCompileDebug UP-TO-DATE
+> Task :core:distro:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:distro:transformDebugClassesWithAsm UP-TO-DATE
+> Task :core:distro:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :core:diag:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :core:diag:compileDebugKotlin UP-TO-DATE
 > Task :core:diag:javaPreCompileDebug UP-TO-DATE
 > Task :core:diag:compileDebugJavaWithJavac NO-SOURCE
 > Task :core:diag:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :core:term:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:term:compileDebugKotlin UP-TO-DATE
 > Task :core:term:javaPreCompileDebug UP-TO-DATE
+> Task :core:term:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:term:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:debug:compileDebugKotlin UP-TO-DATE
 > Task :core:debug:javaPreCompileDebug UP-TO-DATE
+> Task :core:debug:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:debug:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :core:design:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :core:native-packages:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :core:native-packages:compileDebugKotlin UP-TO-DATE
@@ -458,7 +464,10 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :core:editor-completion:compileDebugJavaWithJavac NO-SOURCE
 > Task :core:editor-completion:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :core:ext-api:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:ext-api:compileDebugKotlin UP-TO-DATE
 > Task :core:ext-api:javaPreCompileDebug UP-TO-DATE
+> Task :core:ext-api:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:ext-api:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :core:design:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :core:diag:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :core:fs:checkKotlinGradlePluginConfigurationErrors SKIPPED
@@ -470,14 +479,25 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :core:fs:transformDebugClassesWithAsm UP-TO-DATE
 > Task :core:fs:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :core:lsp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:lsp:compileDebugKotlin UP-TO-DATE
 > Task :core:lsp:javaPreCompileDebug UP-TO-DATE
+> Task :core:lsp:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:lsp:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :core:search:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :core:search:compileDebugKotlin UP-TO-DATE
 > Task :core:search:javaPreCompileDebug UP-TO-DATE
 > Task :core:search:compileDebugJavaWithJavac NO-SOURCE
 > Task :core:search:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:debug:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:distro:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:term:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :feature:debug:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :feature:debug:kspDebugKotlin UP-TO-DATE
+> Task :feature:debug:compileDebugKotlin UP-TO-DATE
 > Task :feature:debug:javaPreCompileDebug UP-TO-DATE
+> Task :feature:debug:compileDebugJavaWithJavac NO-SOURCE
+> Task :feature:debug:transformDebugClassesWithAsm UP-TO-DATE
+> Task :feature:debug:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :core:buffer:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :core:editor:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :core:editor-completion:bundleLibRuntimeToJarDebug UP-TO-DATE
@@ -498,15 +518,36 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :feature:explorer:transformDebugClassesWithAsm UP-TO-DATE
 > Task :feature:explorer:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :feature:lsp-manager:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :feature:lsp-manager:compileDebugKotlin UP-TO-DATE
 > Task :feature:lsp-manager:javaPreCompileDebug UP-TO-DATE
+> Task :feature:lsp-manager:compileDebugJavaWithJavac NO-SOURCE
+> Task :feature:lsp-manager:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :feature:marketplace:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :feature:marketplace:compileDebugKotlin UP-TO-DATE
 > Task :feature:marketplace:javaPreCompileDebug UP-TO-DATE
+> Task :feature:marketplace:compileDebugJavaWithJavac NO-SOURCE
+> Task :feature:marketplace:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :feature:onboarding:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :feature:onboarding:kspDebugKotlin UP-TO-DATE
+> Task :feature:onboarding:compileDebugKotlin UP-TO-DATE
 > Task :feature:onboarding:javaPreCompileDebug UP-TO-DATE
+> Task :feature:onboarding:compileDebugJavaWithJavac NO-SOURCE
+> Task :feature:onboarding:transformDebugClassesWithAsm UP-TO-DATE
+> Task :feature:onboarding:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :feature:sdk-manager:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :feature:sdk-manager:kspDebugKotlin UP-TO-DATE
+> Task :feature:sdk-manager:compileDebugKotlin UP-TO-DATE
 > Task :feature:sdk-manager:javaPreCompileDebug UP-TO-DATE
+> Task :feature:sdk-manager:compileDebugJavaWithJavac NO-SOURCE
+> Task :feature:sdk-manager:transformDebugClassesWithAsm UP-TO-DATE
+> Task :feature:sdk-manager:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :feature:settings:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :feature:settings:kspDebugKotlin UP-TO-DATE
+> Task :feature:settings:compileDebugKotlin UP-TO-DATE
 > Task :feature:settings:javaPreCompileDebug UP-TO-DATE
+> Task :feature:settings:compileDebugJavaWithJavac NO-SOURCE
+> Task :feature:settings:transformDebugClassesWithAsm UP-TO-DATE
+> Task :feature:settings:bundleLibCompileToJarDebug UP-TO-DATE
 > Task :native:buffer:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :native:buffer:compileDebugKotlin UP-TO-DATE
 > Task :native:buffer:javaPreCompileDebug UP-TO-DATE
@@ -674,8 +715,16 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :app:compressDebugAssets UP-TO-DATE
 > Task :feature:explorer:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :feature:editor-pane:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:debug:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:settings:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:sdk-manager:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:lsp-manager:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:onboarding:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :core:adaptive:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:lsp:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :feature:marketplace:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :core:search:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:ext-api:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :native:buffer:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :native:editor-render:bundleLibRuntimeToJarDebug UP-TO-DATE
 > Task :native:ripgrep-ffi:bundleLibRuntimeToJarDebug UP-TO-DATE
@@ -687,16 +736,27 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :core:adaptive:processDebugJavaRes UP-TO-DATE
 > Task :core:buffer:processDebugJavaRes UP-TO-DATE
 > Task :core:config:processDebugJavaRes UP-TO-DATE
+> Task :core:debug:processDebugJavaRes UP-TO-DATE
 > Task :core:design:processDebugJavaRes UP-TO-DATE
 > Task :core:diag:processDebugJavaRes UP-TO-DATE
+> Task :core:distro:processDebugJavaRes UP-TO-DATE
 > Task :core:editor:processDebugJavaRes UP-TO-DATE
 > Task :core:editor-completion:processDebugJavaRes UP-TO-DATE
+> Task :core:ext-api:processDebugJavaRes UP-TO-DATE
 > Task :core:fs:processDebugJavaRes UP-TO-DATE
+> Task :core:lsp:processDebugJavaRes UP-TO-DATE
 > Task :core:native-packages:processDebugJavaRes UP-TO-DATE
 > Task :core:resource:processDebugJavaRes UP-TO-DATE
 > Task :core:search:processDebugJavaRes UP-TO-DATE
+> Task :core:term:processDebugJavaRes UP-TO-DATE
+> Task :feature:debug:processDebugJavaRes UP-TO-DATE
 > Task :feature:editor-pane:processDebugJavaRes UP-TO-DATE
 > Task :feature:explorer:processDebugJavaRes UP-TO-DATE
+> Task :feature:lsp-manager:processDebugJavaRes UP-TO-DATE
+> Task :feature:marketplace:processDebugJavaRes UP-TO-DATE
+> Task :feature:onboarding:processDebugJavaRes UP-TO-DATE
+> Task :feature:sdk-manager:processDebugJavaRes UP-TO-DATE
+> Task :feature:settings:processDebugJavaRes UP-TO-DATE
 > Task :native:buffer:processDebugJavaRes UP-TO-DATE
 > Task :native:editor-render:processDebugJavaRes UP-TO-DATE
 > Task :native:proot:processDebugJavaRes NO-SOURCE
@@ -710,13 +770,24 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :core:fs:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :feature:editor-pane:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:editor-completion:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:debug:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:settings:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:sdk-manager:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:lsp-manager:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:onboarding:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:design:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:adaptive:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:editor:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:resource:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:buffer:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :core:debug:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :core:term:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :core:lsp:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :feature:marketplace:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :core:distro:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:search:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:config:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :core:ext-api:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:native-packages:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :core:diag:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :native:buffer:bundleLibRuntimeToDirDebug UP-TO-DATE
@@ -727,6 +798,7 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :native:wasmtime-ffi:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :native:proot:bundleLibRuntimeToDirDebug UP-TO-DATE
 > Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
 > Task :core:adaptive:mergeDebugJniLibFolders UP-TO-DATE
 > Task :core:adaptive:mergeDebugNativeLibs NO-SOURCE
 > Task :core:adaptive:copyDebugJniLibsProjectOnly UP-TO-DATE
@@ -858,129 +930,38 @@ Unable to initialize metrics, ensure /home/agent/.android is writable, details: 
 > Task :app:desugarDebugAndroidTestFileDependencies UP-TO-DATE
 > Task :app:checkDebugAndroidTestDuplicateClasses UP-TO-DATE
 > Task :app:mergeExtDexDebugAndroidTest UP-TO-DATE
+> Task :app:mergeLibDexDebugAndroidTest UP-TO-DATE
 > Task :app:mergeDebugAndroidTestJniLibFolders UP-TO-DATE
 > Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
 > Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
-> Task :core:distro:kspDebugKotlin
 > Task :app:validateSigningDebugAndroidTest UP-TO-DATE
 > Task :app:writeDebugAndroidTestSigningConfigVersions UP-TO-DATE
 > Task :app:preDebugUnitTestBuild UP-TO-DATE
 > Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
-> Task :core:distro:preDebugUnitTestBuild UP-TO-DATE
-> Task :core:distro:generateDebugUnitTestStubRFile UP-TO-DATE
-> Task :core:distro:javaPreCompileDebugUnitTest UP-TO-DATE
-> Task :core:distro:compileDebugKotlin
-> Task :core:distro:compileDebugJavaWithJavac NO-SOURCE
-> Task :core:distro:processDebugJavaRes UP-TO-DATE
-> Task :core:distro:transformDebugClassesWithAsm
-> Task :core:distro:bundleLibRuntimeToDirDebug
-> Task :core:distro:bundleLibRuntimeToJarDebug
-> Task :core:distro:bundleLibCompileToJarDebug
-> Task :core:term:compileDebugKotlin UP-TO-DATE
-> Task :core:term:compileDebugJavaWithJavac NO-SOURCE
-> Task :core:term:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :core:debug:compileDebugKotlin UP-TO-DATE
-> Task :core:debug:compileDebugJavaWithJavac NO-SOURCE
-> Task :core:debug:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :core:ext-api:compileDebugKotlin UP-TO-DATE
-> Task :core:ext-api:compileDebugJavaWithJavac NO-SOURCE
-> Task :core:ext-api:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :core:lsp:compileDebugKotlin UP-TO-DATE
-> Task :core:lsp:compileDebugJavaWithJavac NO-SOURCE
-> Task :core:lsp:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :core:debug:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :core:term:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :feature:lsp-manager:compileDebugKotlin UP-TO-DATE
-> Task :feature:lsp-manager:compileDebugJavaWithJavac NO-SOURCE
-> Task :feature:lsp-manager:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :feature:marketplace:compileDebugKotlin UP-TO-DATE
-> Task :feature:marketplace:compileDebugJavaWithJavac NO-SOURCE
-> Task :feature:marketplace:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :feature:debug:kspDebugKotlin
-> Task :feature:debug:compileDebugKotlin UP-TO-DATE
-> Task :feature:debug:compileDebugJavaWithJavac NO-SOURCE
-> Task :feature:onboarding:kspDebugKotlin
-> Task :feature:debug:transformDebugClassesWithAsm
-> Task :feature:onboarding:compileDebugKotlin UP-TO-DATE
-> Task :feature:debug:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :feature:onboarding:compileDebugJavaWithJavac NO-SOURCE
-> Task :feature:onboarding:transformDebugClassesWithAsm
-> Task :feature:onboarding:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :feature:debug:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :feature:lsp-manager:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :feature:onboarding:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :core:lsp:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :feature:marketplace:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :core:ext-api:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :core:debug:processDebugJavaRes UP-TO-DATE
-> Task :feature:sdk-manager:kspDebugKotlin
-> Task :core:ext-api:processDebugJavaRes UP-TO-DATE
-> Task :feature:sdk-manager:compileDebugKotlin UP-TO-DATE
-> Task :feature:sdk-manager:compileDebugJavaWithJavac NO-SOURCE
-> Task :core:lsp:processDebugJavaRes UP-TO-DATE
-> Task :core:term:processDebugJavaRes UP-TO-DATE
-> Task :feature:sdk-manager:transformDebugClassesWithAsm
-> Task :feature:debug:processDebugJavaRes UP-TO-DATE
-> Task :feature:sdk-manager:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :feature:sdk-manager:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :feature:lsp-manager:processDebugJavaRes UP-TO-DATE
-> Task :feature:marketplace:processDebugJavaRes UP-TO-DATE
-> Task :feature:onboarding:processDebugJavaRes UP-TO-DATE
-> Task :feature:sdk-manager:processDebugJavaRes UP-TO-DATE
-> Task :feature:debug:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :feature:sdk-manager:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :feature:lsp-manager:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :feature:onboarding:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :core:debug:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :core:term:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :core:lsp:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :feature:marketplace:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :core:ext-api:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :feature:settings:kspDebugKotlin
-> Task :feature:settings:compileDebugKotlin UP-TO-DATE
-> Task :feature:settings:compileDebugJavaWithJavac NO-SOURCE
-> Task :feature:settings:processDebugJavaRes UP-TO-DATE
-> Task :feature:settings:transformDebugClassesWithAsm
-> Task :feature:settings:bundleLibCompileToJarDebug UP-TO-DATE
-> Task :app:compileDebugKotlin UP-TO-DATE
-> Task :core:distro:kspDebugUnitTestKotlin
+> Task :app:compileDebugKotlin
 > Task :app:compileDebugJavaWithJavac UP-TO-DATE
-> Task :feature:settings:bundleLibRuntimeToJarDebug UP-TO-DATE
-> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
 > Task :app:processDebugJavaRes UP-TO-DATE
 > Task :app:mergeDebugJavaResource UP-TO-DATE
-> Task :feature:settings:bundleLibRuntimeToDirDebug UP-TO-DATE
-> Task :app:mergeProjectDexDebug UP-TO-DATE
-> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:mergeProjectDexDebug
+> Task :app:bundleDebugClassesToCompileJar
 > Task :app:compileDebugAndroidTestKotlin UP-TO-DATE
 > Task :app:compileDebugAndroidTestJavaWithJavac UP-TO-DATE
 > Task :app:dexBuilderDebugAndroidTest UP-TO-DATE
+> Task :app:mergeDebugAndroidTestGlobalSynthetics UP-TO-DATE
 > Task :app:processDebugAndroidTestJavaRes UP-TO-DATE
 > Task :app:mergeDebugAndroidTestJavaResource UP-TO-DATE
-> Task :app:mergeLibDexDebugAndroidTest UP-TO-DATE
 > Task :app:mergeProjectDexDebugAndroidTest UP-TO-DATE
-> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
-> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
-> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
-> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
-> Task :app:mergeLibDexDebug
-
-> Task :app:testDebugUnitTest
-Picked up JAVA_TOOL_OPTIONS:  -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts
-
-> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
-> Task :app:mergeDebugAndroidTestGlobalSynthetics UP-TO-DATE
 > Task :app:packageDebugAndroidTest UP-TO-DATE
 > Task :app:createDebugAndroidTestApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebugAndroidTest UP-TO-DATE
-> Task :core:distro:compileDebugUnitTestKotlin UP-TO-DATE
-> Task :core:distro:compileDebugUnitTestJavaWithJavac NO-SOURCE
-> Task :core:distro:hiltAggregateDepsDebugUnitTest UP-TO-DATE
-> Task :core:distro:hiltJavaCompileDebugUnitTest NO-SOURCE
-> Task :core:distro:processDebugUnitTestJavaRes UP-TO-DATE
-> Task :core:distro:transformDebugUnitTestClassesWithAsm
+> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
 
-> Task :core:distro:testDebugUnitTest
+> Task :app:testDebugUnitTest
 Picked up JAVA_TOOL_OPTIONS:  -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts
 
 > Task :app:packageDebug
@@ -995,5 +976,5 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD SUCCESSFUL in 2m 4s
-741 actionable tasks: 33 executed, 708 up-to-date
+BUILD SUCCESSFUL in 19s
+733 actionable tasks: 20 executed, 713 up-to-date

@@ -8,6 +8,9 @@ on:
       - 'tools/ide_reliability/android_regression.py'
       - 'tools/ide_reliability/run_emulator.sh'
   workflow_dispatch:
+concurrency:
+  group: sui-code-v054-verified-delivery
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:

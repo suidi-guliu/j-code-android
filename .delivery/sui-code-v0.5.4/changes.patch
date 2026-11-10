@@ -1,3 +1,162 @@
+diff --git a/.github/workflows/deliver-ide-reliability-v0.5.4.yml b/.github/workflows/deliver-ide-reliability-v0.5.4.yml
+new file mode 100644
+index 0000000..43af6ea
+--- /dev/null
++++ b/.github/workflows/deliver-ide-reliability-v0.5.4.yml
+@@ -0,0 +1,153 @@
++name: Verify Android 16 IDE management and deliver sui-code 0.5.4
++on:
++  push:
++    branches: [sui-code/v0.5.4-ide-reliability-management]
++    paths:
++      - '.github/workflows/deliver-ide-reliability-v0.5.4.yml'
++      - '.delivery/sui-code-v0.5.4/**'
++      - 'tools/ide_reliability/android_regression.py'
++      - 'tools/ide_reliability/run_emulator.sh'
++  workflow_dispatch:
++permissions:
++  contents: read
++jobs:
++  android-and-deliver:
++    if: github.repository == 'suidi-guliu/j-code-android' && github.ref == 'refs/heads/sui-code/v0.5.4-ide-reliability-management'
++    runs-on: ubuntu-24.04
++    timeout-minutes: 50
++    steps:
++      - uses: actions/checkout@v5
++      - uses: actions/setup-java@v5
++        with:
++          distribution: temurin
++          java-version: '21'
++      - name: Verify delivery hashes, immutable history, ARM64 identity and upgrade certificate
++        shell: bash
++        run: |
++          set -euo pipefail
++          root=.delivery/sui-code-v0.5.4
++          (cd "$root" && sha256sum --check --strict SHA256SUMS)
++          for old in sui-code-native-0.4 sui-code-v0.5 sui-code-v0.5-ui-polish sui-code-v0.5.2-startup-recovery sui-code-v0.5.3-zh-hans; do
++            (cd ".delivery/$old" && sha256sum --check --strict SHA256SUMS)
++          done
++          apk="$root/sui-code-v0.5.4-debug.apk"
++          signer=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
++          old_cert=$("$signer" verify --print-certs .delivery/sui-code-v0.5.3-zh-hans/sui-code-v0.5.3-debug.apk | awk '/certificate SHA-256 digest:/ {print $NF}')
++          new_cert=$("$signer" verify --print-certs "$apk" | awk '/certificate SHA-256 digest:/ {print $NF}')
++          test "$old_cert" = "$new_cert"
++          test "$new_cert" = 62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0
++          "$(dirname "$signer")/aapt" dump badging "$apk" > "$RUNNER_TEMP/v054-apk-badging.txt"
++          grep -F "package: name='dev.suicode.ide.debug' versionCode='1070807' versionName='0.5.4'" "$RUNNER_TEMP/v054-apk-badging.txt"
++          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/v054-apk-badging.txt"
++      - name: Verify official user artwork and extract read-only Android test inputs
++        shell: python
++        run: |
++          import pathlib,zipfile,os,json,hashlib
++          root=pathlib.Path('.delivery/sui-code-v0.5.4')
++          asset=pathlib.Path('design/user-assets/sui-code-app-icon.svg')
++          assert hashlib.sha256(asset.read_bytes()).hexdigest()=='39003c5686cdeaf2e09d018c17787f883667815d43227a8dd38b9b54634a60c3'
++          for section in ['apk','language_pack']:
++              item=json.loads((root/'apk-metadata.json').read_text())[section];p=root/item['file']
++              assert p.stat().st_size==item['bytes'] and hashlib.sha256(p.read_bytes()).hexdigest()==item['sha256']
++          assert (root/'sui-code-zh-hans-1.0.1.suik').read_bytes()==pathlib.Path('localization/releases/sui-code-zh-hans-1.0.1.suik').read_bytes()
++          with zipfile.ZipFile(root/'sui-code-v0.5.4-debug.apk') as apk:
++              assert any('sui_launcher_foreground' in n for n in apk.namelist())
++              assert not any('sui-code-zh-hans' in n for n in apk.namelist()),'Translation archive must remain independent'
++          target=pathlib.Path(os.environ['RUNNER_TEMP'])/'v054-inputs';target.mkdir()
++          with zipfile.ZipFile(root/'android-test-inputs.zip') as z:
++              for n in ['payload.tar','payload-sha256.json','legacy-state.json','startup-androidTest.apk']:(target/n).write_bytes(z.read(n))
++      - name: Prepare two hardware accelerated Android 16 AVDs
++        id: avds
++        shell: bash
++        run: |
++          set -euo pipefail
++          test -c /dev/kvm
++          sudo chmod a+rw /dev/kvm
++          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-36;google_apis;x86_64' > "$RUNNER_TEMP/v054-sdk-install.log" 2>&1
++          "$ANDROID_HOME/emulator/emulator" -accel-check
++          export ANDROID_AVD_HOME="$RUNNER_TEMP/v054-avds"
++          mkdir -p "$ANDROID_AVD_HOME"
++          for name in sui-v054-upgrade sui-v054-fresh; do
++            printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n "$name" -k 'system-images;android-36;google_apis;x86_64' -d pixel_c --force
++          done
++          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
++      - name: Android 16 retained-data upgrade, Chinese lifecycle and production UI tests
++        run: bash tools/ide_reliability/run_emulator.sh upgrade
++      - name: Android 16 fresh startup, UI searches, extension cards and adaptive icons
++        if: ${{ !cancelled() && steps.avds.outcome == 'success' }}
++        run: bash tools/ide_reliability/run_emulator.sh fresh
++      - name: Require actual Android success and assemble source and evidence
++        shell: python
++        run: |
++          import pathlib,json,os,zipfile,hashlib,subprocess
++          evidence=pathlib.Path(os.environ['RUNNER_TEMP'])/'v054-android-evidence'
++          for mode in ['upgrade','fresh']:
++              result=json.loads((evidence/mode/'result.json').read_text())
++              assert result['result']=='PASS' and result['android_instrumentation_tests']==15
++          root=pathlib.Path('.delivery/sui-code-v0.5.4');commit=os.environ['GITHUB_SHA']
++          paths=[p for p in subprocess.check_output(['git','ls-tree','--name-only',commit],text=True).splitlines() if p!='.delivery']
++          subprocess.run(['git','archive','--format=zip','--prefix=sui-code-v0.5.4/','-o',str(root/'source.zip'),commit,*paths],check=True)
++          baseline='862cbae35d14954cb87eb03097c0d9dddf5c38ac'
++          subprocess.run(['git','fetch','--depth=1','origin',baseline],check=True)
++          (root/'changes.patch').write_bytes(subprocess.check_output(['git','diff','--binary',baseline,commit,'--','.',':(exclude).delivery']))
++          (root/'modified-files.txt').write_text(subprocess.check_output(['git','diff','--name-status',baseline,commit,'--','.',':(exclude).delivery'],text=True))
++          with zipfile.ZipFile(root/'android-evidence.zip','w',zipfile.ZIP_DEFLATED) as z:
++              for p in evidence.rglob('*'):
++                  if p.is_file():z.write(p,p.relative_to(evidence))
++          url=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
++          receipt='\n\n## Actual Android16 CI receipt\n\nPASS: retained-data upgrade from the original v0.5.3 APK, old API3 packages/files/configuration and original Chinese1.0.0 archive retained; real SAF import and reviewed1.0.1 update, immediate Chinese switching, restart persistence, disable/enable and uninstall fallback, portrait/font130. Thirty Android instrumentation cases (including production Languages/Packages searches, official/third-party cards, unsigned consent and framework-rendered adaptive icons) and two original Project metadata checks passed in two owned Android16 x86_64 AVDs with ARM64 native bridge. Not physical ARM64 acceptance. Runtime paths in the upgrade fixture contain synthetic retention sentinels, not executable Ubuntu/JDK installations. Real task/LSP/DAP evidence is separately identified as Linux x64.\n\nRun: '+url+'\n'
++          report=(root/'report.md').read_text().replace('**待 CI 验收**','**Android16 CI 通过**').replace('待 CI','Android16 CI 通过（ARM64 真机待验）').replace('Android CI 待验','Android16 CI 通过（ARM64 真机待验）')
++          (root/'report.md').write_text(report+receipt)
++          meta=json.loads((root/'apk-metadata.json').read_text());meta.update(source_archive_commit=commit,android_run=url,android_result='PASS',android_instrumentation_tests=30,project_checks=2,physical_arm64_tested=False)
++          (root/'apk-metadata.json').write_text(json.dumps(meta,indent=2)+'\n')
++          (root/'SHA256SUMS').write_text('\n'.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name for p in sorted(root.iterdir()) if p.name!='SHA256SUMS')+'\n')
++      - name: Upload one integrated APK, independent language Kit, official packages and reports
++        id: upload
++        uses: actions/upload-artifact@v4
++        with:
++          name: sui-code-v0.5.4-ide-reliability-management
++          path: .delivery/sui-code-v0.5.4/*
++          include-hidden-files: true
++          if-no-files-found: error
++          compression-level: 0
++          retention-days: 30
++      - name: Download uploaded Artifact for independent byte verification
++        uses: actions/download-artifact@v4
++        with:
++          artifact-ids: ${{ steps.upload.outputs.artifact-id }}
++          path: ${{ runner.temp }}/v054-roundtrip
++          merge-multiple: true
++      - name: Verify uploaded file sizes and SHA-256 and publish real download entry
++        shell: bash
++        env:
++          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
++        run: |
++          set -euo pipefail
++          (cd "$RUNNER_TEMP/v054-roundtrip" && sha256sum --check --strict SHA256SUMS)
++          for source in .delivery/sui-code-v0.5.4/*; do cmp "$source" "$RUNNER_TEMP/v054-roundtrip/$(basename "$source")"; done
++          {
++            echo '## Integrated sui-code v0.5.4 verified delivery'
++            printf '[Download APK, independent Chinese Kit, official packages, SDK and evidence](%s)\n' "$ARTIFACT_URL"
++            echo 'Android16 emulator + ARM64 native bridge, not physical ARM64 tablet acceptance.'
++            cat .delivery/sui-code-v0.5.4/SHA256SUMS
++          } >> "$GITHUB_STEP_SUMMARY"
++      - name: Expose actionable Android failure diagnostics
++        if: failure()
++        shell: python
++        run: |
++          import pathlib,os
++          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'v054-android-evidence';rows=[]
++          for p in root.rglob('*.txt'):
++              if p.name in ['failure.txt','startup-android.txt','full-kit-android.txt','package-management-ui.txt','launcher-icons.txt']:
++                  rows.append(str(p.relative_to(root))+': '+p.read_text(errors='replace')[-6000:])
++          if rows:print('::error title=Android v0.5.4 diagnostics::'+'\n'.join(rows)[-20000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
++      - name: Preserve diagnostics without delivering an unverified APK
++        if: failure()
++        uses: actions/upload-artifact@v4
++        with:
++          name: v0.5.4-android-failure-diagnostics
++          path: |
++            ${{ runner.temp }}/v054-android-evidence/
++            ${{ runner.temp }}/v054-sdk-install.log
++          if-no-files-found: warn
++          retention-days: 30
 diff --git a/app/build.gradle.kts b/app/build.gradle.kts
 index 3b701d6..d81b1b6 100644
 --- a/app/build.gradle.kts
@@ -859,7 +1018,7 @@ index 4671c93..3e76c39 100644
                  val scriptPath="/tmp/sui-native-task-$token.sh"
                  stagedScript=File(distro.activeRootfsPath(),scriptPath.removePrefix("/"))
 diff --git a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
-index eebff3b..307dc78 100644
+index eebff3b..29e3bb4 100644
 --- a/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
 +++ b/app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
 @@ -1,6 +1,8 @@
@@ -871,7 +1030,18 @@ index eebff3b..307dc78 100644
  
  import android.app.Application
  import android.content.Context
-@@ -2499,6 +2501,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+@@ -312,6 +314,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+ 
+     init {
+         nativePackages.onDeactivated = { id -> viewModelScope.launch(Dispatchers.Main.immediate) { javaQuickRun.stopPackage(id); debugController.stopPackage(id) } }
++        nativePackages.onServicesReload = { id -> viewModelScope.launch {
++            lspController.shutdownPackages(setOf(id))
++            lspController.retryOpenDocuments()
++        } }
+         TerminalSessionHost.manager(appContext).onTaskComplete = { sessionId, payload ->
+             setupTerminalRunner.handleTaskComplete(sessionId, payload)
+             javaQuickRun.complete(sessionId, payload)
+@@ -2499,6 +2505,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      val sdkInstallRequestedId: StateFlow<String?> = _sdkInstallRequestedId.asStateFlow()
  
      private val debugController = DebugController(distroService, viewModelScope)
@@ -879,7 +1049,7 @@ index eebff3b..307dc78 100644
      val debugState = debugController.state
      val debugCallStack = debugController.callStack
      val debugVariables = debugController.variables
-@@ -2580,6 +2583,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+@@ -2580,6 +2587,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                  .map { it.filePath.path }
          },
          isServerPaired = ::isLanguageServerPaired,
@@ -887,7 +1057,7 @@ index eebff3b..307dc78 100644
      )
  
      /**
-@@ -2617,6 +2621,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+@@ -2617,6 +2625,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
  
      /** Running language servers, surfaced in the status bar. */
      val lspServers = lspController.servers
@@ -902,7 +1072,7 @@ index eebff3b..307dc78 100644
  
      /** A catalog server an opened file needs but which isn't installed; drives the install prompt. */
      val lspMissingServer = lspController.missingServer
-@@ -3022,9 +3034,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+@@ -3022,9 +3038,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
          // Installing (or removing) a Dev Pack changes which servers are paired, so the files already
          // open have to be re-evaluated rather than waiting for the user to reopen them.
          viewModelScope.launch {
@@ -919,7 +1089,7 @@ index eebff3b..307dc78 100644
                  dev.suicode.nativehost.NativeLanguageServices.refreshAndCheck(nativePackages,distroService) { error -> _messages.tryEmit(error) }
                  lspController.retryOpenDocuments()
              }
-@@ -4261,6 +4278,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+@@ -4261,6 +4282,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      }
  
      fun installLspCatalogEntry(entryId: String) {
@@ -927,7 +1097,7 @@ index eebff3b..307dc78 100644
          viewModelScope.launch(Dispatchers.IO) {
              val entry = LspServerCatalog.findById(entryId)
              if (entry != null && !installRequiredSdks(entry.requiredSdks, entry.name)) return@launch
-@@ -4271,10 +4289,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+@@ -4271,10 +4293,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      }
  
      fun uninstallLspCatalogEntry(entryId: String) {
@@ -940,7 +1110,7 @@ index eebff3b..307dc78 100644
          viewModelScope.launch(Dispatchers.IO) {
              val entry = DebugEngineCatalog.findById(entryId)
              if (entry != null && !installRequiredSdks(entry.requiredSdks, entry.name)) return@launch
-@@ -4285,6 +4305,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
+@@ -4285,6 +4309,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      }
  
      fun uninstallDebugEngine(entryId: String) {
@@ -1518,10 +1688,10 @@ index 46ba85d..7dfd61d 100644
                  )
 diff --git a/app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt b/app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt
 new file mode 100644
-index 0000000..aa76eb6
+index 0000000..6b086fe
 --- /dev/null
 +++ b/app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,118 @@
 +package dev.suicode.nativehost
 +
 +import androidx.compose.foundation.layout.*
@@ -1610,7 +1780,11 @@ index 0000000..aa76eb6
 +                        TextButton(enabled=!setup.busy,onClick={revision++}) { Text(strings.text("files.refresh")) }
 +                    }
 +                    pack.declarations().filter { it.type=="lsp" }.forEach { component ->
-+                        val server=component.descriptor.getValue("arguments").jsonObject.getValue("serverId").jsonPrimitive.content
++                        val server=component.descriptor.getValue("arguments").jsonObject["serverId"]?.jsonPrimitive?.content
++                        if(server.isNullOrBlank()) {
++                            Text("E_COMPONENT: ${component.id}/serverId",color=MaterialTheme.colorScheme.error)
++                            return@forEach
++                        }
 +                        Text("$server · ${serverStates[server] ?: strings.text("management.notRunning")}")
 +                        FlowRow {
 +                            TextButton(onClick={restartServer(server)}) { Text(strings.text("management.restartServer")) }
@@ -1765,10 +1939,18 @@ index d7847f9..ec8e3f3 100644
              }
          }
 diff --git a/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt b/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
-index 64a6466..fedab8c 100644
+index 64a6466..50668f6 100644
 --- a/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
 +++ b/app/src/main/java/dev/suicode/nativehost/NativePackageHost.kt
-@@ -74,7 +74,7 @@ class NativePackageHost private constructor(private val context: Context) {
+@@ -30,6 +30,7 @@ class NativePackageHost private constructor(private val context: Context) {
+     val providers=NativeProviders()
+     val setup by lazy { NativeKitSetup(context,this,dev.blamspot.jcode.core.distro.DistroServiceLocator.distroService(context)) }
+     var onDeactivated: (String)->Unit = {}
++    var onServicesReload: (String)->Unit = {}
+     private val sessions=java.util.concurrent.ConcurrentHashMap<String,CoreSession>()
+     private val mutation=Mutex()
+     private val mutableRows=MutableStateFlow<List<NativePackageRow>>(emptyList())
+@@ -74,7 +75,7 @@ class NativePackageHost private constructor(private val context: Context) {
      val library=mutableLibrary.asStateFlow()
      suspend fun refreshLibrary()=withContext(Dispatchers.IO) {
          fun fetch(path: String,limit: Int): ByteArray {
@@ -1777,7 +1959,7 @@ index 64a6466..fedab8c 100644
              connection.instanceFollowRedirects=false;connection.connectTimeout=20000;connection.readTimeout=30000
              try {
                  check(connection.responseCode==200) { "Official library HTTP ${connection.responseCode}" }
-@@ -140,7 +140,7 @@ class NativePackageHost private constructor(private val context: Context) {
+@@ -140,15 +141,17 @@ class NativePackageHost private constructor(private val context: Context) {
              val data=connection.inputStream.use { it.readNBytes(32*1024*1024+1) }
              check(data.size==item.bytes && hash(data)==item.sha256) { "Package size/SHA-256 mismatch" }
              val pack=verifier.verify(data,item.kind,checkDependencies=false)
@@ -1786,6 +1968,16 @@ index 64a6466..fedab8c 100644
              PackagePreview(data,item.kind,pack,item.url)
          } finally { connection.disconnect() }
      }
+     suspend fun install(preview: PackagePreview,grants: Set<Capability>,allowUnverified: Boolean)=action {
++        val previous=rows.value.firstOrNull { it.record.id==preview.pack.id }?.record
+         store.install(preview.bytes,preview.suffix,Consent(preview.pack.digest,grants,allowUnverified))
+         onDeactivated(preview.pack.id)
+         activate(preview.pack.id)
+         publish()
++        if(requiresServiceReload(previous,rows.value.firstOrNull { it.record.id==preview.pack.id }?.record,preview.pack.declarations().any { it.type=="lsp" })) onServicesReload(preview.pack.id)
+     }
+     suspend fun installedPreview(id: String): PackagePreview = withContext(Dispatchers.IO) {
+         val pack=store.load(id)
 diff --git a/app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt b/app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt
 index 92670d7..0f029ff 100644
 --- a/app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt
@@ -1896,10 +2088,10 @@ index 92670d7..0f029ff 100644
  }
 diff --git a/app/src/main/java/dev/suicode/nativehost/NativeServiceChanges.kt b/app/src/main/java/dev/suicode/nativehost/NativeServiceChanges.kt
 new file mode 100644
-index 0000000..bb887d2
+index 0000000..56bf547
 --- /dev/null
 +++ b/app/src/main/java/dev/suicode/nativehost/NativeServiceChanges.kt
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,15 @@
 +package dev.suicode.nativehost
 +
 +import dev.suicode.packages.InstalledPackage
@@ -1911,6 +2103,10 @@ index 0000000..bb887d2
 +    do { changed=false;dependencies.forEach { (id,required) -> if(id !in affected && required.any { it in affected }) { affected+=id;changed=true } } } while(changed)
 +    return affected
 +}
++
++/** A component repair can change installed tools without changing the package digest or grants. */
++internal fun requiresServiceReload(previous: InstalledPackage?,current: InstalledPackage?,hasLsp: Boolean): Boolean =
++    hasLsp && previous!=null && previous.enabled && previous==current
 diff --git a/app/src/main/res/drawable-nodpi/sui_launcher_foreground.png b/app/src/main/res/drawable-nodpi/sui_launcher_foreground.png
 new file mode 100644
 index 0000000000000000000000000000000000000000..01a1474693a57e3b37c07752a51ccd19baa123aa
@@ -2689,10 +2885,10 @@ index 13a27bd..b291ba7 100644
 +<inset xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@drawable/sui_launcher_foreground" android:inset="0dp" />
 diff --git a/app/src/test/java/dev/suicode/nativehost/NativeServiceChangesTest.kt b/app/src/test/java/dev/suicode/nativehost/NativeServiceChangesTest.kt
 new file mode 100644
-index 0000000..f54689a
+index 0000000..fc2c34a
 --- /dev/null
 +++ b/app/src/test/java/dev/suicode/nativehost/NativeServiceChangesTest.kt
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,28 @@
 +package dev.suicode.nativehost
 +
 +import dev.suicode.packages.InstalledPackage
@@ -2706,6 +2902,13 @@ index 0000000..f54689a
 +        val after=before+("python" to record("python","new"))
 +        assertEquals(setOf("python"),affectedServicePackages(before,after,emptyMap()))
 +        assertTrue(affectedServicePackages(before,before,emptyMap()).isEmpty())
++    }
++    @Test fun repairingTheSameArchiveReloadsItsServerButLocalizationNeverDoes() {
++        val pack=record("java")
++        assertTrue(requiresServiceReload(pack,pack,true))
++        assertFalse(requiresServiceReload(pack,pack,false))
++        assertFalse(requiresServiceReload(null,pack,true))
++        assertFalse(requiresServiceReload(pack,record("java","new"),true))
 +    }
 +    @Test fun disablingOrRemovingABasicPluginInvalidatesItsTransitiveKitsOnly() {
 +        val before=listOf(record("basic"),record("kit"),record("advanced"),record("other")).associateBy { it.id }
@@ -4180,18 +4383,19 @@ index 0000000..79bf02e
 +</svg>
 \ No newline at end of file
 diff --git a/docs/localization/coverage.json b/docs/localization/coverage.json
-index 6287a40..cda9a4e 100644
+index 6287a40..861d872 100644
 --- a/docs/localization/coverage.json
 +++ b/docs/localization/coverage.json
 @@ -1,17 +1,17 @@
  {
 -  "display_bound_key_sites": 824,
-+  "display_bound_key_sites": 850,
-   "unbound_display_literal_sites": 373,
+-  "unbound_display_literal_sites": 373,
 -  "scanned_display_literal_coverage_percent": 68.84,
 -  "catalog_keys": 732,
 -  "translated_keys": 732,
-+  "scanned_display_literal_coverage_percent": 69.5,
++  "display_bound_key_sites": 850,
++  "unbound_display_literal_sites": 374,
++  "scanned_display_literal_coverage_percent": 69.44,
 +  "catalog_keys": 783,
 +  "translated_keys": 783,
    "catalog_translation_percent": 100.0,
@@ -4200,12 +4404,13 @@ index 6287a40..cda9a4e 100644
 -  "remaining_literal_sites": 667,
 +  "key_reference_sites": 940,
 +  "referenced_keys": 740,
-+  "remaining_literal_sites": 644,
++  "remaining_literal_sites": 645,
    "literal_categories": {
 -    "verbatim-technical-or-resource-id": 267,
-+    "verbatim-technical-or-resource-id": 256,
-     "unbound-gap": 373,
+-    "unbound-gap": 373,
 -    "protected-host-English": 27
++    "verbatim-technical-or-resource-id": 256,
++    "unbound-gap": 374,
 +    "protected-host-English": 15
    },
    "physical_arm64_tested": false,
@@ -4222,7 +4427,7 @@ index 6287a40..cda9a4e 100644
    }
  }
 diff --git a/docs/localization/locale-key-audit.json b/docs/localization/locale-key-audit.json
-index 4a82c30..0c06d07 100644
+index 4a82c30..d730222 100644
 --- a/docs/localization/locale-key-audit.json
 +++ b/docs/localization/locale-key-audit.json
 @@ -292,857 +292,862 @@
@@ -4884,378 +5089,378 @@ index 4a82c30..0c06d07 100644
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2530,
-+      "line": 2533,
++      "line": 2537,
        "key": "message.Debugcancelledfilescouldnotbesaved"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2704,
-+      "line": 2626,
++      "line": 2630,
 +      "key": "management.finishDebugFirst"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-+      "line": 2716,
++      "line": 2720,
        "key": "message.noDefinition"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2715,
-+      "line": 2727,
++      "line": 2731,
        "key": "message.noReferences"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2724,
-+      "line": 2736,
++      "line": 2740,
        "key": "message.Putthecursoronasymboltorename"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2739,
-+      "line": 2751,
++      "line": 2755,
        "key": "message.cannotRename"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2748,
-+      "line": 2760,
++      "line": 2764,
        "key": "message.Renamefailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2764,
-+      "line": 2776,
++      "line": 2780,
        "key": "message.sourceLoadFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2775,
-+      "line": 2787,
++      "line": 2791,
        "key": "message.fileMissing"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2867,
-+      "line": 2879,
++      "line": 2883,
        "key": "message.applyEditsFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2969,
-+      "line": 2981,
++      "line": 2985,
        "key": "message.formatted"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2970,
-+      "line": 2982,
++      "line": 2986,
        "key": "message.Languageserverreturnednoformattingedits"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3515,
-+      "line": 3532,
++      "line": 3536,
        "key": "project.createFolderHint"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3516,
-+      "line": 3533,
++      "line": 3537,
        "key": "project.saveFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3520,
-+      "line": 3537,
++      "line": 3541,
        "key": "project.templateUnavailable"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3534,
-+      "line": 3551,
++      "line": 3555,
        "key": "project.created"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3535,
-+      "line": 3552,
++      "line": 3556,
        "key": "message.templateFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3574,
-+      "line": 3591,
++      "line": 3595,
        "key": "message.opened"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3586,
-+      "line": 3603,
++      "line": 3607,
        "key": "message.readFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3590,
-+      "line": 3607,
++      "line": 3611,
        "key": "message.emptyImport"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3602,
-+      "line": 3619,
++      "line": 3623,
        "key": "message.Saveorcloseopenfilesbeforeimportinga"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3611,
-+      "line": 3628,
++      "line": 3632,
        "key": "message.importFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3626,
-+      "line": 3643,
++      "line": 3647,
        "key": "message.importedFolder"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3635,
-+      "line": 3652,
++      "line": 3656,
        "key": "message.Saveorcloseopenfilesbeforeimportinga"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3709,
-+      "line": 3726,
++      "line": 3730,
        "key": "message.Theimportedfolderisnolongeravailable"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3744,
-+      "line": 3761,
++      "line": 3765,
        "key": "message.RemovedfromtheprojectlistFilesremainin"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3757,
-+      "line": 3774,
++      "line": 3778,
        "key": "message.ProjectfilesmovedtoTrashRestorefromFiles"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3758,
-+      "line": 3775,
++      "line": 3779,
        "key": "message.projectDeleteStopped"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3801,
-+      "line": 3818,
++      "line": 3822,
        "key": "message.Projectclosed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3836,
-+      "line": 3853,
++      "line": 3857,
        "key": "message.renamed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3836,
-+      "line": 3853,
++      "line": 3857,
        "key": "message.Renamefaileddestinationexistsortheprojectis"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3837,
-+      "line": 3854,
++      "line": 3858,
        "key": "message.renameRejected"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3848,
-+      "line": 3865,
++      "line": 3869,
        "key": "message.exportNotLocal"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3852,
-+      "line": 3869,
++      "line": 3873,
        "key": "message.exporting"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3855,
-+      "line": 3872,
++      "line": 3876,
        "key": "message.exported"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3856,
-+      "line": 3873,
++      "line": 3877,
        "key": "message.exportFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 4000,
-+      "line": 4017,
++      "line": 4021,
        "key": "message.Cantcolorafileoutsidetheproject"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 4104,
-+      "line": 4121,
++      "line": 4125,
        "key": "message.Workspaceconfigisunavailable"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 4115,
-+      "line": 4132,
++      "line": 4136,
        "key": "message.Projectoverridesrequirealocalproject"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5322,
-+      "line": 5343,
++      "line": 5347,
        "key": "message.Finishorsafelycancelpackageinstallationbeforerestarting"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5327,
-+      "line": 5348,
++      "line": 5352,
        "key": "message.Restartpostponedwaitforaptdpkgtoreach"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5841,
-+      "line": 5862,
++      "line": 5866,
        "key": "message.writeFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5994,
-+      "line": 6015,
++      "line": 6019,
        "key": "message.bufferRetained"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6087,
-+      "line": 6108,
++      "line": 6112,
        "key": "message.reloaded"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6088,
-+      "line": 6109,
++      "line": 6113,
        "key": "message.reloadedMany"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6106,
-+      "line": 6127,
++      "line": 6131,
        "key": "message.Nounsavedchanges"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6130,
-+      "line": 6151,
++      "line": 6155,
        "key": "message.cannotDiscard"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6137,
-+      "line": 6158,
++      "line": 6162,
        "key": "message.discardFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6142,
-+      "line": 6163,
++      "line": 6167,
        "key": "message.discarded"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6153,
-+      "line": 6174,
++      "line": 6178,
        "key": "message.Nothingtoformat"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6160,
-+      "line": 6181,
++      "line": 6185,
        "key": "message.formatted"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6167,
-+      "line": 6188,
++      "line": 6192,
        "key": "message.Alreadyformatted"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6174,
-+      "line": 6195,
++      "line": 6199,
        "key": "message.formatted"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6187,
-+      "line": 6208,
++      "line": 6212,
        "key": "message.Formattingreplydiscardedbecausethefilechanged"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6219,
-+      "line": 6240,
++      "line": 6244,
        "key": "message.saved"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6228,
-+      "line": 6249,
++      "line": 6253,
        "key": "message.readOnly"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6231,
-+      "line": 6252,
++      "line": 6256,
        "key": "message.Restoretheremovedfilebeforesavingopenedits"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6233,
-+      "line": 6254,
++      "line": 6258,
        "key": "message.cannotSave"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6268,
-+      "line": 6289,
++      "line": 6293,
        "key": "message.saveFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6284,
-+      "line": 6305,
++      "line": 6309,
        "key": "message.Saved1file"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6284,
-+      "line": 6305,
++      "line": 6309,
        "key": "message.savedMany"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6313,
-+      "line": 6334,
++      "line": 6338,
        "key": "message.fileGone"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6529,
-+      "line": 6550,
++      "line": 6554,
        "key": "message.Projectoverridesrequirealocalprojectroot"
      },
      {
@@ -5526,72 +5731,72 @@ index 4a82c30..0c06d07 100644
 -      "line": 45,
 -      "key": "ui.fallback"
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 92,
++      "line": 96,
 +      "key": "management.restartServer"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 93,
++      "line": 97,
 +      "key": "management.serverLog"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 103,
++      "line": 107,
 +      "key": "ui.downloadAndReview"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 103,
++      "line": 107,
 +      "key": "ui.reviewUpdateReinstall"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 105,
++      "line": 109,
 +      "key": "ui.disable"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 105,
++      "line": 109,
 +      "key": "ui.enable"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 106,
++      "line": 110,
 +      "key": "management.permissions"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 106,
++      "line": 110,
 +      "key": "management.permissions"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 107,
++      "line": 111,
 +      "key": "ui.rollback"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 108,
++      "line": 112,
 +      "key": "ui.uninstall"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
++      "line": 117,
 +      "key": "ui.uninstallPackage"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
++      "line": 117,
 +      "key": "packages.removeDescription"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
++      "line": 117,
 +      "key": "ui.uninstall"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
++      "line": 117,
 +      "key": "ui.cancel"
      },
      {
@@ -6228,7 +6433,7 @@ index 4a82c30..0c06d07 100644
        "value": "A blank project folder.",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 377,
-+      "line": 379,
++      "line": 383,
        "literal": "\"A blank project folder.\"",
        "category": "unbound-gap"
      },
@@ -6236,7 +6441,7 @@ index 4a82c30..0c06d07 100644
        "value": "Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior.",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 470,
-+      "line": 472,
++      "line": 476,
        "literal": "\"Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior.\"",
        "category": "unbound-gap"
      },
@@ -6244,7 +6449,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 475,
-+      "line": 477,
++      "line": 481,
        "literal": "\"Native library: ${it.message}\"",
        "category": "unbound-gap"
      },
@@ -6252,7 +6457,7 @@ index 4a82c30..0c06d07 100644
        "value": "Legacy JCode/VSIX packages are not supported by the native ecosystem.",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 479,
-+      "line": 481,
++      "line": 485,
        "literal": "\"Legacy JCode/VSIX packages are not supported by the native ecosystem.\"",
        "category": "unbound-gap"
      },
@@ -6260,7 +6465,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 917,
-+      "line": 919,
++      "line": 923,
        "literal": "\"Removed the migration bundle (${freed / (1024 * 1024)} MB).\"",
        "category": "unbound-gap"
      },
@@ -6268,7 +6473,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 965,
-+      "line": 967,
++      "line": 971,
        "literal": "\"Migration bundle written to ${dir.absolutePath} (${parts.size} parts).\"",
        "category": "unbound-gap"
      },
@@ -6276,7 +6481,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 967,
-+      "line": 969,
++      "line": 973,
        "literal": "\"Migration export failed: ${it.message ?: \"unknown error\"}\"",
        "category": "unbound-gap"
      },
@@ -6284,7 +6489,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 1101,
-+      "line": 1103,
++      "line": 1107,
        "literal": "\"Migration import failed: ${it.message ?: \"unknown error\"}\"",
        "category": "unbound-gap"
      },
@@ -6292,7 +6497,7 @@ index 4a82c30..0c06d07 100644
        "value": "Imported settings, projects and extensions.",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 1116,
-+      "line": 1118,
++      "line": 1122,
        "literal": "\"Imported settings, projects and extensions.\"",
        "category": "unbound-gap"
      },
@@ -6300,7 +6505,7 @@ index 4a82c30..0c06d07 100644
        "value": "Virtual device",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 1503,
-+      "line": 1505,
++      "line": 1509,
        "literal": "\"Virtual device\"",
        "category": "unbound-gap"
      },
@@ -6308,7 +6513,7 @@ index 4a82c30..0c06d07 100644
        "value": "This phone",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 1504,
-+      "line": 1506,
++      "line": 1510,
        "literal": "\"This phone\"",
        "category": "unbound-gap"
      },
@@ -6316,7 +6521,7 @@ index 4a82c30..0c06d07 100644
        "value": "The native official library is maintained by sui-code. Third-party packages can be imported locally after review.",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2441,
-+      "line": 2443,
++      "line": 2447,
        "literal": "\"The native official library is maintained by sui-code. Third-party packages can be imported locally after review.\"",
        "category": "unbound-gap"
      },
@@ -6324,7 +6529,7 @@ index 4a82c30..0c06d07 100644
        "value": "symbol",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2704,
-+      "line": 2716,
++      "line": 2720,
        "literal": "\"symbol\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6332,7 +6537,7 @@ index 4a82c30..0c06d07 100644
        "value": "symbol",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2715,
-+      "line": 2727,
++      "line": 2731,
        "literal": "\"symbol\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6340,7 +6545,7 @@ index 4a82c30..0c06d07 100644
        "value": "symbol",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2739,
-+      "line": 2751,
++      "line": 2755,
        "literal": "\"symbol\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6348,7 +6553,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2745,
-+      "line": 2757,
++      "line": 2761,
        "literal": "\"Renamed to \\\"$trimmed\\\" in ${edit.fileCount} \"",
        "category": "unbound-gap"
      },
@@ -6356,7 +6561,7 @@ index 4a82c30..0c06d07 100644
        "value": "file",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2746,
-+      "line": 2758,
++      "line": 2762,
        "literal": "\"file\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6364,7 +6569,7 @@ index 4a82c30..0c06d07 100644
        "value": "files",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2746,
-+      "line": 2758,
++      "line": 2762,
        "literal": "\"files\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6372,7 +6577,7 @@ index 4a82c30..0c06d07 100644
        "value": "path",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2764,
-+      "line": 2776,
++      "line": 2780,
        "literal": "\"path\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6380,7 +6585,7 @@ index 4a82c30..0c06d07 100644
        "value": "SHA-256",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2765,
-+      "line": 2777,
++      "line": 2781,
        "literal": "\"SHA-256\"",
        "category": "unbound-gap"
      },
@@ -6388,7 +6593,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2767,
-+      "line": 2779,
++      "line": 2783,
        "literal": "\"language-sources/$digest/\"",
        "category": "unbound-gap"
      },
@@ -6396,7 +6601,7 @@ index 4a82c30..0c06d07 100644
        "value": "Source.java",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2767,
-+      "line": 2779,
++      "line": 2783,
        "literal": "\"Source.java\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6404,7 +6609,7 @@ index 4a82c30..0c06d07 100644
        "value": ".class",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2767,
-+      "line": 2779,
++      "line": 2783,
        "literal": "\".class\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6412,7 +6617,7 @@ index 4a82c30..0c06d07 100644
        "value": ".java",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2767,
-+      "line": 2779,
++      "line": 2783,
        "literal": "\".java\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6420,7 +6625,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2775,
-+      "line": 2787,
++      "line": 2791,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6428,7 +6633,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2824,
-+      "line": 2836,
++      "line": 2840,
        "literal": "\"$actionLabel needs a language server; none supports $name\"",
        "category": "unbound-gap"
      },
@@ -6436,7 +6641,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2828,
-+      "line": 2840,
++      "line": 2844,
        "literal": "\"$actionLabel needs an enabled IDE Kit for $name; install one from Native Packages\"",
        "category": "unbound-gap"
      },
@@ -6444,7 +6649,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2830,
-+      "line": 2842,
++      "line": 2846,
        "literal": "\"$actionLabel needs ${entry?.name ?: descriptor.id}; install it from Toolchains\"",
        "category": "unbound-gap"
      },
@@ -6452,7 +6657,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2831,
-+      "line": 2843,
++      "line": 2847,
        "literal": "\"$actionLabel needs the Linux environment to be ready\"",
        "category": "unbound-gap"
      },
@@ -6460,7 +6665,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2839,
-+      "line": 2851,
++      "line": 2855,
        "literal": "\"${status.name} failed to start${status.detail?.let { \": $it\" } ?: \"\"}\"",
        "category": "unbound-gap"
      },
@@ -6468,7 +6673,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2840,
-+      "line": 2852,
++      "line": 2856,
        "literal": "\"${status.name} is still starting\"",
        "category": "unbound-gap"
      },
@@ -6476,7 +6681,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2846,
-+      "line": 2858,
++      "line": 2862,
        "literal": "\"${status.name} doesn't support $actionLabel\"",
        "category": "unbound-gap"
      },
@@ -6484,7 +6689,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2867,
-+      "line": 2879,
++      "line": 2883,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6492,7 +6697,7 @@ index 4a82c30..0c06d07 100644
        "value": "error",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2867,
-+      "line": 2879,
++      "line": 2883,
        "literal": "\"error\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6500,7 +6705,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2969,
-+      "line": 2981,
++      "line": 2985,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6508,7 +6713,7 @@ index 4a82c30..0c06d07 100644
        "value": "IDE Kit edit rejected: file.write permission or language scope is missing",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3019,
-+      "line": 3031,
++      "line": 3035,
        "literal": "\"IDE Kit edit rejected: file.write permission or language scope is missing\"",
        "category": "unbound-gap"
      },
@@ -6516,7 +6721,7 @@ index 4a82c30..0c06d07 100644
        "value": "sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled.",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3127,
-+      "line": 3144,
++      "line": 3148,
        "literal": "\"sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled.\"",
        "category": "unbound-gap"
      },
@@ -6524,7 +6729,7 @@ index 4a82c30..0c06d07 100644
        "value": "Native package restore failed",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3178,
-+      "line": 3195,
++      "line": 3199,
        "literal": "\"Native package restore failed\"",
        "category": "unbound-gap"
      },
@@ -6532,7 +6737,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3494,
-+      "line": 3511,
++      "line": 3515,
        "literal": "\"Added '${project.name}' to the workspace.\"",
        "category": "unbound-gap"
      },
@@ -6540,7 +6745,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3526,
-+      "line": 3543,
++      "line": 3547,
        "literal": "\"Workspace '${node.name}' created\"",
        "category": "unbound-gap"
      },
@@ -6548,7 +6753,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3534,
-+      "line": 3551,
++      "line": 3555,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6556,7 +6761,7 @@ index 4a82c30..0c06d07 100644
        "value": "template",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3534,
-+      "line": 3551,
++      "line": 3555,
        "literal": "\"template\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6564,7 +6769,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3534,
-+      "line": 3551,
++      "line": 3555,
        "literal": "\" · ${it.title}\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6572,7 +6777,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3535,
-+      "line": 3552,
++      "line": 3556,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6580,7 +6785,7 @@ index 4a82c30..0c06d07 100644
        "value": "That folder is the JCode Projects root — pick a project or workspace folder inside it.",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3549,
-+      "line": 3566,
++      "line": 3570,
        "literal": "\"That folder is the JCode Projects root — pick a project or workspace folder inside it.\"",
        "category": "unbound-gap"
      },
@@ -6588,7 +6793,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3574,
-+      "line": 3591,
++      "line": 3595,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6596,7 +6801,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3586,
-+      "line": 3603,
++      "line": 3607,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6604,7 +6809,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3586,
-+      "line": 3603,
++      "line": 3607,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6612,7 +6817,7 @@ index 4a82c30..0c06d07 100644
        "value": "unknown error",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3586,
-+      "line": 3603,
++      "line": 3607,
        "literal": "\"unknown error\"",
        "category": "unbound-gap"
      },
@@ -6620,7 +6825,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3590,
-+      "line": 3607,
++      "line": 3611,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6628,7 +6833,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3596,
-+      "line": 3613,
++      "line": 3617,
        "literal": "\"'$label' is too large to import — needs ${formatBytes(scan.totalBytes)}, \"",
        "category": "unbound-gap"
      },
@@ -6636,7 +6841,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3597,
-+      "line": 3614,
++      "line": 3618,
        "literal": "\"only ${formatBytes(sources.usableSpace)} free.\"",
        "category": "unbound-gap"
      },
@@ -6644,7 +6849,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3611,
-+      "line": 3628,
++      "line": 3632,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6652,7 +6857,7 @@ index 4a82c30..0c06d07 100644
        "value": "unknown error",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3611,
-+      "line": 3628,
++      "line": 3632,
        "literal": "\"unknown error\"",
        "category": "unbound-gap"
      },
@@ -6660,7 +6865,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3620,
-+      "line": 3637,
++      "line": 3641,
        "literal": "\"Imported Workspace '${it.name}'.\"",
        "category": "unbound-gap"
      },
@@ -6668,7 +6873,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3626,
-+      "line": 3643,
++      "line": 3647,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6676,7 +6881,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3704,
-+      "line": 3721,
++      "line": 3725,
        "literal": "\"Opened ${if (isWorkspace) \"Workspace\" else \"Project\"} '${project.name}'.\"",
        "category": "unbound-gap"
      },
@@ -6684,7 +6889,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3713,
-+      "line": 3730,
++      "line": 3734,
        "literal": "\"Imported ${if (isWorkspace) \"Workspace\" else \"Project\"} '${it.name}'.\"",
        "category": "unbound-gap"
      },
@@ -6692,7 +6897,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3758,
-+      "line": 3775,
++      "line": 3779,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6700,7 +6905,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3836,
-+      "line": 3853,
++      "line": 3857,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6708,7 +6913,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3837,
-+      "line": 3854,
++      "line": 3858,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6716,7 +6921,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3848,
-+      "line": 3865,
++      "line": 3869,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6724,7 +6929,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3852,
-+      "line": 3869,
++      "line": 3873,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6732,7 +6937,7 @@ index 4a82c30..0c06d07 100644
        "value": "count",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3855,
-+      "line": 3872,
++      "line": 3876,
        "literal": "\"count\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6740,7 +6945,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3855,
-+      "line": 3872,
++      "line": 3876,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6748,7 +6953,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3856,
-+      "line": 3873,
++      "line": 3877,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6756,7 +6961,7 @@ index 4a82c30..0c06d07 100644
        "value": "unknown error",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3856,
-+      "line": 3873,
++      "line": 3877,
        "literal": "\"unknown error\"",
        "category": "unbound-gap"
      },
@@ -6764,7 +6969,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 4080,
-+      "line": 4097,
++      "line": 4101,
        "literal": "\"Removed environment '$label'.\"",
        "category": "unbound-gap"
      },
@@ -6772,7 +6977,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 4080,
-+      "line": 4097,
++      "line": 4101,
        "literal": "\"Could not remove '$label'.\"",
        "category": "unbound-gap"
      },
@@ -6780,7 +6985,7 @@ index 4a82c30..0c06d07 100644
        "value": "message",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5007,
-+      "line": 5028,
++      "line": 5032,
        "literal": "\"message\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6788,7 +6993,7 @@ index 4a82c30..0c06d07 100644
        "value": "Device sandbox",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5541,
-+      "line": 5562,
++      "line": 5566,
        "literal": "\"Device sandbox\"",
        "category": "unbound-gap"
      },
@@ -6796,7 +7001,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5586,
-+      "line": 5607,
++      "line": 5611,
        "literal": "\"adb pair $target\"",
        "category": "unbound-gap"
      },
@@ -6804,7 +7009,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5841,
-+      "line": 5862,
++      "line": 5866,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6812,7 +7017,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5841,
-+      "line": 5862,
++      "line": 5866,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6820,7 +7025,7 @@ index 4a82c30..0c06d07 100644
        "value": "error",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5841,
-+      "line": 5862,
++      "line": 5866,
        "literal": "\"error\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6828,7 +7033,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5994,
-+      "line": 6015,
++      "line": 6019,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6836,7 +7041,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6087,
-+      "line": 6108,
++      "line": 6112,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6844,7 +7049,7 @@ index 4a82c30..0c06d07 100644
        "value": "count",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6088,
-+      "line": 6109,
++      "line": 6113,
        "literal": "\"count\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6852,7 +7057,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6130,
-+      "line": 6151,
++      "line": 6155,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6860,7 +7065,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6137,
-+      "line": 6158,
++      "line": 6162,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6868,7 +7073,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6137,
-+      "line": 6158,
++      "line": 6162,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6876,7 +7081,7 @@ index 4a82c30..0c06d07 100644
        "value": "error",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6137,
-+      "line": 6158,
++      "line": 6162,
        "literal": "\"error\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6884,7 +7089,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6142,
-+      "line": 6163,
++      "line": 6167,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6892,7 +7097,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6160,
-+      "line": 6181,
++      "line": 6185,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6900,7 +7105,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6174,
-+      "line": 6195,
++      "line": 6199,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6908,7 +7113,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6219,
-+      "line": 6240,
++      "line": 6244,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6916,7 +7121,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6228,
-+      "line": 6249,
++      "line": 6253,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6924,7 +7129,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6233,
-+      "line": 6254,
++      "line": 6258,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6932,7 +7137,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6268,
-+      "line": 6289,
++      "line": 6293,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6940,7 +7145,7 @@ index 4a82c30..0c06d07 100644
        "value": "reason",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6268,
-+      "line": 6289,
++      "line": 6293,
        "literal": "\"reason\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6948,7 +7153,7 @@ index 4a82c30..0c06d07 100644
        "value": "error",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6268,
-+      "line": 6289,
++      "line": 6293,
        "literal": "\"error\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6956,7 +7161,7 @@ index 4a82c30..0c06d07 100644
        "value": "count",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6284,
-+      "line": 6305,
++      "line": 6309,
        "literal": "\"count\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6964,7 +7169,7 @@ index 4a82c30..0c06d07 100644
        "value": "language-sources",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6308,
-+      "line": 6329,
++      "line": 6333,
        "literal": "\"language-sources\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6972,7 +7177,7 @@ index 4a82c30..0c06d07 100644
        "value": "name",
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6313,
-+      "line": 6334,
++      "line": 6338,
        "literal": "\"name\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -6980,7 +7185,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6317,
-+      "line": 6338,
++      "line": 6342,
        "literal": "\"Binary preview is not implemented yet for ${file.name}.\"",
        "category": "unbound-gap"
      },
@@ -6988,7 +7193,7 @@ index 4a82c30..0c06d07 100644
        "value": null,
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6359,
-+      "line": 6380,
++      "line": 6384,
        "literal": "\"Binary preview is not implemented yet for ${node.name}.\"",
        "category": "unbound-gap"
      },
@@ -7009,7 +7214,7 @@ index 4a82c30..0c06d07 100644
        "literal": "\"lsp request server=${managed.descriptor.id} elapsedMs=${android.os.SystemClock.elapsedRealtime()-started}\"",
        "category": "unbound-gap"
      },
-@@ -7705,411 +7895,243 @@
+@@ -7705,411 +7895,250 @@
        "category": "verbatim-technical-or-resource-id"
      },
      {
@@ -7147,50 +7352,36 @@ index 4a82c30..0c06d07 100644
 -      "path": "app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt",
 -      "line": 42,
 -      "literal": "\"${bundle.displayName} (${bundle.locale})\\n${bundle.packageId}\"",
-+      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 90,
-+      "literal": "\"$server · ${serverStates[server] ?: strings.text(\"management.notRunning\")}\"",
-+      "category": "verbatim-technical-or-resource-id"
-+    },
-+    {
-+      "value": "id",
-+      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
-+      "literal": "\"id\"",
-       "category": "verbatim-technical-or-resource-id"
-     },
-     {
-       "value": "path",
-       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
+-      "category": "verbatim-technical-or-resource-id"
+-    },
+-    {
+-      "value": "path",
+-      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 51,
-+      "line": 57,
-       "literal": "\"path\"",
-       "category": "verbatim-technical-or-resource-id"
-     },
-     {
-       "value": "Checking prerequisites…",
-       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
+-      "literal": "\"path\"",
+-      "category": "verbatim-technical-or-resource-id"
+-    },
+-    {
+-      "value": "Checking prerequisites…",
+-      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 62,
-+      "line": 70,
-       "literal": "\"Checking prerequisites…\"",
-       "category": "verbatim-technical-or-resource-id"
-     },
-     {
-       "value": "Installing reviewed package resources",
-       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
+-      "literal": "\"Checking prerequisites…\"",
+-      "category": "verbatim-technical-or-resource-id"
+-    },
+-    {
+-      "value": "Installing reviewed package resources",
+-      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 62,
-+      "line": 70,
-       "literal": "\"Installing reviewed package resources\"",
-       "category": "verbatim-technical-or-resource-id"
-     },
-     {
-       "value": "Ready · package resources enabled; no language environment required",
-       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
+-      "literal": "\"Installing reviewed package resources\"",
+-      "category": "verbatim-technical-or-resource-id"
+-    },
+-    {
+-      "value": "Ready · package resources enabled; no language environment required",
+-      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 62,
-+      "line": 70,
-       "literal": "\"Ready · package resources enabled; no language environment required\"",
-       "category": "verbatim-technical-or-resource-id"
-     },
+-      "literal": "\"Ready · package resources enabled; no language environment required\"",
+-      "category": "verbatim-technical-or-resource-id"
+-    },
 -    {
 -      "value": "version",
 -      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
@@ -7232,9 +7423,13 @@ index 4a82c30..0c06d07 100644
 -      "line": 82,
 -      "literal": "\"dependencies\"",
 -      "category": "verbatim-technical-or-resource-id"
--    },
--    {
--      "value": null,
++      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
++      "line": 91,
++      "literal": "\"E_COMPONENT: ${component.id}/serverId\"",
++      "category": "unbound-gap"
+     },
+     {
+       "value": null,
 -      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 83,
 -      "literal": "\"SHA-256: ${item.sha256}\"",
@@ -7259,37 +7454,51 @@ index 4a82c30..0c06d07 100644
 -      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 96,
 -      "literal": "\"name\"",
--      "category": "verbatim-technical-or-resource-id"
--    },
--    {
--      "value": "id",
++      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
++      "line": 94,
++      "literal": "\"$server · ${serverStates[server] ?: strings.text(\"management.notRunning\")}\"",
+       "category": "verbatim-technical-or-resource-id"
+     },
+     {
+       "value": "id",
 -      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 97,
--      "literal": "\"id\"",
--      "category": "verbatim-technical-or-resource-id"
--    },
--    {
++      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
++      "line": 117,
+       "literal": "\"id\"",
+       "category": "verbatim-technical-or-resource-id"
+     },
+     {
 -      "value": "version",
--      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
++      "value": "path",
+       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 97,
 -      "literal": "\"version\"",
--      "category": "verbatim-technical-or-resource-id"
--    },
--    {
++      "line": 57,
++      "literal": "\"path\"",
+       "category": "verbatim-technical-or-resource-id"
+     },
+     {
 -      "value": "kind",
--      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
++      "value": "Checking prerequisites…",
+       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 97,
 -      "literal": "\"kind\"",
--      "category": "verbatim-technical-or-resource-id"
--    },
--    {
++      "line": 70,
++      "literal": "\"Checking prerequisites…\"",
+       "category": "verbatim-technical-or-resource-id"
+     },
+     {
 -      "value": "status",
--      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
++      "value": "Installing reviewed package resources",
+       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 97,
 -      "literal": "\"status\"",
--      "category": "verbatim-technical-or-resource-id"
--    },
--    {
++      "line": 70,
++      "literal": "\"Installing reviewed package resources\"",
+       "category": "verbatim-technical-or-resource-id"
+     },
+     {
 -      "value": "Verified sui-code signature",
 -      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 98,
@@ -7312,21 +7521,24 @@ index 4a82c30..0c06d07 100644
 -    },
 -    {
 -      "value": "id",
--      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
++      "value": "Ready · package resources enabled; no language environment required",
+       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt",
 -      "line": 119,
 -      "literal": "\"id\"",
--      "category": "verbatim-technical-or-resource-id"
--    },
--    {
--      "value": null,
--      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt",
++      "line": 70,
++      "literal": "\"Ready · package resources enabled; no language environment required\"",
+       "category": "verbatim-technical-or-resource-id"
+     },
+     {
+       "value": null,
+       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt",
 -      "line": 37,
 -      "literal": "\"Review ${if(kit) \"IDE Kit installation plan\" else \"native plugin\"}\"",
 -      "category": "protected-host-English"
 -    },
-     {
-       "value": null,
-       "path": "app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt",
+-    {
+-      "value": null,
+-      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt",
 -      "line": 39,
 +      "line": 42,
        "literal": "\"${preview.pack.id} · ${preview.pack.version}\\n${preview.source}\\n${preview.bytes.size} bytes · SHA-256 ${preview.pack.digest}\"",
@@ -7522,7 +7734,7 @@ index 4a82c30..0c06d07 100644
      {
        "value": "Clear search",
        "path": "core/design/src/main/java/dev/blamspot/jcode/design/CompactSearchField.kt",
-@@ -8873,6 +8895,13 @@
+@@ -8873,6 +8902,13 @@
        "literal": "\"$ $text\"",
        "category": "verbatim-technical-or-resource-id"
      },
@@ -7536,7 +7748,7 @@ index 4a82c30..0c06d07 100644
      {
        "value": null,
        "path": "feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt",
-@@ -8967,77 +8996,77 @@
+@@ -8967,77 +9003,77 @@
      {
        "value": null,
        "path": "feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/NativeEnvironmentPage.kt",
@@ -7625,7 +7837,7 @@ index 4a82c30..0c06d07 100644
        "literal": "\"Ubuntu packages: ${reviewed.packages.joinToString { \"${it.name}=${if(reviewed.upgrade) it.candidate else it.selected}\" }}\\n\\nThe existing Setup terminal will open. Review apt output there. Cancellation waits for a safe boundary; this action does not remove or upgrade your JDK.\"",
        "category": "unbound-gap"
      },
-@@ -9435,857 +9464,857 @@
+@@ -9435,857 +9471,857 @@
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/JCodeShell.kt",
@@ -8284,377 +8496,377 @@ index 4a82c30..0c06d07 100644
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2530,
-+      "line": 2533,
++      "line": 2537,
        "key": "message.Debugcancelledfilescouldnotbesaved"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2704,
-+      "line": 2716,
++      "line": 2720,
        "key": "message.noDefinition"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2715,
-+      "line": 2727,
++      "line": 2731,
        "key": "message.noReferences"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2724,
-+      "line": 2736,
++      "line": 2740,
        "key": "message.Putthecursoronasymboltorename"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2739,
-+      "line": 2751,
++      "line": 2755,
        "key": "message.cannotRename"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2748,
-+      "line": 2760,
++      "line": 2764,
        "key": "message.Renamefailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2764,
-+      "line": 2776,
++      "line": 2780,
        "key": "message.sourceLoadFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2775,
-+      "line": 2787,
++      "line": 2791,
        "key": "message.fileMissing"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2867,
-+      "line": 2879,
++      "line": 2883,
        "key": "message.applyEditsFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2969,
-+      "line": 2981,
++      "line": 2985,
        "key": "message.formatted"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 2970,
-+      "line": 2982,
++      "line": 2986,
        "key": "message.Languageserverreturnednoformattingedits"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3515,
-+      "line": 3532,
++      "line": 3536,
        "key": "project.createFolderHint"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3516,
-+      "line": 3533,
++      "line": 3537,
        "key": "project.saveFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3520,
-+      "line": 3537,
++      "line": 3541,
        "key": "project.templateUnavailable"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3534,
-+      "line": 3551,
++      "line": 3555,
        "key": "project.created"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3535,
-+      "line": 3552,
++      "line": 3556,
        "key": "message.templateFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3574,
-+      "line": 3591,
++      "line": 3595,
        "key": "message.opened"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3586,
-+      "line": 3603,
++      "line": 3607,
        "key": "message.readFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3590,
-+      "line": 3607,
++      "line": 3611,
        "key": "message.emptyImport"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3602,
-+      "line": 3619,
++      "line": 3623,
        "key": "message.Saveorcloseopenfilesbeforeimportinga"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3611,
-+      "line": 3628,
++      "line": 3632,
        "key": "message.importFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3626,
-+      "line": 3643,
++      "line": 3647,
        "key": "message.importedFolder"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3635,
-+      "line": 3652,
++      "line": 3656,
        "key": "message.Saveorcloseopenfilesbeforeimportinga"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3709,
-+      "line": 3726,
++      "line": 3730,
        "key": "message.Theimportedfolderisnolongeravailable"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3744,
-+      "line": 3761,
++      "line": 3765,
        "key": "message.RemovedfromtheprojectlistFilesremainin"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3757,
-+      "line": 3774,
++      "line": 3778,
        "key": "message.ProjectfilesmovedtoTrashRestorefromFiles"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3758,
-+      "line": 3775,
++      "line": 3779,
        "key": "message.projectDeleteStopped"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3801,
-+      "line": 3818,
++      "line": 3822,
        "key": "message.Projectclosed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3836,
-+      "line": 3853,
++      "line": 3857,
        "key": "message.renamed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3836,
-+      "line": 3853,
++      "line": 3857,
        "key": "message.Renamefaileddestinationexistsortheprojectis"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3837,
-+      "line": 3854,
++      "line": 3858,
        "key": "message.renameRejected"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3848,
-+      "line": 3865,
++      "line": 3869,
        "key": "message.exportNotLocal"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3852,
-+      "line": 3869,
++      "line": 3873,
        "key": "message.exporting"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3855,
-+      "line": 3872,
++      "line": 3876,
        "key": "message.exported"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 3856,
-+      "line": 3873,
++      "line": 3877,
        "key": "message.exportFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 4000,
-+      "line": 4017,
++      "line": 4021,
        "key": "message.Cantcolorafileoutsidetheproject"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 4104,
-+      "line": 4121,
++      "line": 4125,
        "key": "message.Workspaceconfigisunavailable"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 4115,
-+      "line": 4132,
++      "line": 4136,
        "key": "message.Projectoverridesrequirealocalproject"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5322,
-+      "line": 5343,
++      "line": 5347,
        "key": "message.Finishorsafelycancelpackageinstallationbeforerestarting"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5327,
-+      "line": 5348,
++      "line": 5352,
        "key": "message.Restartpostponedwaitforaptdpkgtoreach"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5841,
-+      "line": 5862,
++      "line": 5866,
        "key": "message.writeFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 5994,
-+      "line": 6015,
++      "line": 6019,
        "key": "message.bufferRetained"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6087,
-+      "line": 6108,
++      "line": 6112,
        "key": "message.reloaded"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6088,
-+      "line": 6109,
++      "line": 6113,
        "key": "message.reloadedMany"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6106,
-+      "line": 6127,
++      "line": 6131,
        "key": "message.Nounsavedchanges"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6130,
-+      "line": 6151,
++      "line": 6155,
        "key": "message.cannotDiscard"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6137,
-+      "line": 6158,
++      "line": 6162,
        "key": "message.discardFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6142,
-+      "line": 6163,
++      "line": 6167,
        "key": "message.discarded"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6153,
-+      "line": 6174,
++      "line": 6178,
        "key": "message.Nothingtoformat"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6160,
-+      "line": 6181,
++      "line": 6185,
        "key": "message.formatted"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6167,
-+      "line": 6188,
++      "line": 6192,
        "key": "message.Alreadyformatted"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6174,
-+      "line": 6195,
++      "line": 6199,
        "key": "message.formatted"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6187,
-+      "line": 6208,
++      "line": 6212,
        "key": "message.Formattingreplydiscardedbecausethefilechanged"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6219,
-+      "line": 6240,
++      "line": 6244,
        "key": "message.saved"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6228,
-+      "line": 6249,
++      "line": 6253,
        "key": "message.readOnly"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6231,
-+      "line": 6252,
++      "line": 6256,
        "key": "message.Restoretheremovedfilebeforesavingopenedits"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6233,
-+      "line": 6254,
++      "line": 6258,
        "key": "message.cannotSave"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6268,
-+      "line": 6289,
++      "line": 6293,
        "key": "message.saveFailed"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6284,
-+      "line": 6305,
++      "line": 6309,
        "key": "message.Saved1file"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6284,
-+      "line": 6305,
++      "line": 6309,
        "key": "message.savedMany"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6313,
-+      "line": 6334,
++      "line": 6338,
        "key": "message.fileGone"
      },
      {
        "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
 -      "line": 6529,
-+      "line": 6550,
++      "line": 6554,
        "key": "message.Projectoverridesrequirealocalprojectroot"
      },
      {
-@@ -10865,353 +10894,433 @@
+@@ -10865,353 +10901,433 @@
      },
      {
        "path": "app/src/main/java/dev/suicode/nativehost/NativeLanguageCenter.kt",
@@ -8871,7 +9083,7 @@ index 4a82c30..0c06d07 100644
 -      "line": 89,
 -      "key": "ui.refreshReadiness"
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 92,
++      "line": 96,
 +      "key": "management.restartServer"
      },
      {
@@ -8879,7 +9091,7 @@ index 4a82c30..0c06d07 100644
 -      "line": 90,
 -      "key": "ui.advancedEnvironmentAndServerControls"
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 93,
++      "line": 97,
 +      "key": "management.serverLog"
      },
      {
@@ -8887,7 +9099,7 @@ index 4a82c30..0c06d07 100644
 -      "line": 37,
 -      "key": "ui.language"
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 103,
++      "line": 107,
 +      "key": "ui.downloadAndReview"
      },
      {
@@ -8895,7 +9107,7 @@ index 4a82c30..0c06d07 100644
 -      "line": 39,
 -      "key": "ui.english"
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 103,
++      "line": 107,
 +      "key": "ui.reviewUpdateReinstall"
      },
      {
@@ -8903,7 +9115,7 @@ index 4a82c30..0c06d07 100644
 -      "line": 41,
 -      "key": "ui.english"
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 105,
++      "line": 109,
 +      "key": "ui.disable"
      },
      {
@@ -8911,42 +9123,42 @@ index 4a82c30..0c06d07 100644
 -      "line": 45,
 -      "key": "ui.fallback"
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 105,
++      "line": 109,
 +      "key": "ui.enable"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 106,
++      "line": 110,
 +      "key": "management.permissions"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 107,
++      "line": 111,
 +      "key": "ui.rollback"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 108,
++      "line": 112,
 +      "key": "ui.uninstall"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
++      "line": 117,
 +      "key": "ui.uninstallPackage"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
++      "line": 117,
 +      "key": "packages.removeDescription"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
++      "line": 117,
 +      "key": "ui.uninstall"
 +    },
 +    {
 +      "path": "app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt",
-+      "line": 113,
++      "line": 117,
 +      "key": "ui.cancel"
      },
      {
@@ -9255,7 +9467,7 @@ index 4a82c30..0c06d07 100644
      },
      {
        "path": "core/design/src/main/java/dev/blamspot/jcode/design/ManagerDetailScreen.kt",
-@@ -11893,6 +12002,31 @@
+@@ -11893,6 +12009,31 @@
        "line": 1052,
        "key": "ui.show"
      },
@@ -9287,7 +9499,7 @@ index 4a82c30..0c06d07 100644
      {
        "path": "feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt",
        "line": 48,
-@@ -11990,57 +12124,82 @@
+@@ -11990,57 +12131,82 @@
      },
      {
        "path": "feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/NativeEnvironmentPage.kt",
@@ -9381,7 +9593,7 @@ index 4a82c30..0c06d07 100644
      },
      {
 diff --git a/docs/localization/locale-key-audit.md b/docs/localization/locale-key-audit.md
-index 0978bc7..4b785dd 100644
+index 0978bc7..ebe6d46 100644
 --- a/docs/localization/locale-key-audit.md
 +++ b/docs/localization/locale-key-audit.md
 @@ -2,7 +2,7 @@
@@ -9389,7 +9601,7 @@ index 0978bc7..4b785dd 100644
  由 `python3 tools/localization/audit.py` 从生产源码及独立语言包资源生成。清单为词法扫描，动态后端日志和扩展作者文案不据此声称已翻译。**资源键翻译率不是全应用汉化率。**
  
 -公开键：732；中文值：732；键引用位置：902；仍有硬编码位置：667（分别列出受保护宿主英文、技术原文及缺口）。
-+公开键：783；中文值：783；键引用位置：940；仍有硬编码位置：644（分别列出受保护宿主英文、技术原文及缺口）。
++公开键：783；中文值：783；键引用位置：940；仍有硬编码位置：645（分别列出受保护宿主英文、技术原文及缺口）。
  
  ## 页面/源码汇总
  
@@ -9411,7 +9623,7 @@ index 0978bc7..4b785dd 100644
  |app/src/main/java/dev/suicode/nativehost/NativeLocalization.kt|4|4|0|0|2|
 -|app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt|41|38|0|3|19|
 -|app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt|0|0|0|22|1|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt|36|28|0|0|12|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt|36|28|1|0|12|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt|25|19|0|0|4|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageReview.kt|25|25|0|13|3|
  |core/design/src/main/java/dev/blamspot/jcode/design/CompactSearchField.kt|0|0|1|0|0|
@@ -9712,69 +9924,69 @@ index 0978bc7..4b785dd 100644
 +|app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6047|ui.terminateExit|终止并退出|已绑定|
 +|app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6055|ui.runInBackground|在后台运行|已绑定|
 +|app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6060|ui.cancel|取消|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2533|message.Debugcancelledfilescouldnotbesaved|调试已取消：无法保存文件。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2626|management.finishDebugFirst|请先结束调试会话，再重启语言服务器。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2716|message.noDefinition|未找到“{symbol}”的定义|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2727|message.noReferences|未找到“{symbol}”的引用|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2736|message.Putthecursoronasymboltorename|请将光标放在要重命名的符号上。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2751|message.cannotRename|无法在此处重命名“{symbol}”|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2760|message.Renamefailed|重命名失败|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2776|message.sourceLoadFailed|语言服务无法加载源文件：{path}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2787|message.fileMissing|无法打开 {name}：文件不存在|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2879|message.applyEditsFailed|应用编辑失败：{reason}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2981|message.formatted|已格式化 {name}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2982|message.Languageserverreturnednoformattingedits|语言服务未返回格式化更改。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3532|project.createFolderHint|请在“内部文件”中新建文件夹，或创建可选项目。已有目录元数据将保留。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3533|project.saveFailed|创建已取消：无法保存已有文件。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3537|project.templateUnavailable|请启用原生 IDE Kit，并授予 project.read／file.write 权限以使用此模板。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3551|project.created|已创建项目“{name}”{template}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3552|message.templateFailed|项目已保留；模板应用失败：{reason}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3591|message.opened|已打开“{name}”。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3603|message.readFailed|无法读取“{name}”：{reason}。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3607|message.emptyImport|“{name}”为空，没有可导入的内容。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3619|message.Saveorcloseopenfilesbeforeimportinga|导入文件夹前，请先保存或关闭已打开的文件。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3628|message.importFailed|导入失败：{reason}。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3643|message.importedFolder|已导入“{name}”。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3652|message.Saveorcloseopenfilesbeforeimportinga|导入文件夹前，请先保存或关闭已打开的文件。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3726|message.Theimportedfolderisnolongeravailable|导入的文件夹已不可用。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3761|message.RemovedfromtheprojectlistFilesremainin|已从项目列表移除，文件仍保留在“内部文件”中。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3774|message.ProjectfilesmovedtoTrashRestorefromFiles|项目文件已移到回收站，可从“文件 → 回收站”恢复。Ubuntu 和已安装工具均已保留。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3775|message.projectDeleteStopped|项目删除已停止：{reason}。重试前请检查回收站和内部文件。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3818|message.Projectclosed|项目已关闭。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3853|message.renamed|已重命名为“{name}”。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3853|message.Renamefaileddestinationexistsortheprojectis|重命名失败：目标已存在或项目不可用。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3854|message.renameRejected|重命名被拒绝：{reason}。项目文件未被覆盖。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3865|message.exportNotLocal|导出失败：“{name}”不是本地文件夹。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3869|message.exporting|正在导出“{name}”…|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3872|message.exported|已从“{name}”导出 {count} 个文件。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3873|message.exportFailed|导出失败：{reason}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4017|message.Cantcolorafileoutsidetheproject|无法为项目外的文件设置标签颜色。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4121|message.Workspaceconfigisunavailable|共享目录配置不可用。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4132|message.Projectoverridesrequirealocalproject|项目覆盖设置需要本地项目。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5343|message.Finishorsafelycancelpackageinstallationbeforerestarting|请完成或安全取消软件包安装后再重启。已有 Ubuntu 和数据会保留。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5348|message.Restartpostponedwaitforaptdpkgtoreach|已推迟重启，请等待 apt/dpkg 到达安全停止点。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5862|message.writeFailed|无法写入 {name}：{reason}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6015|message.bufferRetained|{name} 已移到回收站或删除。打开的缓冲区仍以只读方式保留；保存前请恢复文件。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6108|message.reloaded|已从磁盘重新加载 {name}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6109|message.reloadedMany|已从磁盘重新加载 {count} 个文件|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6127|message.Nounsavedchanges|没有未保存的更改|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6151|message.cannotDiscard|无法放弃“{name}”的更改：不支持此文件来源|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6158|message.discardFailed|放弃 {name} 的更改失败：{reason}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6163|message.discarded|已放弃 {name} 的更改|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6174|message.Nothingtoformat|没有可格式化的内容|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6181|message.formatted|已格式化 {name}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6188|message.Alreadyformatted|格式已规范，无需更改。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6195|message.formatted|已格式化 {name}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6208|message.Formattingreplydiscardedbecausethefilechanged|文件已变化，已忽略过期的格式化结果。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6240|message.saved|已保存 {name}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6249|message.readOnly|{name} 为只读。保存前请恢复已移除的文件，或导出缓冲区内容。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6252|message.Restoretheremovedfilebeforesavingopenedits|保存前请恢复已移除的文件；打开的编辑内容仍已保留。|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6254|message.cannotSave|无法保存“{name}”：不支持此文件来源|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6289|message.saveFailed|保存 {name} 失败：{reason}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6305|message.Saved1file|已保存 1 个文件|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6305|message.savedMany|已保存 {count} 个文件|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6334|message.fileGone|文件已不存在：{name}|已绑定|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6550|message.Projectoverridesrequirealocalprojectroot|项目覆盖设置需要本地项目根目录。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2537|message.Debugcancelledfilescouldnotbesaved|调试已取消：无法保存文件。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2630|management.finishDebugFirst|请先结束调试会话，再重启语言服务器。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2720|message.noDefinition|未找到“{symbol}”的定义|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2731|message.noReferences|未找到“{symbol}”的引用|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2740|message.Putthecursoronasymboltorename|请将光标放在要重命名的符号上。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2755|message.cannotRename|无法在此处重命名“{symbol}”|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2764|message.Renamefailed|重命名失败|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2780|message.sourceLoadFailed|语言服务无法加载源文件：{path}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2791|message.fileMissing|无法打开 {name}：文件不存在|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2883|message.applyEditsFailed|应用编辑失败：{reason}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2985|message.formatted|已格式化 {name}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2986|message.Languageserverreturnednoformattingedits|语言服务未返回格式化更改。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3536|project.createFolderHint|请在“内部文件”中新建文件夹，或创建可选项目。已有目录元数据将保留。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3537|project.saveFailed|创建已取消：无法保存已有文件。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3541|project.templateUnavailable|请启用原生 IDE Kit，并授予 project.read／file.write 权限以使用此模板。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3555|project.created|已创建项目“{name}”{template}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3556|message.templateFailed|项目已保留；模板应用失败：{reason}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3595|message.opened|已打开“{name}”。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3607|message.readFailed|无法读取“{name}”：{reason}。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3611|message.emptyImport|“{name}”为空，没有可导入的内容。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3623|message.Saveorcloseopenfilesbeforeimportinga|导入文件夹前，请先保存或关闭已打开的文件。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3632|message.importFailed|导入失败：{reason}。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3647|message.importedFolder|已导入“{name}”。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3656|message.Saveorcloseopenfilesbeforeimportinga|导入文件夹前，请先保存或关闭已打开的文件。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3730|message.Theimportedfolderisnolongeravailable|导入的文件夹已不可用。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3765|message.RemovedfromtheprojectlistFilesremainin|已从项目列表移除，文件仍保留在“内部文件”中。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3778|message.ProjectfilesmovedtoTrashRestorefromFiles|项目文件已移到回收站，可从“文件 → 回收站”恢复。Ubuntu 和已安装工具均已保留。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3779|message.projectDeleteStopped|项目删除已停止：{reason}。重试前请检查回收站和内部文件。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3822|message.Projectclosed|项目已关闭。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3857|message.renamed|已重命名为“{name}”。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3857|message.Renamefaileddestinationexistsortheprojectis|重命名失败：目标已存在或项目不可用。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3858|message.renameRejected|重命名被拒绝：{reason}。项目文件未被覆盖。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3869|message.exportNotLocal|导出失败：“{name}”不是本地文件夹。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3873|message.exporting|正在导出“{name}”…|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3876|message.exported|已从“{name}”导出 {count} 个文件。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3877|message.exportFailed|导出失败：{reason}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4021|message.Cantcolorafileoutsidetheproject|无法为项目外的文件设置标签颜色。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4125|message.Workspaceconfigisunavailable|共享目录配置不可用。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4136|message.Projectoverridesrequirealocalproject|项目覆盖设置需要本地项目。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5347|message.Finishorsafelycancelpackageinstallationbeforerestarting|请完成或安全取消软件包安装后再重启。已有 Ubuntu 和数据会保留。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5352|message.Restartpostponedwaitforaptdpkgtoreach|已推迟重启，请等待 apt/dpkg 到达安全停止点。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5866|message.writeFailed|无法写入 {name}：{reason}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6019|message.bufferRetained|{name} 已移到回收站或删除。打开的缓冲区仍以只读方式保留；保存前请恢复文件。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6112|message.reloaded|已从磁盘重新加载 {name}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6113|message.reloadedMany|已从磁盘重新加载 {count} 个文件|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6131|message.Nounsavedchanges|没有未保存的更改|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6155|message.cannotDiscard|无法放弃“{name}”的更改：不支持此文件来源|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6162|message.discardFailed|放弃 {name} 的更改失败：{reason}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6167|message.discarded|已放弃 {name} 的更改|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6178|message.Nothingtoformat|没有可格式化的内容|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6185|message.formatted|已格式化 {name}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6192|message.Alreadyformatted|格式已规范，无需更改。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6199|message.formatted|已格式化 {name}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6212|message.Formattingreplydiscardedbecausethefilechanged|文件已变化，已忽略过期的格式化结果。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6244|message.saved|已保存 {name}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6253|message.readOnly|{name} 为只读。保存前请恢复已移除的文件，或导出缓冲区内容。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6256|message.Restoretheremovedfilebeforesavingopenedits|保存前请恢复已移除的文件；打开的编辑内容仍已保留。|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6258|message.cannotSave|无法保存“{name}”：不支持此文件来源|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6293|message.saveFailed|保存 {name} 失败：{reason}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6309|message.Saved1file|已保存 1 个文件|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6309|message.savedMany|已保存 {count} 个文件|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6338|message.fileGone|文件已不存在：{name}|已绑定|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6554|message.Projectoverridesrequirealocalprojectroot|项目覆盖设置需要本地项目根目录。|已绑定|
  |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:155|ui.cancel|取消|已绑定|
  |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:221|ui.cancel|取消|已绑定|
  |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:308|ui.Done|完成|已绑定|
@@ -9887,20 +10099,20 @@ index 0978bc7..4b785dd 100644
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:81|ui.language|界面语言|已绑定|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:85|management.selectComponents|选择组件 / 修复|已绑定|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:86|files.refresh|刷新|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:92|management.restartServer|重启语言服务器|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:93|management.serverLog|服务器日志|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:103|ui.downloadAndReview|下载并审阅|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:103|ui.reviewUpdateReinstall|审阅更新／重新安装|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:105|ui.disable|禁用|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:105|ui.enable|启用|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:106|management.permissions|权限|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:106|management.permissions|权限|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:107|ui.rollback|回滚|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:108|ui.uninstall|卸载|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:113|ui.uninstallPackage|卸载扩展包？|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:113|packages.removeDescription|{id}<br>将保留 Ubuntu、语言环境、项目和源文件。|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:113|ui.uninstall|卸载|已绑定|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:113|ui.cancel|取消|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:96|management.restartServer|重启语言服务器|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:97|management.serverLog|服务器日志|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:107|ui.downloadAndReview|下载并审阅|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:107|ui.reviewUpdateReinstall|审阅更新／重新安装|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:109|ui.disable|禁用|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:109|ui.enable|启用|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:110|management.permissions|权限|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:110|management.permissions|权限|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:111|ui.rollback|回滚|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:112|ui.uninstall|卸载|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:117|ui.uninstallPackage|卸载扩展包？|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:117|packages.removeDescription|{id}<br>将保留 Ubuntu、语言环境、项目和源文件。|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:117|ui.uninstall|卸载|已绑定|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:117|ui.cancel|取消|已绑定|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt:56|packages.title|扩展包|已绑定|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt:57|packages.sourceContext|源文件上下文：{path}|已绑定|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt:57|ui.openASourceFileForLanguageActionsProjectWorkflows|打开源文件可使用语言操作；项目工作流使用当前选中的项目|已绑定|
@@ -10142,102 +10354,102 @@ index 0978bc7..4b785dd 100644
 +|app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6041|"Still running:\n"|unbound-gap|
 +|app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6041|"•  $it"|verbatim-technical-or-resource-id|
 +|app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt:77|"$label · ${actual.name}"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:379|"A blank project folder."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:472|"Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:477|"Native library: ${it.message}"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:481|"Legacy JCode/VSIX packages are not supported by the native ecosystem."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:919|"Removed the migration bundle (${freed / (1024 * 1024)} MB)."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:967|"Migration bundle written to ${dir.absolutePath} (${parts.size} parts)."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:969|"Migration export failed: ${it.message ?: "unknown error"}"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1103|"Migration import failed: ${it.message ?: "unknown error"}"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1118|"Imported settings, projects and extensions."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1505|"Virtual device"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1506|"This phone"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2443|"The native official library is maintained by sui-code. Third-party packages can be imported locally after review."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2716|"symbol"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2727|"symbol"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2751|"symbol"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2757|"Renamed to \"$trimmed\" in ${edit.fileCount} "|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2758|"file"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2758|"files"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2776|"path"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2777|"SHA-256"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2779|"language-sources/$digest/"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2779|"Source.java"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2779|".class"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2779|".java"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2787|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2836|"$actionLabel needs a language server; none supports $name"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2840|"$actionLabel needs an enabled IDE Kit for $name; install one from Native Packages"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2842|"$actionLabel needs ${entry?.name ?: descriptor.id}; install it from Toolchains"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2843|"$actionLabel needs the Linux environment to be ready"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2851|"${status.name} failed to start${status.detail?.let { ": $it" } ?: ""}"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2852|"${status.name} is still starting"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2858|"${status.name} doesn't support $actionLabel"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2879|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2879|"error"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2981|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3031|"IDE Kit edit rejected: file.write permission or language scope is missing"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3144|"sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3195|"Native package restore failed"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3511|"Added '${project.name}' to the workspace."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3543|"Workspace '${node.name}' created"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3551|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3551|"template"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3551|" · ${it.title}"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3552|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3566|"That folder is the JCode Projects root — pick a project or workspace folder inside it."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3591|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3603|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3603|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3603|"unknown error"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:383|"A blank project folder."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:476|"Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:481|"Native library: ${it.message}"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:485|"Legacy JCode/VSIX packages are not supported by the native ecosystem."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:923|"Removed the migration bundle (${freed / (1024 * 1024)} MB)."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:971|"Migration bundle written to ${dir.absolutePath} (${parts.size} parts)."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:973|"Migration export failed: ${it.message ?: "unknown error"}"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1107|"Migration import failed: ${it.message ?: "unknown error"}"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1122|"Imported settings, projects and extensions."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1509|"Virtual device"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1510|"This phone"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2447|"The native official library is maintained by sui-code. Third-party packages can be imported locally after review."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2720|"symbol"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2731|"symbol"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2755|"symbol"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2761|"Renamed to \"$trimmed\" in ${edit.fileCount} "|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2762|"file"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2762|"files"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2780|"path"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2781|"SHA-256"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2783|"language-sources/$digest/"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2783|"Source.java"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2783|".class"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2783|".java"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2791|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2840|"$actionLabel needs a language server; none supports $name"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2844|"$actionLabel needs an enabled IDE Kit for $name; install one from Native Packages"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2846|"$actionLabel needs ${entry?.name ?: descriptor.id}; install it from Toolchains"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2847|"$actionLabel needs the Linux environment to be ready"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2855|"${status.name} failed to start${status.detail?.let { ": $it" } ?: ""}"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2856|"${status.name} is still starting"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2862|"${status.name} doesn't support $actionLabel"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2883|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2883|"error"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2985|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3035|"IDE Kit edit rejected: file.write permission or language scope is missing"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3148|"sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3199|"Native package restore failed"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3515|"Added '${project.name}' to the workspace."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3547|"Workspace '${node.name}' created"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3555|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3555|"template"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3555|" · ${it.title}"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3556|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3570|"That folder is the JCode Projects root — pick a project or workspace folder inside it."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3595|"name"|verbatim-technical-or-resource-id|
 +|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3607|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3613|"'$label' is too large to import — needs ${formatBytes(scan.totalBytes)}, "|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3614|"only ${formatBytes(sources.usableSpace)} free."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3628|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3628|"unknown error"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3637|"Imported Workspace '${it.name}'."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3643|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3721|"Opened ${if (isWorkspace) "Workspace" else "Project"} '${project.name}'."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3730|"Imported ${if (isWorkspace) "Workspace" else "Project"} '${it.name}'."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3775|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3853|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3854|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3865|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3607|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3607|"unknown error"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3611|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3617|"'$label' is too large to import — needs ${formatBytes(scan.totalBytes)}, "|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3618|"only ${formatBytes(sources.usableSpace)} free."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3632|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3632|"unknown error"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3641|"Imported Workspace '${it.name}'."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3647|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3725|"Opened ${if (isWorkspace) "Workspace" else "Project"} '${project.name}'."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3734|"Imported ${if (isWorkspace) "Workspace" else "Project"} '${it.name}'."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3779|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3857|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3858|"reason"|verbatim-technical-or-resource-id|
 +|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3869|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3872|"count"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3872|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3873|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3873|"unknown error"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4097|"Removed environment '$label'."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4097|"Could not remove '$label'."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5028|"message"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5562|"Device sandbox"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5607|"adb pair $target"|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5862|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5862|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5862|"error"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6015|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6108|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6109|"count"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6151|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6158|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6158|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6158|"error"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6163|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6181|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6195|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6240|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6249|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6254|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6289|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6289|"reason"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6289|"error"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6305|"count"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6329|"language-sources"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6334|"name"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6338|"Binary preview is not implemented yet for ${file.name}."|unbound-gap|
-+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6380|"Binary preview is not implemented yet for ${node.name}."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3873|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3876|"count"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3876|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3877|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3877|"unknown error"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4101|"Removed environment '$label'."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4101|"Could not remove '$label'."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5032|"message"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5566|"Device sandbox"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5611|"adb pair $target"|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5866|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5866|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5866|"error"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6019|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6112|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6113|"count"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6155|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6162|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6162|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6162|"error"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6167|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6185|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6199|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6244|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6253|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6258|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6293|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6293|"reason"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6293|"error"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6309|"count"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6333|"language-sources"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6338|"name"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6342|"Binary preview is not implemented yet for ${file.name}."|unbound-gap|
++|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6384|"Binary preview is not implemented yet for ${node.name}."|unbound-gap|
  |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:138|"Go to Line"|unbound-gap|
  |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:144|"line or line:column (1–$lineCount)"|unbound-gap|
  |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:152|"Go"|unbound-gap|
@@ -10252,7 +10464,7 @@ index 0978bc7..4b785dd 100644
  |app/src/main/java/dev/blamspot/jcode/run/BuildConfigPage.kt:48|"Build configuration"|unbound-gap|
  |app/src/main/java/dev/blamspot/jcode/run/BuildConfigPage.kt:50|"A build task for publish/deployment. Stored in this project's .jcode/run.yaml."|unbound-gap|
  |app/src/main/java/dev/blamspot/jcode/run/BuildConfigPage.kt:57|"Name"|unbound-gap|
-@@ -1442,64 +1482,40 @@
+@@ -1442,64 +1482,41 @@
  |app/src/main/java/dev/suicode/nativehost/NativeKitPanel.kt:67|"label"|verbatim-technical-or-resource-id|
  |app/src/main/java/dev/suicode/nativehost/NativeKitPanel.kt:71|"label"|verbatim-technical-or-resource-id|
  |app/src/main/java/dev/suicode/nativehost/NativeKitPanel.kt:73|"label"|verbatim-technical-or-resource-id|
@@ -10324,8 +10536,9 @@ index 0978bc7..4b785dd 100644
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:70|"${field.label}: ${field.value}"|verbatim-technical-or-resource-id|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:71|"${field.label}: ${field.value}"|verbatim-technical-or-resource-id|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:75|"${if(component.ready) "✓" else "○"} ${r.name} · ${component.installedVersion}"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:90|"$server · ${serverStates[server] ?: strings.text("management.notRunning")}"|verbatim-technical-or-resource-id|
-+|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:113|"id"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:91|"E_COMPONENT: ${component.id}/serverId"|unbound-gap|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:94|"$server · ${serverStates[server] ?: strings.text("management.notRunning")}"|verbatim-technical-or-resource-id|
++|app/src/main/java/dev/suicode/nativehost/NativePackageCard.kt:117|"id"|verbatim-technical-or-resource-id|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt:57|"path"|verbatim-technical-or-resource-id|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt:70|"Checking prerequisites…"|verbatim-technical-or-resource-id|
 +|app/src/main/java/dev/suicode/nativehost/NativePackageCenter.kt:70|"Installing reviewed package resources"|verbatim-technical-or-resource-id|
@@ -10349,7 +10562,7 @@ index 0978bc7..4b785dd 100644
  |core/design/src/main/java/dev/blamspot/jcode/design/CompactSearchField.kt:95|"Clear search"|unbound-gap|
  |core/design/src/main/java/dev/blamspot/jcode/design/IconPackLoader.kt:129|"description"|verbatim-technical-or-resource-id|
  |core/design/src/main/java/dev/blamspot/jcode/design/IconPackLoader.kt:183|"description"|verbatim-technical-or-resource-id|
-@@ -1609,6 +1625,7 @@
+@@ -1609,6 +1626,7 @@
  |feature/onboarding/src/main/java/dev/blamspot/jcode/feature/onboarding/OnboardingFeature.kt:952|"Allow \"All files access\""|unbound-gap|
  |feature/onboarding/src/main/java/dev/blamspot/jcode/feature/onboarding/OnboardingFeature.kt:956|"Without it, projects fall back to app-private storage and are removed ""when the app is uninstalled. In the settings screen that opens, turn on ""\"Allow access to manage all files\" for JCode, then return here."|unbound-gap|
  |feature/onboarding/src/main/java/dev/blamspot/jcode/feature/onboarding/OnboardingFeature.kt:1089|"$ $text"|verbatim-technical-or-resource-id|
@@ -10357,7 +10570,7 @@ index 0978bc7..4b785dd 100644
  |feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt:50|"Environment: ${environment.runtime.selectedDistro.label} · Linux ${environment.runtime.selectedDistro.arch.rootfsKey}"|unbound-gap|
  |feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt:58|"Version: ${release.version}"|unbound-gap|
  |feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt:59|"Source: ${release.source}"|unbound-gap|
-@@ -1622,17 +1639,17 @@
+@@ -1622,17 +1640,17 @@
  |feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt:88|"$home\n${if(remove) "Only this inactive managed installation will be deleted. Active or in-use JDKs are protected." else "java, javac and jshell will be verified before updating java.env. Existing terminals and language services need a restart."}"|verbatim-technical-or-resource-id|
  |feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt:94|"Install Java ${release.version}?"|unbound-gap|
  |feature/sdk-manager/src/main/java/dev/blamspot/jcode/feature/sdkmanager/JavaEnvironmentPage.kt:95|"${release.source}\n${release.fileName}\n\nThe Ubuntu Setup terminal will open. Download, checksum verification and HelloWorld must succeed before activation. Existing JDKs and an existing usable system default will be kept.\n\nNo language plugin will be downloaded."|unbound-gap|
@@ -10399,7 +10612,7 @@ index f5273ae..0bbc20c 100644
  - [Native Extension & IDE Kit Development Specification](SUIC-SUIK-Development-Specification.md)
  - [UI Extension & Design Specification](SuiCode-UI-Design-Specification.md)
 diff --git a/docs/specifications/SUIC-SUIK-Development-Specification.md b/docs/specifications/SUIC-SUIK-Development-Specification.md
-index 953777b..53983f3 100644
+index 953777b..6b9bb87 100644
 --- a/docs/specifications/SUIC-SUIK-Development-Specification.md
 +++ b/docs/specifications/SUIC-SUIK-Development-Specification.md
 @@ -1,6 +1,6 @@
@@ -10744,7 +10957,7 @@ index 953777b..53983f3 100644
            }
          },
          "required": [
-@@ -4704,3 +5003,212 @@ Core占位符验证和渲染使用同一字面扫描器，不依赖Android ICU
+@@ -4704,3 +5003,216 @@ Core占位符验证和渲染使用同一字面扫描器，不依赖Android ICU
  `NativePackageHost.uiText(key: String, arguments: Map<String,String> = emptyMap()): String`是Android宿主事件文案适配器，读取已授权资源与用户选择的不可变快照，不进行磁盘或运行环境IO；返回值与`UiTranslations.text`完全一致。调用时机为生成宿主Toast/Snackbar等事件文本，未知键或错误参数抛IllegalArgumentException；无可用语言包时逐键返回英文。它不是扩展可执行入口，不增加权限，也不允许扩展执行任意代码。Compose控件仍读取`LocalUiTranslations`，只显示翻译，不更改枚举/配置标识、用户路径、命令或保存内容。
  
  `tools/localization/audit.py`输出生产源码位置、键、中文值、未接入字符串、宿主受保护英文和技术原文。静态显示参数引用覆盖率只衡量扫描到的字面文案，不包含无法静态识别的动态后端/扩展作者文案，不能称为“全应用汉化率”。`localization/ui-literal-baseline.json`对新增未审阅硬编码显示文字设回归门槛；更新基线必须人工说明缺口，不能把删除扫描范围当作翻译。
@@ -10957,6 +11170,10 @@ index 953777b..53983f3 100644
 +Installation log metadata records task type (`environment` or `ide-component`), component/package ID, distro, source, timestamp, outcome and persistent log location. Languages reads only environment records, Packages only IDE records. Archives survive navigation/restarts. Logging failures are diagnosed and cannot prevent cancellation cleanup. Historical unindexed Ubuntu logs are retained. The host reads bounded log tails off the UI thread.
 +
 +Runnable card templates and the corresponding real archives are indexed in [examples/CARDS.md](examples/CARDS.md). The SDK copies the exact production `PackageCards`, `KitRequirements`, verifier and independent loaders; it does not emulate Android backends. Old API1–4 packages with no card declaration continue using a generic host card.
++
++### Host integration: unchanged-archive tool repair
++
++`NativePackageHost.onServicesReload: (packageId: String) -> Unit` is an Android host callback, not an extension-granted operation. It is emitted after committed install/activation/publish when the installed enabled record is unchanged but the Kit declares LSP services. This covers installing an optional Java Debug bundle or Python formatting backend without changing the package archive digest. The workbench asynchronously closes only that owner's LSP sessions and reopens its documents; unrelated servers and debug owners remain alive. Changed records use the dependency-aware service invalidation flow instead. Resource-only localization Kits never emit this callback. Errors in incomplete legacy server descriptors are diagnosed in their host card rather than crashing composition. No callback grants capabilities or changes publisher trust.
 diff --git a/docs/specifications/SuiCode-UI-Design-Specification.md b/docs/specifications/SuiCode-UI-Design-Specification.md
 index b50fec1..efebf8b 100644
 --- a/docs/specifications/SuiCode-UI-Design-Specification.md
@@ -12579,7 +12796,7 @@ literal 0
 HcmV?d00001
 
 diff --git a/localization/ui-literal-baseline.json b/localization/ui-literal-baseline.json
-index 04dcd12..4c021d9 100644
+index 04dcd12..3d634df 100644
 --- a/localization/ui-literal-baseline.json
 +++ b/localization/ui-literal-baseline.json
 @@ -1,6 +1,5 @@
@@ -12883,7 +13100,7 @@ index 04dcd12..4c021d9 100644
    "da1470d57dcbf1693025aa3b26cbcf63da59c69b94a80ebca566f512fe30d417",
    "dab822c74a01316d8d4c48c06d433a22cc4c24d5356f3fa05c7c420729de6cdb",
    "db54bfcfde2701b81e6261eeb7bedb2dfbf91dadd8cbb9713c611e62989deb0c",
-@@ -473,29 +454,23 @@
+@@ -473,29 +454,24 @@
    "dbed7f63c59c1d1dbdf0fd859c0a804cb7946001b7f29c8327a0dcc181d8c194",
    "dc07fe72c28c035ae4b234ebda9a12333afea1f3f2cda8cf220a69f6511888d9",
    "dc939f5fcf8398954435a0e8eca198954ed4b90c89264b42b145e9c12c22af34",
@@ -12910,10 +13127,11 @@ index 04dcd12..4c021d9 100644
 -  "e61308b44ce48462ead9c2a9136a3be0d5e693eec9542ef8b4e8269059620742",
    "e65d2023ef81ff203afaf7eae029427d42fe8374dc8930043bf0a4b82b707191",
 -  "e6be6c222f4d9ceae771a307c3b63a4a516a34a84012fccb5c3a060ca482f52a",
++  "e951fbcfd9be32df476993532e9b9b7cfcdba709ddb1674d8c9075929283e04f",
    "e9b30b3bafe61d5d61481eb02c1103c8d4644d2bd7c5b84213512e05b23f6f99",
    "ea353ea71e00e58e207066c766a955789ae13395e11beedec63dea0b351acd1a",
    "eabbe468e0279926c0c4c733b96a8ed01f4814a3ec17cb13a024937c1376a5b7",
-@@ -507,6 +482,7 @@
+@@ -507,6 +483,7 @@
    "ecd54d20ab5fd40c64f3ec305773b763860469c2dc14a8d86e736907f0a10e52",
    "ece28263a38b50ecf8a83dbb73756ebdec57951a7460444cae3993c02492edf5",
    "edaf376540a544eb6d47f6a03868ea370bb42fbd96cf54c81d17edf21a11f08f",
@@ -12921,7 +13139,7 @@ index 04dcd12..4c021d9 100644
    "eee6cf8c688ed3707734a4f136213a3eaf630eaada6ae9d9c5f7d85c6f209955",
    "eef0e1978f2fb0f4dcac8bc752ef5e24acbc0ab886a5a797f6428f763c60a19a",
    "ef5a4fe2e82df5b0e6ab924395719fce084b27d63953b10634a5651f3fed2df4",
-@@ -520,6 +496,7 @@
+@@ -520,6 +497,7 @@
    "f39270f202feceed4124d62b244006913ad459231e09910f0e80af8e7909fa88",
    "f4589448ba130b02b57caf858f8f3daaa1e29aae2c97ef53ce3d1effbda95fa7",
    "f60bc44042d530f982794475c6f06ff6cf5a59f5ca2ec841e5251fab46b8da4f",
@@ -12929,7 +13147,7 @@ index 04dcd12..4c021d9 100644
    "f68b7503a528e9fc8403e838d03c60111bc4ac64953411698a209a9464a6db04",
    "f68dc775860c6e0153572ee251c0576b2c6b7cc57b8319a15870452476d16d7c",
    "f6c19d256cfdd01596539e1628f348390202702afb4606ad47ceb5412a67af1c",
-@@ -527,7 +504,8 @@
+@@ -527,7 +505,8 @@
    "f7005a46b117a5768d275508d4a9a9fcbfa0e8b2fc25de764596fdd8fc397160",
    "f780b1163d01dd052a0ba82b12dfe16956f6e06300abc46f5c68ac6ff7dede0d",
    "f7b06656ff4b5019de9f501de584f3553022c3a11f6ee414a6ad72e1dc12965b",
@@ -14193,10 +14411,10 @@ index 0000000..e23aeea
 +}
 diff --git a/tools/ide_reliability/android_regression.py b/tools/ide_reliability/android_regression.py
 new file mode 100644
-index 0000000..431042d
+index 0000000..421934a
 --- /dev/null
 +++ b/tools/ide_reliability/android_regression.py
-@@ -0,0 +1,261 @@
+@@ -0,0 +1,287 @@
 +#!/usr/bin/env python3
 +"""Shipping APK + standalone Kit UI regression. OWNED new AVDs only; never uninstall/clear target app.
 +No real Ubuntu/toolchain is installed: fixtures prove byte retention, not runtime execution.
@@ -14216,10 +14434,16 @@ index 0000000..431042d
 + print(message,flush=True);steps.append(message);(a.evidence/'steps.log').write_text('\n'.join(steps)+'\n')
 +def fail_hook(kind,error,tb):
 + text=''.join(traceback.format_exception(kind,error,tb))
++ if last_xml:
++  try:
++   inputs=[n.attrib for n in ET.fromstring(last_xml).iter('node') if n.attrib.get('class')=='android.widget.EditText']
++   text+='\nLIVE_SEARCH_INPUTS '+json.dumps(inputs,ensure_ascii=False)[:2000]
++  except Exception:pass
 + (a.evidence/'failure.txt').write_text(text)
 + try:
 +  log=adb('logcat','-d','-v','brief',timeout=30).stdout
 +  (a.evidence/'failure-logcat.txt').write_text(log)
++  if last_xml:(a.evidence/'failure-ui.xml').write_text(last_xml)
 +  lines=log.splitlines();fatal=[]
 +  for i,line in enumerate(lines):
 +   if 'FATAL EXCEPTION' in line or ('Fatal signal' in line and pkg in line):fatal.extend(lines[max(0,i-2):i+45])
@@ -14378,11 +14602,19 @@ index 0000000..431042d
 + tap('关闭' if chinese else 'Close')
 + wait_text('运行文件' if chinese else 'Run file')
 + checkpoint('language-selected-'+('zh' if chinese else 'en'),['运行文件','概览','文件','扩展包'] if chinese else ['Run file','Overview','Files','Packages'])
++def package_search_editor(tree):
++ editors=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
++ preferred=[n for n in editors if any(term in ' '.join(n.attrib.get(k,'') for k in ['text','content-desc','hint','hint-text']) for term in ['Search packages','搜索扩展包'])]
++ assert editors,'The real Packages search editor must be available'
++ return preferred[0] if preferred else max(editors,key=lambda n:bounds(n)[0])
 +def card_action(label,chinese):
 + open_packages(chinese);tap('已安装' if chinese else 'Installed')
-+ tree=xml();editors=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
-+ assert editors,'The real Packages search editor must be available'
-+ tap_node(editors[0]);adb('shell','input keycombination 113 29');adb('shell','input text '+kitid);adb('shell','input keyevent 4');time.sleep(.7)
++ tree=xml();package_search_editor(tree)
++ # Use the product's actual Clear control; global editor shortcuts must not affect fixture input.
++ if matches(tree,'Clear'):tap('Clear')
++ elif matches(tree,'清除'):tap('清除')
++ tree=xml();tap_node(package_search_editor(tree));adb('shell','input text '+kitid);adb('shell','input keyevent 4');time.sleep(.7)
++ note('PACKAGE_ID_FILTER '+kitid)
 + # A unique ID search prevents borrowing a lifecycle action from an adjacent Kit.
 + tap(label,scroll=True)
 +
@@ -14450,7 +14682,19 @@ index 0000000..431042d
 +adb('shell','input keyevent 3');time.sleep(1)
 +adb('shell',f'input swipe {WIDTH//2} {HEIGHT-35} {WIDTH//2} 150 400');time.sleep(1)
 +wait_text('sui-code',scroll=True);checkpoint('system-launcher-user-icon',['sui-code'])
-+tap('sui-code');wait_text('Run file');checkpoint('launched-via-official-user-icon',['Run file'])
++tap('sui-code')
++launch_deadline=time.monotonic()+50
++while True:
++ tree=xml()
++ if matches(tree,'Run file'):break
++ if matches(tree,'Slow-swipe up to show the Taskbar'):
++  checkpoint('android-system-taskbar-first-use-tutorial')
++  adb('shell','input keyevent 4');time.sleep(.5)
++  if matches(xml(),'Slow-swipe up to show the Taskbar'):adb('shell',f'input tap {WIDTH//2} 160')
++  note('DISMISSED_ANDROID_SYSTEM_TASKBAR_TUTORIAL')
++ assert time.monotonic()<launch_deadline,'Actual Launcher tap did not reveal the app workbench'
++ time.sleep(.5)
++checkpoint('launched-via-official-user-icon',['Run file'])
 +note('ANDROID_FRAMEWORK_ADAPTIVE_AND_ACTUAL_LAUNCHER_DISPLAY_PASS')
 +(a.evidence/'logcat.txt').write_text(adb('logcat','-d','-v','threadtime','-s','AndroidRuntime','SuiStartup','SuiStartupTest','SuiPerformance').stdout)
 +for name in ['startup.log','startup.previous.log']:

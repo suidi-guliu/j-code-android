@@ -6,11 +6,11 @@
     "arm64-v8a"
   ],
   "certificate_sha256": "62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0",
-  "source_build_commit": "47cac88b4da4c7c27e6fea8372d476cb6afb52ca",
+  "source_build_commit": "ce2398e2280d4fbd048274113bb000d13c07c2dd",
   "apk": {
     "file": "sui-code-v0.5.4-debug.apk",
-    "bytes": 92226893,
-    "sha256": "3f606b8b2c8f7bcfbcd5b9872fd25f0117f5cd18321bff58b7905e63710f7606"
+    "bytes": 91273537,
+    "sha256": "418d63e21d21d84401dd59a25b32cc6c08c425d35a6201a38f678d8d000f1d3f"
   },
   "language_pack": {
     "file": "sui-code-zh-hans-1.0.1.suik",
@@ -21,7 +21,7 @@
   "core_api": 4,
   "language_resources": 783,
   "original_translations_preserved": 732,
-  "jvm_tests": 192,
+  "jvm_tests": 193,
   "android_result": "PENDING_CI",
   "physical_arm64_tested": false
 }
