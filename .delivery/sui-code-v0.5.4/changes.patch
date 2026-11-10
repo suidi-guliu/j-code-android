@@ -1,9 +1,9 @@
 diff --git a/.github/workflows/deliver-ide-reliability-v0.5.4.yml b/.github/workflows/deliver-ide-reliability-v0.5.4.yml
 new file mode 100644
-index 0000000..43af6ea
+index 0000000..382fc8d
 --- /dev/null
 +++ b/.github/workflows/deliver-ide-reliability-v0.5.4.yml
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,156 @@
 +name: Verify Android 16 IDE management and deliver sui-code 0.5.4
 +on:
 +  push:
@@ -14,6 +14,9 @@ index 0000000..43af6ea
 +      - 'tools/ide_reliability/android_regression.py'
 +      - 'tools/ide_reliability/run_emulator.sh'
 +  workflow_dispatch:
++concurrency:
++  group: sui-code-v054-verified-delivery
++  cancel-in-progress: true
 +permissions:
 +  contents: read
 +jobs:
@@ -1304,8 +1307,54 @@ index 2c30b3a..87b6a75 100644
      val onCheckSdkStatuses: () -> Unit,
      val onInstallSdkCatalogEntry: (String) -> Unit,
      val onInstallSdkCatalogVersion: (String, String) -> Unit,
+diff --git a/app/src/main/java/dev/suicode/nativehost/KitProbeScripts.kt b/app/src/main/java/dev/suicode/nativehost/KitProbeScripts.kt
+new file mode 100644
+index 0000000..3c4f434
+--- /dev/null
++++ b/app/src/main/java/dev/suicode/nativehost/KitProbeScripts.kt
+@@ -0,0 +1,40 @@
++package dev.suicode.nativehost
++
++import dev.blamspot.jcode.core.distro.shellQuote
++import dev.suicode.packages.KitRequirement
++import kotlinx.serialization.json.*
++
++/** Pre-consent inspection must never invoke an extension-named executable or import its module. */
++internal object KitProbeScripts {
++    fun modulePresence(module: String,additionalPaths: List<String> = emptyList()): String {
++        require(module.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*")))
++        val paths=JsonArray(additionalPaths.map(::JsonPrimitive)).toString()
++        val script="""
++            import sys, sysconfig
++            from importlib.machinery import PathFinder
++            paths=list(sys.path)+[sysconfig.get_path('purelib'),sysconfig.get_path('platlib'),'/usr/lib/python3/dist-packages']+$paths
++            for part in ${JsonPrimitive(module)}.split('.'):
++                spec=PathFinder.find_spec(part,[p for p in paths if p])
++                if spec is None: raise SystemExit(1)
++                paths=list(spec.submodule_search_locations or [])
++        """.trimIndent()
++        // -I/-S ignore PYTHONPATH, startup site/.pth files and the current directory.
++        return "/usr/bin/python3 -I -S -c "+shellQuote(script)
++    }
++    fun versionMetadata(requirement: KitRequirement): String = """
++        set +e
++        for package in ${requirement.packages.joinToString(" ",transform=::shellQuote)}; do
++            value=${'$'}(dpkg-query -W -f='${'$'}{db:Status-Abbrev} ${'$'}{Version}' "${'$'}package" 2>/dev/null)
++            case "${'$'}value" in 'ii '*) printf '%s' "${'$'}{value#ii }"; exit 0;; esac
++        done
++        for tool in ${(requirement.commands+requirement.anyCommands).distinct().joinToString(" ",transform=::shellQuote)}; do
++            path=${'$'}(command -v "${'$'}tool" 2>/dev/null) || continue
++            path=${'$'}(readlink -f -- "${'$'}path") || continue
++            owner=${'$'}(dpkg-query -S -- "${'$'}path" 2>/dev/null | head -1 | sed 's/: .*//')
++            [ -n "${'$'}owner" ] || continue
++            value=${'$'}(dpkg-query -W -f='${'$'}{Version}' "${'$'}owner" 2>/dev/null) || continue
++            printf '%s' "${'$'}value"; exit 0
++        done
++        printf '%s' ${shellQuote("Installed checks passed; required/source version: "+requirement.version)}
++    """.trimIndent()
++}
 diff --git a/app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt b/app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt
-index cebfd10..ce207dd 100644
+index cebfd10..e5cc032 100644
 --- a/app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt
 +++ b/app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt
 @@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.*
@@ -1323,7 +1372,7 @@ index cebfd10..ce207dd 100644
      private fun verify(r: KitRequirement): String = buildList {
 -        r.files.forEach { add("test -r ${shellQuote(it)}") }
 +        if(r.provider!="environment" || r.environmentId=="java") r.files.forEach { add("test -r ${shellQuote(it)}") }
-+        r.pythonModules.forEach { add("python3 -c ${shellQuote("import $it")}") }
++        r.pythonModules.forEach { add(KitProbeScripts.modulePresence(it)) }
          r.commands.forEach { add("command -v ${shellQuote(it)} >/dev/null 2>&1") }
 -        r.packages.forEach { add("dpkg-query -W -f='\${db:Status-Abbrev}' ${shellQuote(it)} 2>/dev/null | grep -q '^ii '") }
 +        if(r.files.isEmpty() && r.commands.isEmpty() && r.anyCommands.isEmpty() && r.pythonModules.isEmpty()) r.packages.forEach { add("dpkg-query -W -f='\${db:Status-Abbrev}' ${shellQuote(it)} 2>/dev/null | grep -q '^ii '") }
@@ -1333,18 +1382,13 @@ index cebfd10..ce207dd 100644
          if(r.environmentId=="python") add("command -v python3 >/dev/null")
          // DAP executable names are versioned on Ubuntu. Package metadata alone isn't readiness.
          if(r.anyCommands.isNotEmpty()) add("("+r.anyCommands.joinToString(" || ") { "command -v ${shellQuote(it)} >/dev/null 2>&1" }+")")
-@@ -41,15 +42,25 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+@@ -41,15 +42,20 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
          if(!distro.isRuntimeReady()) return@withContext requirements.map { KitDependencyStatus(it,false,"Ubuntu setup required") }
          // Only Core-composed existence/dpkg checks; never a prerequisite's installation resource.
          val checks=requirements.map { CatalogProbeBatch.Probe(it.id,verify(it)) }
 -        val result=distro.execOwned(CatalogProbeBatch.script(checks),"/tmp","sui-kit:dependency-probe",45000)
 +        val versions=requirements.joinToString("\n") { r ->
-+            val command=when {
-+                r.commands.isNotEmpty() -> shellQuote(r.commands.first())+" --version 2>&1 | head -1"
-+                r.pythonModules.isNotEmpty() -> "python3 -c "+shellQuote("import ${r.pythonModules.first()} as m; print(getattr(m, '__version__', 'installed'))")
-+                r.packages.isNotEmpty() -> "dpkg-query -W -f='\${Version}' "+shellQuote(r.packages.first())
-+                else -> "printf '%s' "+shellQuote("Verified files present; required/source version: "+r.version)
-+            }
++            val command=KitProbeScripts.versionMetadata(r)
 +            "printf 'SUI_VERSION\\t%s\\t' ${shellQuote(r.id)}; timeout 3 /bin/bash --noprofile --norc -c ${shellQuote(command)} 2>/dev/null | tr '\\n\\r\\t' '   '; printf '\\n'"
 +        }
 +        val result=distro.execOwned(CatalogProbeBatch.script(checks)+"\n"+versions,"/tmp","sui-kit:dependency-probe",45000)
@@ -1363,7 +1407,7 @@ index cebfd10..ce207dd 100644
          mutable.update { it.copy(busy=true,message="Checking prerequisites…") }
          try {
              val deps=mutableListOf<PackagePreview>()
-@@ -76,35 +87,18 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+@@ -76,35 +82,18 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
              }
              collect(preview.pack)
              var status=inspect(preview.pack,true)
@@ -1406,7 +1450,7 @@ index cebfd10..ce207dd 100644
                      "ubuntu-apt" -> scripts[r.id]="""
                          set -eu
                          sudo -n apt-get -o Acquire::AllowInsecureRepositories=false -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-@@ -117,7 +111,7 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+@@ -117,7 +106,7 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
                  }
              }
              var aptDownloadBytes: Long?=null
@@ -1415,7 +1459,7 @@ index cebfd10..ce207dd 100644
              if(aptRows.isNotEmpty()) {
                  val packages=aptRows.flatMap { it.requirement.packages }.distinct()
                  val query="""
-@@ -132,20 +126,21 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+@@ -132,20 +121,21 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
                  check(metadata.succeeded) { "Signed repository metadata unavailable: ${metadata.stderr.takeLast(1500)}. Retry after checking the network; installed tools retained." }
                  val candidates=metadata.stdout.lineSequence().filter { it.startsWith("SUI_APT\t") }.map { it.split('\t') }.filter { it.size==3 }.associate { it[1] to it[2] }
                  check(packages.all { candidates[it]?.matches(Regex("[A-Za-z0-9:.+~_-]+"))==true }) { "No trusted repository candidate for all prerequisites. Check Ubuntu sources and retry." }
@@ -1443,7 +1487,7 @@ index cebfd10..ce207dd 100644
          } finally { mutable.update { it.copy(busy=false) } }
      }
  
-@@ -154,13 +149,13 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+@@ -154,13 +144,13 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
          check((plan.preview.pack.official || allowUnverified) && (plan.scripts.isEmpty() || grants.containsAll(setOf(Capability.RUN,Capability.FILE_READ,Capability.FILE_WRITE)))) { "IDE dependency deployment needs reviewed file.read, file.write and process.run permissions" }
          job=scope.launch {
              // Metadata-only Kits (including localization) never require Ubuntu, a PTY or a runtime.
@@ -1459,7 +1503,7 @@ index cebfd10..ce207dd 100644
                  } catch(e: CancellationException) { throw e }
                  catch(e: Exception) { mutable.update { it.copy(message="Package resources could not be enabled: ${e.message}. Review and retry; installed environments are unchanged.") } }
                  finally { mutable.update { it.copy(busy=false,installing=false,cancelling=false) } }
-@@ -180,16 +175,20 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+@@ -180,16 +170,20 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
                  poller=scope.launch { while(isActive) { if(logFile.isFile) mutable.update { it.copy(log=java.io.RandomAccessFile(logFile,"r").use { input -> input.seek((input.length()-65536).coerceAtLeast(0));ByteArray((input.length()-input.filePointer).toInt()).also { input.readFully(it) }.toString(Charsets.UTF_8) }) };delay(750) } }
                  val completed=mutableSetOf<String>()
                  val warnings=mutableListOf<String>()
@@ -1484,7 +1528,7 @@ index cebfd10..ce207dd 100644
                      val command="mkdir -p /opt/sui-code/logs; /bin/bash -o pipefail -c "+shellQuote("/bin/bash -c ${shellQuote(body)} 2>&1 | tee -a ${shellQuote(logPath)}")
                      val result=runner("IDE Kit · ${r.name}",command,2100000,plan.distroId) ?: error("Cannot start Setup terminal")
                      if(!result.succeeded) {
-@@ -200,6 +199,10 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+@@ -200,6 +194,10 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
                  }
                  val verified=inspect(plan.preview.pack,true)
                  val missing=verified.filter { !it.ready }
@@ -1495,7 +1539,7 @@ index cebfd10..ce207dd 100644
                  // Core package transactions are atomic; package rollback retains all installed tools/data.
                  plan.dependencies.forEach { check(grants.containsAll(it.pack.permissions)) { "Dependency permissions were not approved" };host.install(it,it.pack.permissions,false) }
                  host.install(plan.preview,grants,allowUnverified)
-@@ -211,6 +214,7 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
+@@ -211,6 +209,7 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
              catch(e: Exception) { mutable.update { it.copy(message="Installation paused: ${e.message}. Existing tools and package archives retained; review and retry.") } }
              finally { withContext(NonCancellable) {
                  poller?.cancelAndJoin()
@@ -2883,6 +2927,46 @@ index 13a27bd..b291ba7 100644
 -    </group>
 -</vector>
 +<inset xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@drawable/sui_launcher_foreground" android:inset="0dp" />
+diff --git a/app/src/test/java/dev/suicode/nativehost/KitProbeScriptsTest.kt b/app/src/test/java/dev/suicode/nativehost/KitProbeScriptsTest.kt
+new file mode 100644
+index 0000000..4dfd1ff
+--- /dev/null
++++ b/app/src/test/java/dev/suicode/nativehost/KitProbeScriptsTest.kt
+@@ -0,0 +1,34 @@
++package dev.suicode.nativehost
++
++import dev.suicode.packages.KitRequirement
++import org.junit.Test
++import org.junit.Assert.*
++import java.nio.file.Files
++
++class KitProbeScriptsTest {
++    @Test fun dottedModulePresenceNeverExecutesTheParentPackage() {
++        val root=Files.createTempDirectory("passive-module").toFile()
++        try {
++            val marker=root.resolve("executed")
++            val pkg=root.resolve("probe_evil").apply { mkdir() }
++            pkg.resolve("__init__.py").writeText("from pathlib import Path\nPath(${quotePython(marker.path)}).write_text('executed')\n")
++            pkg.resolve("child.py").writeText("raise RuntimeError('must never import')\n")
++            val process=ProcessBuilder("/bin/bash","-c",KitProbeScripts.modulePresence("probe_evil.child",listOf(root.path))).redirectErrorStream(true).start()
++            val output=process.inputStream.bufferedReader().readText()
++            assertEquals(output,0,process.waitFor());assertFalse(marker.exists())
++        } finally { root.deleteRecursively() }
++    }
++    @Test fun versionDiscoveryNeverRunsTheDeclaredExecutable() {
++        val root=Files.createTempDirectory("passive-version").toFile()
++        try {
++            val marker=root.resolve("executed");val binary=root.resolve("untrusted_probe_tool")
++            binary.writeText("#!/bin/sh\ntouch '${marker.path}'\n");binary.setExecutable(true)
++            val r=KitRequirement("tool","Tool","unknown","https://example.org","ubuntu-apt",emptyList(),listOf(binary.name),listOf("missing-package-for-probe"),null,null,null)
++            val builder=ProcessBuilder("/bin/bash","-c",KitProbeScripts.versionMetadata(r)).redirectErrorStream(true)
++            builder.environment()["PATH"]=root.path+":"+System.getenv("PATH")
++            val process=builder.start();val output=process.inputStream.bufferedReader().readText()
++            assertEquals(output,0,process.waitFor());assertFalse(marker.exists())
++        } finally { root.deleteRecursively() }
++    }
++    private fun quotePython(value: String)="'"+value.replace("\\","\\\\").replace("'","\\'")+"'"
++}
 diff --git a/app/src/test/java/dev/suicode/nativehost/NativeServiceChangesTest.kt b/app/src/test/java/dev/suicode/nativehost/NativeServiceChangesTest.kt
 new file mode 100644
 index 0000000..fc2c34a
@@ -10612,7 +10696,7 @@ index f5273ae..0bbc20c 100644
  - [Native Extension & IDE Kit Development Specification](SUIC-SUIK-Development-Specification.md)
  - [UI Extension & Design Specification](SuiCode-UI-Design-Specification.md)
 diff --git a/docs/specifications/SUIC-SUIK-Development-Specification.md b/docs/specifications/SUIC-SUIK-Development-Specification.md
-index 953777b..6b9bb87 100644
+index 953777b..2144154 100644
 --- a/docs/specifications/SUIC-SUIK-Development-Specification.md
 +++ b/docs/specifications/SUIC-SUIK-Development-Specification.md
 @@ -1,6 +1,6 @@
@@ -10977,7 +11061,7 @@ index 953777b..6b9bb87 100644
 +
 +非语言Kit可声明最多8个inert text/link字段、最多8个已有组件action；action只接受command/workflow/panel/build/test/format/lint，调用仍经过当前授权CoreSession、原能力检查及backend。禁用/卸载立即使操作不可用；更新后必须重新按摘要审核。宿主的包类型、发布者、来源、签名、权限和安装状态由VerifiedPack/PackageStore计算，不能由卡片字段替代。SUIC仅允许general类别与只读fields，禁止slots/basicPlugin/languageIds/actions，不允许以卡片绕过完整IDE Kit职责。
 +
-+`KitRequirement`新增可选`dependsOn: List<String>=[]`、`pythonModules: List<String>=[]`及解析结果`explicitDependencies: Boolean=false`。dependsOn必须引用当前setup描述符中存在的ID，ID在整个包内唯一，禁止循环。pythonModules为Python标识符点分路径，宿主使用固定Python模块导入检查，绝不拼接未转义脚本。`KitRequirements.parse(d:JsonObject):List<KitRequirement>`校验单个描述符；`forPack(pack:VerifiedPack)`读取全包setup并检查包内ID唯一；`selection(requirements:List<KitRequirement>,requested:Set<String>):List<KitRequirement>`返回拓扑顺序的必要依赖闭包。三者均无IO或进程执行，不需要安装权限；非法图/未知选择抛E_COMPONENT，非法资源路径仍E_PATH。旧描述符未写dependsOn时，对非environment组件保守加入该包environment依赖；显式空数组表示没有依赖。隐式闭包也检测循环。environment要求只参加检测与审核，不由IDE Kit安装器下载JDK/GCC/Python。
++`KitRequirement`新增可选`dependsOn: List<String>=[]`、`pythonModules: List<String>=[]`及解析结果`explicitDependencies: Boolean=false`。dependsOn必须引用当前setup描述符中存在的ID，ID在整个包内唯一，禁止循环。pythonModules为Python标识符点分路径；宿主在审核前使用隔离的固定Ubuntu Python解释器和PathFinder逐层检查模块位置，不导入目标或父模块，不运行扩展声明的命令，不加载PYTHONPATH、当前目录、site或.pth启动文件。安装状态仅说明文件/工具存在，协议Ready必须由授权后的真实LSP/DAP启动确认。`KitRequirements.parse(d:JsonObject):List<KitRequirement>`校验单个描述符；`forPack(pack:VerifiedPack)`读取全包setup并检查包内ID唯一；`selection(requirements:List<KitRequirement>,requested:Set<String>):List<KitRequirement>`返回拓扑顺序的必要依赖闭包。三者均无IO或进程执行，不需要安装权限；非法图/未知选择抛E_COMPONENT，非法资源路径仍E_PATH。旧描述符未写dependsOn时，对非environment组件保守加入该包environment依赖；显式空数组表示没有依赖。隐式闭包也检测循环。environment要求只参加检测与审核，不由IDE Kit安装器下载JDK/GCC/Python。
 +
 +日志必须按environment/package/component类别、owner、组件、来源、版本、发行版、创建时间和结果归属；Languages只呈现运行环境任务，Packages呈现扩展与IDE组件任务。检查状态与实际LSP/DAP运行状态分开，不能把安装探测成功显示成正在运行。任何安装脚本都必须经统一计划审阅、精确包摘要授权后由原PRoot/PTY执行。
 +
@@ -11161,7 +11245,7 @@ index 953777b..6b9bb87 100644
 +
 +### 0.4.2 installation ownership and catalog provenance
 +
-+`KitRequirements.selection(requirements: List<KitRequirement>, requested: Set<String>): List<KitRequirement>` returns a dependency-first closure. Unknown IDs or cycles fail `E_COMPONENT`. An omitted legacy `dependsOn` conservatively includes environment requirements; an explicit empty array means no requirement dependencies. Legacy requirements sharing a kit-resource installer are reviewed as one inseparable group; force repair is refused until the Kit declares the selective component contract. New official Kits declare independent requirements and their resource installer consumes the reviewed selection. Environment requirements are read-only in Packages, including legacy API3 Kits: the host must never turn them into a runtime download. Runtime installation and configuration repair are owned by Languages. Selected IDE tools whose closure lacks a usable runtime are blocked with a diagnostic; installed tools are retained. Skipping optional tools yields Partially Ready, not a simulated Ready state. Component probes do not execute package installers. `packages` specifies reviewed APT installation targets; when file/command/module/alternative-command checks are supplied, those actual tool checks determine installed status. Package database checks are the fallback only when no actual tool condition is declared. A working preinstalled versioned LLDB, pip-installed pylsp or custom compiler must not be rejected solely because an Ubuntu meta-package is absent. Installed status is separate from the running LSP/DAP protocol state. `pythonModules` contains only dotted Python identifiers and is checked using the existing Ubuntu interpreter.
++`KitRequirements.selection(requirements: List<KitRequirement>, requested: Set<String>): List<KitRequirement>` returns a dependency-first closure. Unknown IDs or cycles fail `E_COMPONENT`. An omitted legacy `dependsOn` conservatively includes environment requirements; an explicit empty array means no requirement dependencies. Legacy requirements sharing a kit-resource installer are reviewed as one inseparable group; force repair is refused until the Kit declares the selective component contract. New official Kits declare independent requirements and their resource installer consumes the reviewed selection. Environment requirements are read-only in Packages, including legacy API3 Kits: the host must never turn them into a runtime download. Runtime installation and configuration repair are owned by Languages. Selected IDE tools whose closure lacks a usable runtime are blocked with a diagnostic; installed tools are retained. Skipping optional tools yields Partially Ready, not a simulated Ready state. Component probes do not execute package installers. `packages` specifies reviewed APT installation targets; when file/command/module/alternative-command checks are supplied, those actual tool checks determine installed status. Package database checks are the fallback only when no actual tool condition is declared. A working preinstalled versioned LLDB, pip-installed pylsp or custom compiler must not be rejected solely because an Ubuntu meta-package is absent. Installed status is separate from the running LSP/DAP protocol state. `pythonModules` contains only dotted Python identifiers. Before consent, the host uses `/usr/bin/python3 -I -S` and `PathFinder.find_spec` to inspect each path segment without importing the target or parent modules, ignoring startup site/.pth files, PYTHONPATH and the current directory. Version discovery reads dpkg metadata, including executable ownership when a meta-package is absent; it never invokes extension-named binaries. A required/source version is explicitly labelled when no installed package version is available. Existence does not assert that a server can initialize: actual LSP/DAP protocol readiness and errors are reported independently after authorization. Host-owned runtime validation remains distinct from author-declared tool probes.
 +
 +The production host's `NativeKitSetup.prepare(preview, selectedComponents: Set<String>? = null, forceComponents: Set<String> = emptySet())` inspects all declared requirements but constructs installers only for the selected closure. `null` selects all non-runtime components. `forceComponents` must be a subset of selected non-runtime IDs; it explicitly requests a reviewed repair/update even when the installed check succeeds. Normal installation never reinstalls healthy components. APT updates pin reviewed signed candidates and do not upgrade unrelated requested components. The review binds the archive digest, exact source, versions, known download sizes, permissions, distro and creation time (maximum one hour). Changing selections invalidates approval until the refreshed plan has been reviewed. Grouped scripts receive `SUI_KIT_COMPONENTS`, the space-separated pending selected requirement IDs sharing that resource; a grouped installer must not deploy omitted siblings. All scripts remain authenticated package resources and require explicit `process.run`, `file.read`, `file.write` consent. Core retains independent final checks after command errors. Cancellation uses the existing Setup PTY and safe apt/dpkg boundaries; installed components are retained and package archives remain recoverable. Removing a Kit must not remove the language runtime or user data.
 +

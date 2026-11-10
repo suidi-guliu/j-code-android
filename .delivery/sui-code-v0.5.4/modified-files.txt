@@ -17,6 +17,7 @@ M	app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt
 M	app/src/main/java/dev/blamspot/jcode/MainViewModel.kt
 M	app/src/main/java/dev/blamspot/jcode/lsp/LspController.kt
 M	app/src/main/java/dev/blamspot/jcode/workbench/WorkbenchModel.kt
+A	app/src/main/java/dev/suicode/nativehost/KitProbeScripts.kt
 M	app/src/main/java/dev/suicode/nativehost/NativeKitSetup.kt
 M	app/src/main/java/dev/suicode/nativehost/NativeLanguageCenter.kt
 M	app/src/main/java/dev/suicode/nativehost/NativeLanguageServices.kt
@@ -29,6 +30,7 @@ A	app/src/main/res/drawable-nodpi/sui_launcher_foreground.png
 M	app/src/main/res/drawable/ic_launcher_foreground.xml
 M	app/src/main/res/drawable/ic_launcher_foreground_beta.xml
 M	app/src/main/res/drawable/ic_launcher_foreground_debug.xml
+A	app/src/test/java/dev/suicode/nativehost/KitProbeScriptsTest.kt
 A	app/src/test/java/dev/suicode/nativehost/NativeServiceChangesTest.kt
 M	core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroModels.kt
 M	core/distro/src/main/java/dev/blamspot/jcode/core/distro/DistroService.kt

@@ -53,7 +53,8 @@ Languages 只管理 JDK/GCC/G++/Python，复用原环境管理器；不加载 Ki
 
 ## 3. 自动化测试证据
 
-- JVM：**193/193 通过**：app30、native-packages79、distro81、lsp3。XML、Gradle日志在 `test-evidence.zip`。构建 `BUILD SUCCESSFUL`，并已编译 Android 测试 APK；这不等于 Android 测试已经运行。
+- JVM：**195/195 通过**：app32、native-packages79、distro81、lsp3。XML、Gradle日志在 `test-evidence.zip`。构建 `BUILD SUCCESSFUL`，并已编译 Android 测试 APK；这不等于 Android 测试已经运行。
+- 安装审核前安全回归：真实进程执行两项测试，声明的恶意版本命令和父模块均未被执行；只读取工具/模块位置与包数据库。
 - 实际 Ubuntu24.04 amd64：37项工程/单文件/路径/重复运行用例，6个严格匹配候选和实际跳转的 LSP 工程场景，另2个没有 Java Debug 的真实 JDT 场景；三语言实际 DAP 流程；6项配置错误/修复/回滚；Java/C/C++/Python 四种真实 PTY 中文输入和4项生产 Core 进程停止/终端保留验证。
 - Stop 测试调用 APK 同一已编译 `GuestProcessTree`，Linux测试绑定只把 Android Os 信号接口映射为真正内核信号；不是虚构进程状态。停止目标后终端及输出、另一个 owner 的任务仍存在。并未把 Linux PTY 等同于 Android PTY。
 - 使用官方 Termux/proot 源码提交 `52d65a4dc140ca554d241a1438ddd4f6b00c9813` 编译的现代 PRoot。Ubuntu apt 的旧5.1.0无法正确处理此容器内部分 statx 路径；最初失败日志保留，不能把该旧测试工具问题冒充应用根因。APK 自带 PRoot 二进制没有因测试而替换。
@@ -65,7 +66,7 @@ Languages 只管理 JDK/GCC/G++/Python，复用原环境管理器；不加载 Ki
 
 APK：`sui-code-v0.5.4-debug.apk`，`dev.suicode.ide.debug`，`0.5.4 / 1070807`，ARM64。
 
-- 文件大小：`91273537` bytes；SHA-256：`418d63e21d21d84401dd59a25b32cc6c08c425d35a6201a38f678d8d000f1d3f`。
+- 文件大小：`91273537` bytes；SHA-256：`356933706493edd834d0b0c92d23d09ee503a37aab1bc7a6aa2210b32378a115`。
 - 新旧APK实际证书SHA-256均为 `62c2da3484d337626eac6711e5ea7015913e23b8932e9f2b2bd220b843579fa0`。
 - 可以按 Android 签名/版本规则覆盖v0.5.3；无需卸载、清数据或重装Ubuntu。真实平板的升级结果待用户最终验收。
 - 未删除或重新打包 JDK/GCC/Python/Ubuntu；运行和修复复用既有工具。包禁用/卸载保留工具及用户数据。共享Ubuntu运行包不执行自动 apt purge；原JDK管理保留选择/安全删除非活动JDK能力。
@@ -77,7 +78,7 @@ APK：`sui-code-v0.5.4-debug.apk`，`dev.suicode.ide.debug`，`0.5.4 / 1070807`�
 
 ## 5. 源码与公开规范
 
-基线：`862cbae35d14954cb87eb03097c0d9dddf5c38ac`。分支：`sui-code/v0.5.4-ide-reliability-management`。生产APK源码提交：`ce2398e2280d4fbd048274113bb000d13c07c2dd`；工作流补充源码归档的实际提交另见 `apk-metadata.json`。
+基线：`862cbae35d14954cb87eb03097c0d9dddf5c38ac`。分支：`sui-code/v0.5.4-ide-reliability-management`。生产APK源码提交：`339017321e43f5fc3d7c98ff7e031a86ff6ad56c`；工作流补充源码归档的实际提交另见 `apk-metadata.json`。
 
 主要提交：136a6de（挂载/配置事务）、822f1c0（统一LSP路径与协议）、8b41b12（卡片与依赖/规范）、85c39de（独立环境/扩展管理/图标）、e3241aa（真实工具识别与Android管理测试），后续UI状态/验收提交见分支历史和 `modified-files.txt`。
 
@@ -105,6 +106,8 @@ GitHub Actions工作流：`deliver-ide-reliability-v0.5.4.yml`，通过后才上
 10. 如失败，保留日志、实际工程路径、服务器状态和重现步骤，通过现有诊断导出收集启动/任务日志；不要用删除环境的方式重试。
 
 
-## 首轮 Android 验收失败记录
+## Android 验收记录与最终复验
 
-Run https://github.com/suidi-guliu/j-code-android/actions/runs/42739177332 未发布APK Artifact。升级场景卡在自动化脚本 Enable 定位：改用实际清除搜索按钮并限定 Packages 文本框，避免全局 Ctrl+A 与其他编辑上下文影响输入。全新场景已通过15项 instrumentation，但最后被Android系统首次Taskbar教程遮挡，现显式处理该系统浮层并仍要求真实桌面点击后显示应用。未发现该次日志中的应用FATAL；这些失败不计入通过数量，后续必须重跑完整场景。
+首轮 Run https://github.com/suidi-guliu/j-code-android/actions/runs/42739177332 未发布APK Artifact。升级场景自动化未正确清空 Packages 搜索字段；全新场景15项 instrumentation通过后，桌面点击被Android首次Taskbar教程遮挡。已修正实际搜索控件定位和系统浮层处理，未将首轮计为通过。
+
+第二轮 Run https://github.com/suidi-guliu/j-code-android/actions/runs/42742398725 已成功完成保留数据升级与全新安装、30项 instrumentation、2项Project检查和Artifact上传后下载字节核验。最终候选在此后加入审核前被动探测安全修复，因此本APK仍须新的完整Android CI验收回执；前一轮成功不冒充当前二进制通过。
