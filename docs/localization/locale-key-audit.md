@@ -248,69 +248,69 @@
 |app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6047|ui.terminateExit|终止并退出|已绑定|
 |app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6055|ui.runInBackground|在后台运行|已绑定|
 |app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6060|ui.cancel|取消|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2531|message.Debugcancelledfilescouldnotbesaved|调试已取消：无法保存文件。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2624|management.finishDebugFirst|请先结束调试会话，再重启语言服务器。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2714|message.noDefinition|未找到“{symbol}”的定义|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2725|message.noReferences|未找到“{symbol}”的引用|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2734|message.Putthecursoronasymboltorename|请将光标放在要重命名的符号上。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2749|message.cannotRename|无法在此处重命名“{symbol}”|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2758|message.Renamefailed|重命名失败|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2774|message.sourceLoadFailed|语言服务无法加载源文件：{path}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2785|message.fileMissing|无法打开 {name}：文件不存在|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2877|message.applyEditsFailed|应用编辑失败：{reason}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2979|message.formatted|已格式化 {name}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2980|message.Languageserverreturnednoformattingedits|语言服务未返回格式化更改。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3525|project.createFolderHint|请在“内部文件”中新建文件夹，或创建可选项目。已有目录元数据将保留。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3526|project.saveFailed|创建已取消：无法保存已有文件。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3530|project.templateUnavailable|请启用原生 IDE Kit，并授予 project.read／file.write 权限以使用此模板。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3544|project.created|已创建项目“{name}”{template}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3545|message.templateFailed|项目已保留；模板应用失败：{reason}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3584|message.opened|已打开“{name}”。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3596|message.readFailed|无法读取“{name}”：{reason}。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3600|message.emptyImport|“{name}”为空，没有可导入的内容。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3612|message.Saveorcloseopenfilesbeforeimportinga|导入文件夹前，请先保存或关闭已打开的文件。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3621|message.importFailed|导入失败：{reason}。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3636|message.importedFolder|已导入“{name}”。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3645|message.Saveorcloseopenfilesbeforeimportinga|导入文件夹前，请先保存或关闭已打开的文件。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3719|message.Theimportedfolderisnolongeravailable|导入的文件夹已不可用。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3754|message.RemovedfromtheprojectlistFilesremainin|已从项目列表移除，文件仍保留在“内部文件”中。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3767|message.ProjectfilesmovedtoTrashRestorefromFiles|项目文件已移到回收站，可从“文件 → 回收站”恢复。Ubuntu 和已安装工具均已保留。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3768|message.projectDeleteStopped|项目删除已停止：{reason}。重试前请检查回收站和内部文件。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3811|message.Projectclosed|项目已关闭。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3846|message.renamed|已重命名为“{name}”。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3846|message.Renamefaileddestinationexistsortheprojectis|重命名失败：目标已存在或项目不可用。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3847|message.renameRejected|重命名被拒绝：{reason}。项目文件未被覆盖。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3858|message.exportNotLocal|导出失败：“{name}”不是本地文件夹。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3862|message.exporting|正在导出“{name}”…|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3865|message.exported|已从“{name}”导出 {count} 个文件。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3866|message.exportFailed|导出失败：{reason}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4010|message.Cantcolorafileoutsidetheproject|无法为项目外的文件设置标签颜色。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4114|message.Workspaceconfigisunavailable|共享目录配置不可用。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4125|message.Projectoverridesrequirealocalproject|项目覆盖设置需要本地项目。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5336|message.Finishorsafelycancelpackageinstallationbeforerestarting|请完成或安全取消软件包安装后再重启。已有 Ubuntu 和数据会保留。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5341|message.Restartpostponedwaitforaptdpkgtoreach|已推迟重启，请等待 apt/dpkg 到达安全停止点。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5855|message.writeFailed|无法写入 {name}：{reason}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6008|message.bufferRetained|{name} 已移到回收站或删除。打开的缓冲区仍以只读方式保留；保存前请恢复文件。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6101|message.reloaded|已从磁盘重新加载 {name}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6102|message.reloadedMany|已从磁盘重新加载 {count} 个文件|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6120|message.Nounsavedchanges|没有未保存的更改|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6144|message.cannotDiscard|无法放弃“{name}”的更改：不支持此文件来源|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6151|message.discardFailed|放弃 {name} 的更改失败：{reason}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6156|message.discarded|已放弃 {name} 的更改|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6167|message.Nothingtoformat|没有可格式化的内容|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6174|message.formatted|已格式化 {name}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6181|message.Alreadyformatted|格式已规范，无需更改。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6188|message.formatted|已格式化 {name}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6201|message.Formattingreplydiscardedbecausethefilechanged|文件已变化，已忽略过期的格式化结果。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6233|message.saved|已保存 {name}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6242|message.readOnly|{name} 为只读。保存前请恢复已移除的文件，或导出缓冲区内容。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6245|message.Restoretheremovedfilebeforesavingopenedits|保存前请恢复已移除的文件；打开的编辑内容仍已保留。|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6247|message.cannotSave|无法保存“{name}”：不支持此文件来源|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6282|message.saveFailed|保存 {name} 失败：{reason}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6298|message.Saved1file|已保存 1 个文件|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6298|message.savedMany|已保存 {count} 个文件|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6327|message.fileGone|文件已不存在：{name}|已绑定|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6543|message.Projectoverridesrequirealocalprojectroot|项目覆盖设置需要本地项目根目录。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2533|message.Debugcancelledfilescouldnotbesaved|调试已取消：无法保存文件。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2626|management.finishDebugFirst|请先结束调试会话，再重启语言服务器。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2716|message.noDefinition|未找到“{symbol}”的定义|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2727|message.noReferences|未找到“{symbol}”的引用|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2736|message.Putthecursoronasymboltorename|请将光标放在要重命名的符号上。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2751|message.cannotRename|无法在此处重命名“{symbol}”|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2760|message.Renamefailed|重命名失败|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2776|message.sourceLoadFailed|语言服务无法加载源文件：{path}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2787|message.fileMissing|无法打开 {name}：文件不存在|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2879|message.applyEditsFailed|应用编辑失败：{reason}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2981|message.formatted|已格式化 {name}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2982|message.Languageserverreturnednoformattingedits|语言服务未返回格式化更改。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3532|project.createFolderHint|请在“内部文件”中新建文件夹，或创建可选项目。已有目录元数据将保留。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3533|project.saveFailed|创建已取消：无法保存已有文件。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3537|project.templateUnavailable|请启用原生 IDE Kit，并授予 project.read／file.write 权限以使用此模板。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3551|project.created|已创建项目“{name}”{template}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3552|message.templateFailed|项目已保留；模板应用失败：{reason}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3591|message.opened|已打开“{name}”。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3603|message.readFailed|无法读取“{name}”：{reason}。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3607|message.emptyImport|“{name}”为空，没有可导入的内容。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3619|message.Saveorcloseopenfilesbeforeimportinga|导入文件夹前，请先保存或关闭已打开的文件。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3628|message.importFailed|导入失败：{reason}。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3643|message.importedFolder|已导入“{name}”。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3652|message.Saveorcloseopenfilesbeforeimportinga|导入文件夹前，请先保存或关闭已打开的文件。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3726|message.Theimportedfolderisnolongeravailable|导入的文件夹已不可用。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3761|message.RemovedfromtheprojectlistFilesremainin|已从项目列表移除，文件仍保留在“内部文件”中。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3774|message.ProjectfilesmovedtoTrashRestorefromFiles|项目文件已移到回收站，可从“文件 → 回收站”恢复。Ubuntu 和已安装工具均已保留。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3775|message.projectDeleteStopped|项目删除已停止：{reason}。重试前请检查回收站和内部文件。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3818|message.Projectclosed|项目已关闭。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3853|message.renamed|已重命名为“{name}”。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3853|message.Renamefaileddestinationexistsortheprojectis|重命名失败：目标已存在或项目不可用。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3854|message.renameRejected|重命名被拒绝：{reason}。项目文件未被覆盖。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3865|message.exportNotLocal|导出失败：“{name}”不是本地文件夹。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3869|message.exporting|正在导出“{name}”…|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3872|message.exported|已从“{name}”导出 {count} 个文件。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3873|message.exportFailed|导出失败：{reason}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4017|message.Cantcolorafileoutsidetheproject|无法为项目外的文件设置标签颜色。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4121|message.Workspaceconfigisunavailable|共享目录配置不可用。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4132|message.Projectoverridesrequirealocalproject|项目覆盖设置需要本地项目。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5343|message.Finishorsafelycancelpackageinstallationbeforerestarting|请完成或安全取消软件包安装后再重启。已有 Ubuntu 和数据会保留。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5348|message.Restartpostponedwaitforaptdpkgtoreach|已推迟重启，请等待 apt/dpkg 到达安全停止点。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5862|message.writeFailed|无法写入 {name}：{reason}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6015|message.bufferRetained|{name} 已移到回收站或删除。打开的缓冲区仍以只读方式保留；保存前请恢复文件。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6108|message.reloaded|已从磁盘重新加载 {name}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6109|message.reloadedMany|已从磁盘重新加载 {count} 个文件|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6127|message.Nounsavedchanges|没有未保存的更改|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6151|message.cannotDiscard|无法放弃“{name}”的更改：不支持此文件来源|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6158|message.discardFailed|放弃 {name} 的更改失败：{reason}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6163|message.discarded|已放弃 {name} 的更改|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6174|message.Nothingtoformat|没有可格式化的内容|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6181|message.formatted|已格式化 {name}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6188|message.Alreadyformatted|格式已规范，无需更改。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6195|message.formatted|已格式化 {name}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6208|message.Formattingreplydiscardedbecausethefilechanged|文件已变化，已忽略过期的格式化结果。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6240|message.saved|已保存 {name}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6249|message.readOnly|{name} 为只读。保存前请恢复已移除的文件，或导出缓冲区内容。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6252|message.Restoretheremovedfilebeforesavingopenedits|保存前请恢复已移除的文件；打开的编辑内容仍已保留。|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6254|message.cannotSave|无法保存“{name}”：不支持此文件来源|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6289|message.saveFailed|保存 {name} 失败：{reason}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6305|message.Saved1file|已保存 1 个文件|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6305|message.savedMany|已保存 {count} 个文件|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6334|message.fileGone|文件已不存在：{name}|已绑定|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6550|message.Projectoverridesrequirealocalprojectroot|项目覆盖设置需要本地项目根目录。|已绑定|
 |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:155|ui.cancel|取消|已绑定|
 |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:221|ui.cancel|取消|已绑定|
 |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:308|ui.Done|完成|已绑定|
@@ -1079,102 +1079,102 @@
 |app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6041|"Still running:\n"|unbound-gap|
 |app/src/main/java/dev/blamspot/jcode/JCodeShell.kt:6041|"•  $it"|verbatim-technical-or-resource-id|
 |app/src/main/java/dev/blamspot/jcode/JavaQuickRunController.kt:77|"$label · ${actual.name}"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:377|"A blank project folder."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:470|"Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:475|"Native library: ${it.message}"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:479|"Legacy JCode/VSIX packages are not supported by the native ecosystem."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:917|"Removed the migration bundle (${freed / (1024 * 1024)} MB)."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:965|"Migration bundle written to ${dir.absolutePath} (${parts.size} parts)."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:967|"Migration export failed: ${it.message ?: "unknown error"}"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1101|"Migration import failed: ${it.message ?: "unknown error"}"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1116|"Imported settings, projects and extensions."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1503|"Virtual device"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1504|"This phone"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2441|"The native official library is maintained by sui-code. Third-party packages can be imported locally after review."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2714|"symbol"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2725|"symbol"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2749|"symbol"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2755|"Renamed to \"$trimmed\" in ${edit.fileCount} "|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2756|"file"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2756|"files"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2774|"path"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2775|"SHA-256"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2777|"language-sources/$digest/"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2777|"Source.java"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2777|".class"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2777|".java"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2785|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2834|"$actionLabel needs a language server; none supports $name"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2838|"$actionLabel needs an enabled IDE Kit for $name; install one from Native Packages"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2840|"$actionLabel needs ${entry?.name ?: descriptor.id}; install it from Toolchains"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2841|"$actionLabel needs the Linux environment to be ready"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2849|"${status.name} failed to start${status.detail?.let { ": $it" } ?: ""}"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2850|"${status.name} is still starting"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2856|"${status.name} doesn't support $actionLabel"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2877|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2877|"error"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2979|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3029|"IDE Kit edit rejected: file.write permission or language scope is missing"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3137|"sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3188|"Native package restore failed"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3504|"Added '${project.name}' to the workspace."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3536|"Workspace '${node.name}' created"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3544|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3544|"template"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3544|" · ${it.title}"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3545|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3559|"That folder is the JCode Projects root — pick a project or workspace folder inside it."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3584|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3596|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3596|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3596|"unknown error"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3600|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3606|"'$label' is too large to import — needs ${formatBytes(scan.totalBytes)}, "|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3607|"only ${formatBytes(sources.usableSpace)} free."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3621|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3621|"unknown error"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3630|"Imported Workspace '${it.name}'."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3636|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3714|"Opened ${if (isWorkspace) "Workspace" else "Project"} '${project.name}'."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3723|"Imported ${if (isWorkspace) "Workspace" else "Project"} '${it.name}'."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3768|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3846|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3847|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3858|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3862|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3865|"count"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:379|"A blank project folder."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:472|"Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:477|"Native library: ${it.message}"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:481|"Legacy JCode/VSIX packages are not supported by the native ecosystem."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:919|"Removed the migration bundle (${freed / (1024 * 1024)} MB)."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:967|"Migration bundle written to ${dir.absolutePath} (${parts.size} parts)."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:969|"Migration export failed: ${it.message ?: "unknown error"}"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1103|"Migration import failed: ${it.message ?: "unknown error"}"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1118|"Imported settings, projects and extensions."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1505|"Virtual device"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:1506|"This phone"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2443|"The native official library is maintained by sui-code. Third-party packages can be imported locally after review."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2716|"symbol"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2727|"symbol"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2751|"symbol"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2757|"Renamed to \"$trimmed\" in ${edit.fileCount} "|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2758|"file"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2758|"files"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2776|"path"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2777|"SHA-256"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2779|"language-sources/$digest/"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2779|"Source.java"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2779|".class"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2779|".java"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2787|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2836|"$actionLabel needs a language server; none supports $name"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2840|"$actionLabel needs an enabled IDE Kit for $name; install one from Native Packages"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2842|"$actionLabel needs ${entry?.name ?: descriptor.id}; install it from Toolchains"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2843|"$actionLabel needs the Linux environment to be ready"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2851|"${status.name} failed to start${status.detail?.let { ": $it" } ?: ""}"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2852|"${status.name} is still starting"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2858|"${status.name} doesn't support $actionLabel"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2879|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2879|"error"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:2981|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3031|"IDE Kit edit rejected: file.write permission or language scope is missing"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3144|"sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3195|"Native package restore failed"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3511|"Added '${project.name}' to the workspace."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3543|"Workspace '${node.name}' created"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3551|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3551|"template"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3551|" · ${it.title}"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3552|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3566|"That folder is the JCode Projects root — pick a project or workspace folder inside it."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3591|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3603|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3603|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3603|"unknown error"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3607|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3613|"'$label' is too large to import — needs ${formatBytes(scan.totalBytes)}, "|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3614|"only ${formatBytes(sources.usableSpace)} free."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3628|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3628|"unknown error"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3637|"Imported Workspace '${it.name}'."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3643|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3721|"Opened ${if (isWorkspace) "Workspace" else "Project"} '${project.name}'."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3730|"Imported ${if (isWorkspace) "Workspace" else "Project"} '${it.name}'."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3775|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3853|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3854|"reason"|verbatim-technical-or-resource-id|
 |app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3865|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3866|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3866|"unknown error"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4090|"Removed environment '$label'."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4090|"Could not remove '$label'."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5021|"message"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5555|"Device sandbox"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5600|"adb pair $target"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5855|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5855|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5855|"error"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6008|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6101|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6102|"count"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6144|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3869|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3872|"count"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3872|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3873|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:3873|"unknown error"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4097|"Removed environment '$label'."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:4097|"Could not remove '$label'."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5028|"message"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5562|"Device sandbox"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5607|"adb pair $target"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5862|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5862|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:5862|"error"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6015|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6108|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6109|"count"|verbatim-technical-or-resource-id|
 |app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6151|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6151|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6151|"error"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6156|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6174|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6188|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6233|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6242|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6247|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6282|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6282|"reason"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6282|"error"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6298|"count"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6322|"language-sources"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6327|"name"|verbatim-technical-or-resource-id|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6331|"Binary preview is not implemented yet for ${file.name}."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6373|"Binary preview is not implemented yet for ${node.name}."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6158|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6158|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6158|"error"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6163|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6181|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6195|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6240|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6249|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6254|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6289|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6289|"reason"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6289|"error"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6305|"count"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6329|"language-sources"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6334|"name"|verbatim-technical-or-resource-id|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6338|"Binary preview is not implemented yet for ${file.name}."|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/MainViewModel.kt:6380|"Binary preview is not implemented yet for ${node.name}."|unbound-gap|
 |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:138|"Go to Line"|unbound-gap|
 |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:144|"line or line:column (1–$lineCount)"|unbound-gap|
 |app/src/main/java/dev/blamspot/jcode/PaletteCommandsUi.kt:152|"Go"|unbound-gap|
@@ -1224,8 +1224,8 @@
 |app/src/main/java/dev/blamspot/jcode/debug/AndroidDebugAttach.kt:145|" ($text)"|verbatim-technical-or-resource-id|
 |app/src/main/java/dev/blamspot/jcode/ext/NativeExtensionPage.kt:94|"${extension.name} could not be loaded"|unbound-gap|
 |app/src/main/java/dev/blamspot/jcode/ext/NativeExtensionPage.kt:99|"Unknown error."|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/lsp/LspController.kt:404|"SuiPerformance"|unbound-gap|
-|app/src/main/java/dev/blamspot/jcode/lsp/LspController.kt:404|"lsp request server=${managed.descriptor.id} elapsedMs=${android.os.SystemClock.elapsedRealtime()-started}"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/lsp/LspController.kt:416|"SuiPerformance"|unbound-gap|
+|app/src/main/java/dev/blamspot/jcode/lsp/LspController.kt:416|"lsp request server=${managed.descriptor.id} elapsedMs=${android.os.SystemClock.elapsedRealtime()-started}"|unbound-gap|
 |app/src/main/java/dev/blamspot/jcode/run/BuildConfigPage.kt:48|"Build configuration"|unbound-gap|
 |app/src/main/java/dev/blamspot/jcode/run/BuildConfigPage.kt:50|"A build task for publish/deployment. Stored in this project's .jcode/run.yaml."|unbound-gap|
 |app/src/main/java/dev/blamspot/jcode/run/BuildConfigPage.kt:57|"Name"|unbound-gap|

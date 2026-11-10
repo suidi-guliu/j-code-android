@@ -67,11 +67,12 @@ class NativeEnvironmentManager(private val distro: DistroService) {
         if(job?.isActive==true) return
         val runtime=distro.environmentState.value.runtime
         val plan=NativeInstallPlan(language,language.packages.map { NativePackage(it,"0","0") },runtime.selectedDistro.id,runtime.selectedDistro.arch.rootfsKey)
-        mutable.update { it.copy(plan=plan) }
+        // Offline repair has no package candidate plan; never show placeholder package versions.
+        mutable.update { it.copy(plan=null) }
         install(plan,repairOnly=true)
     }
     @Synchronized fun install(plan: NativeInstallPlan,repairOnly: Boolean=false) {
-        if (job?.isActive == true || (plan != mutable.value.plan && plan != mutable.value.plan?.copy(upgrade=true))) return
+        if (job?.isActive == true || (!repairOnly && plan != mutable.value.plan && plan != mutable.value.plan?.copy(upgrade=true))) return
         job = scope.launch {
             var poller: Job? = null
             var logFile: File? = null
@@ -83,7 +84,7 @@ class NativeEnvironmentManager(private val distro: DistroService) {
                 cancellationFile = File(distro.activeRootfsPath(), cancelPath.removePrefix("/"))
                 val logPath = "/opt/sui-code/logs/${plan.language.key}-$token.log"
                 val file = File(distro.activeRootfsPath(), logPath.removePrefix("/")); logFile = file
-                mutable.update { it.copy(busy = true, installing = true, log = "", logPath = logPath, message = "Installing ${plan.language.title}. See Setup terminal; cancellation waits for a safe package boundary.") }
+                mutable.update { it.copy(busy = true, installing = true, log = "", logPath = logPath, message = if(repairOnly) "Verifying installed ${plan.language.title} and repairing configuration without downloads." else "Installing ${plan.language.title}. See Setup terminal; cancellation waits for a safe package boundary.") }
                 poller = scope.launch { while (true) {
                     if (file.isFile) mutable.update { it.copy(log = tail(file)) }
                     delay(750)

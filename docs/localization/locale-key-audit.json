@@ -837,317 +837,317 @@
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2531,
+      "line": 2533,
       "key": "message.Debugcancelledfilescouldnotbesaved"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2624,
+      "line": 2626,
       "key": "management.finishDebugFirst"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2714,
+      "line": 2716,
       "key": "message.noDefinition"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2725,
+      "line": 2727,
       "key": "message.noReferences"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2734,
+      "line": 2736,
       "key": "message.Putthecursoronasymboltorename"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2749,
+      "line": 2751,
       "key": "message.cannotRename"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2758,
+      "line": 2760,
       "key": "message.Renamefailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2774,
+      "line": 2776,
       "key": "message.sourceLoadFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2785,
+      "line": 2787,
       "key": "message.fileMissing"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2877,
+      "line": 2879,
       "key": "message.applyEditsFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2979,
+      "line": 2981,
       "key": "message.formatted"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2980,
+      "line": 2982,
       "key": "message.Languageserverreturnednoformattingedits"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3525,
+      "line": 3532,
       "key": "project.createFolderHint"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3526,
+      "line": 3533,
       "key": "project.saveFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3530,
+      "line": 3537,
       "key": "project.templateUnavailable"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3544,
+      "line": 3551,
       "key": "project.created"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3545,
+      "line": 3552,
       "key": "message.templateFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3584,
+      "line": 3591,
       "key": "message.opened"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3596,
+      "line": 3603,
       "key": "message.readFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3600,
+      "line": 3607,
       "key": "message.emptyImport"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3612,
+      "line": 3619,
       "key": "message.Saveorcloseopenfilesbeforeimportinga"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3621,
+      "line": 3628,
       "key": "message.importFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3636,
+      "line": 3643,
       "key": "message.importedFolder"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3645,
+      "line": 3652,
       "key": "message.Saveorcloseopenfilesbeforeimportinga"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3719,
+      "line": 3726,
       "key": "message.Theimportedfolderisnolongeravailable"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3754,
+      "line": 3761,
       "key": "message.RemovedfromtheprojectlistFilesremainin"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3767,
+      "line": 3774,
       "key": "message.ProjectfilesmovedtoTrashRestorefromFiles"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3768,
+      "line": 3775,
       "key": "message.projectDeleteStopped"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3811,
+      "line": 3818,
       "key": "message.Projectclosed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3846,
+      "line": 3853,
       "key": "message.renamed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3846,
+      "line": 3853,
       "key": "message.Renamefaileddestinationexistsortheprojectis"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3847,
+      "line": 3854,
       "key": "message.renameRejected"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3858,
+      "line": 3865,
       "key": "message.exportNotLocal"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3862,
+      "line": 3869,
       "key": "message.exporting"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3865,
+      "line": 3872,
       "key": "message.exported"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3866,
+      "line": 3873,
       "key": "message.exportFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 4010,
+      "line": 4017,
       "key": "message.Cantcolorafileoutsidetheproject"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 4114,
+      "line": 4121,
       "key": "message.Workspaceconfigisunavailable"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 4125,
+      "line": 4132,
       "key": "message.Projectoverridesrequirealocalproject"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5336,
+      "line": 5343,
       "key": "message.Finishorsafelycancelpackageinstallationbeforerestarting"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5341,
+      "line": 5348,
       "key": "message.Restartpostponedwaitforaptdpkgtoreach"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5855,
+      "line": 5862,
       "key": "message.writeFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6008,
+      "line": 6015,
       "key": "message.bufferRetained"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6101,
+      "line": 6108,
       "key": "message.reloaded"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6102,
+      "line": 6109,
       "key": "message.reloadedMany"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6120,
+      "line": 6127,
       "key": "message.Nounsavedchanges"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6144,
+      "line": 6151,
       "key": "message.cannotDiscard"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6151,
+      "line": 6158,
       "key": "message.discardFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6156,
+      "line": 6163,
       "key": "message.discarded"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6167,
+      "line": 6174,
       "key": "message.Nothingtoformat"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6174,
-      "key": "message.formatted"
-    },
-    {
-      "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
       "line": 6181,
-      "key": "message.Alreadyformatted"
+      "key": "message.formatted"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
       "line": 6188,
+      "key": "message.Alreadyformatted"
+    },
+    {
+      "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
+      "line": 6195,
       "key": "message.formatted"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6201,
+      "line": 6208,
       "key": "message.Formattingreplydiscardedbecausethefilechanged"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6233,
+      "line": 6240,
       "key": "message.saved"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6242,
+      "line": 6249,
       "key": "message.readOnly"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6245,
+      "line": 6252,
       "key": "message.Restoretheremovedfilebeforesavingopenedits"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6247,
+      "line": 6254,
       "key": "message.cannotSave"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6282,
+      "line": 6289,
       "key": "message.saveFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6298,
+      "line": 6305,
       "key": "message.Saved1file"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6298,
+      "line": 6305,
       "key": "message.savedMany"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6327,
+      "line": 6334,
       "key": "message.fileGone"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6543,
+      "line": 6550,
       "key": "message.Projectoverridesrequirealocalprojectroot"
     },
     {
@@ -5076,672 +5076,672 @@
     {
       "value": "A blank project folder.",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 377,
+      "line": 379,
       "literal": "\"A blank project folder.\"",
       "category": "unbound-gap"
     },
     {
       "value": "Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior.",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 470,
+      "line": 472,
       "literal": "\"Import .suic or .suik through Package Manager to review the publisher, permissions and execution behavior.\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 475,
+      "line": 477,
       "literal": "\"Native library: ${it.message}\"",
       "category": "unbound-gap"
     },
     {
       "value": "Legacy JCode/VSIX packages are not supported by the native ecosystem.",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 479,
+      "line": 481,
       "literal": "\"Legacy JCode/VSIX packages are not supported by the native ecosystem.\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 917,
+      "line": 919,
       "literal": "\"Removed the migration bundle (${freed / (1024 * 1024)} MB).\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 965,
+      "line": 967,
       "literal": "\"Migration bundle written to ${dir.absolutePath} (${parts.size} parts).\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 967,
+      "line": 969,
       "literal": "\"Migration export failed: ${it.message ?: \"unknown error\"}\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 1101,
+      "line": 1103,
       "literal": "\"Migration import failed: ${it.message ?: \"unknown error\"}\"",
       "category": "unbound-gap"
     },
     {
       "value": "Imported settings, projects and extensions.",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 1116,
+      "line": 1118,
       "literal": "\"Imported settings, projects and extensions.\"",
       "category": "unbound-gap"
     },
     {
       "value": "Virtual device",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 1503,
+      "line": 1505,
       "literal": "\"Virtual device\"",
       "category": "unbound-gap"
     },
     {
       "value": "This phone",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 1504,
+      "line": 1506,
       "literal": "\"This phone\"",
       "category": "unbound-gap"
     },
     {
       "value": "The native official library is maintained by sui-code. Third-party packages can be imported locally after review.",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2441,
+      "line": 2443,
       "literal": "\"The native official library is maintained by sui-code. Third-party packages can be imported locally after review.\"",
       "category": "unbound-gap"
     },
     {
       "value": "symbol",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2714,
+      "line": 2716,
       "literal": "\"symbol\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "symbol",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2725,
+      "line": 2727,
       "literal": "\"symbol\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "symbol",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2749,
+      "line": 2751,
       "literal": "\"symbol\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2755,
+      "line": 2757,
       "literal": "\"Renamed to \\\"$trimmed\\\" in ${edit.fileCount} \"",
       "category": "unbound-gap"
     },
     {
       "value": "file",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2756,
+      "line": 2758,
       "literal": "\"file\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "files",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2756,
+      "line": 2758,
       "literal": "\"files\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "path",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2774,
+      "line": 2776,
       "literal": "\"path\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "SHA-256",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2775,
+      "line": 2777,
       "literal": "\"SHA-256\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2777,
+      "line": 2779,
       "literal": "\"language-sources/$digest/\"",
       "category": "unbound-gap"
     },
     {
       "value": "Source.java",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2777,
+      "line": 2779,
       "literal": "\"Source.java\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": ".class",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2777,
+      "line": 2779,
       "literal": "\".class\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": ".java",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2777,
+      "line": 2779,
       "literal": "\".java\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2785,
+      "line": 2787,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2834,
+      "line": 2836,
       "literal": "\"$actionLabel needs a language server; none supports $name\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2838,
+      "line": 2840,
       "literal": "\"$actionLabel needs an enabled IDE Kit for $name; install one from Native Packages\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2840,
+      "line": 2842,
       "literal": "\"$actionLabel needs ${entry?.name ?: descriptor.id}; install it from Toolchains\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2841,
+      "line": 2843,
       "literal": "\"$actionLabel needs the Linux environment to be ready\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2849,
+      "line": 2851,
       "literal": "\"${status.name} failed to start${status.detail?.let { \": $it\" } ?: \"\"}\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2850,
+      "line": 2852,
       "literal": "\"${status.name} is still starting\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2856,
+      "line": 2858,
       "literal": "\"${status.name} doesn't support $actionLabel\"",
       "category": "unbound-gap"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2877,
+      "line": 2879,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "error",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2877,
+      "line": 2879,
       "literal": "\"error\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2979,
+      "line": 2981,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "IDE Kit edit rejected: file.write permission or language scope is missing",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3029,
+      "line": 3031,
       "literal": "\"IDE Kit edit rejected: file.write permission or language scope is missing\"",
       "category": "unbound-gap"
     },
     {
       "value": "sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled.",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3137,
+      "line": 3144,
       "literal": "\"sui-code builds are delivered through the Fork's verified Actions artifacts; the upstream app updater is disabled.\"",
       "category": "unbound-gap"
     },
     {
       "value": "Native package restore failed",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3188,
+      "line": 3195,
       "literal": "\"Native package restore failed\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3504,
+      "line": 3511,
       "literal": "\"Added '${project.name}' to the workspace.\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3536,
+      "line": 3543,
       "literal": "\"Workspace '${node.name}' created\"",
       "category": "unbound-gap"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3544,
+      "line": 3551,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "template",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3544,
+      "line": 3551,
       "literal": "\"template\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3544,
+      "line": 3551,
       "literal": "\" · ${it.title}\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3545,
+      "line": 3552,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "That folder is the JCode Projects root — pick a project or workspace folder inside it.",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3559,
+      "line": 3566,
       "literal": "\"That folder is the JCode Projects root — pick a project or workspace folder inside it.\"",
       "category": "unbound-gap"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3584,
+      "line": 3591,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3596,
+      "line": 3603,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3596,
+      "line": 3603,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "unknown error",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3596,
+      "line": 3603,
       "literal": "\"unknown error\"",
       "category": "unbound-gap"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3600,
+      "line": 3607,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3606,
+      "line": 3613,
       "literal": "\"'$label' is too large to import — needs ${formatBytes(scan.totalBytes)}, \"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3607,
+      "line": 3614,
       "literal": "\"only ${formatBytes(sources.usableSpace)} free.\"",
       "category": "unbound-gap"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3621,
+      "line": 3628,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "unknown error",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3621,
+      "line": 3628,
       "literal": "\"unknown error\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3630,
+      "line": 3637,
       "literal": "\"Imported Workspace '${it.name}'.\"",
       "category": "unbound-gap"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3636,
+      "line": 3643,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3714,
+      "line": 3721,
       "literal": "\"Opened ${if (isWorkspace) \"Workspace\" else \"Project\"} '${project.name}'.\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3723,
+      "line": 3730,
       "literal": "\"Imported ${if (isWorkspace) \"Workspace\" else \"Project\"} '${it.name}'.\"",
       "category": "unbound-gap"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3768,
+      "line": 3775,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3846,
+      "line": 3853,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3847,
+      "line": 3854,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3858,
+      "line": 3865,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3862,
+      "line": 3869,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "count",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3865,
+      "line": 3872,
       "literal": "\"count\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3865,
+      "line": 3872,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3866,
+      "line": 3873,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "unknown error",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3866,
+      "line": 3873,
       "literal": "\"unknown error\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 4090,
+      "line": 4097,
       "literal": "\"Removed environment '$label'.\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 4090,
+      "line": 4097,
       "literal": "\"Could not remove '$label'.\"",
       "category": "unbound-gap"
     },
     {
       "value": "message",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5021,
+      "line": 5028,
       "literal": "\"message\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "Device sandbox",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5555,
+      "line": 5562,
       "literal": "\"Device sandbox\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5600,
+      "line": 5607,
       "literal": "\"adb pair $target\"",
       "category": "unbound-gap"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5855,
+      "line": 5862,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5855,
+      "line": 5862,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "error",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5855,
+      "line": 5862,
       "literal": "\"error\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6008,
+      "line": 6015,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6101,
+      "line": 6108,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "count",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6102,
+      "line": 6109,
       "literal": "\"count\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6144,
+      "line": 6151,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6151,
+      "line": 6158,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6151,
+      "line": 6158,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "error",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6151,
+      "line": 6158,
       "literal": "\"error\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6156,
+      "line": 6163,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6174,
+      "line": 6181,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6188,
+      "line": 6195,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6233,
+      "line": 6240,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6242,
+      "line": 6249,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6247,
+      "line": 6254,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6282,
+      "line": 6289,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "reason",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6282,
+      "line": 6289,
       "literal": "\"reason\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "error",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6282,
+      "line": 6289,
       "literal": "\"error\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "count",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6298,
+      "line": 6305,
       "literal": "\"count\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "language-sources",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6322,
+      "line": 6329,
       "literal": "\"language-sources\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": "name",
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6327,
+      "line": 6334,
       "literal": "\"name\"",
       "category": "verbatim-technical-or-resource-id"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6331,
+      "line": 6338,
       "literal": "\"Binary preview is not implemented yet for ${file.name}.\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6373,
+      "line": 6380,
       "literal": "\"Binary preview is not implemented yet for ${node.name}.\"",
       "category": "unbound-gap"
     },
@@ -6091,14 +6091,14 @@
     {
       "value": "SuiPerformance",
       "path": "app/src/main/java/dev/blamspot/jcode/lsp/LspController.kt",
-      "line": 404,
+      "line": 416,
       "literal": "\"SuiPerformance\"",
       "category": "unbound-gap"
     },
     {
       "value": null,
       "path": "app/src/main/java/dev/blamspot/jcode/lsp/LspController.kt",
-      "line": 404,
+      "line": 416,
       "literal": "\"lsp request server=${managed.descriptor.id} elapsedMs=${android.os.SystemClock.elapsedRealtime()-started}\"",
       "category": "unbound-gap"
     },
@@ -10009,312 +10009,312 @@
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2531,
+      "line": 2533,
       "key": "message.Debugcancelledfilescouldnotbesaved"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2714,
+      "line": 2716,
       "key": "message.noDefinition"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2725,
+      "line": 2727,
       "key": "message.noReferences"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2734,
+      "line": 2736,
       "key": "message.Putthecursoronasymboltorename"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2749,
+      "line": 2751,
       "key": "message.cannotRename"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2758,
+      "line": 2760,
       "key": "message.Renamefailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2774,
+      "line": 2776,
       "key": "message.sourceLoadFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2785,
+      "line": 2787,
       "key": "message.fileMissing"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2877,
+      "line": 2879,
       "key": "message.applyEditsFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2979,
+      "line": 2981,
       "key": "message.formatted"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 2980,
+      "line": 2982,
       "key": "message.Languageserverreturnednoformattingedits"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3525,
+      "line": 3532,
       "key": "project.createFolderHint"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3526,
+      "line": 3533,
       "key": "project.saveFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3530,
+      "line": 3537,
       "key": "project.templateUnavailable"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3544,
+      "line": 3551,
       "key": "project.created"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3545,
+      "line": 3552,
       "key": "message.templateFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3584,
+      "line": 3591,
       "key": "message.opened"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3596,
+      "line": 3603,
       "key": "message.readFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3600,
+      "line": 3607,
       "key": "message.emptyImport"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3612,
+      "line": 3619,
       "key": "message.Saveorcloseopenfilesbeforeimportinga"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3621,
+      "line": 3628,
       "key": "message.importFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3636,
+      "line": 3643,
       "key": "message.importedFolder"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3645,
+      "line": 3652,
       "key": "message.Saveorcloseopenfilesbeforeimportinga"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3719,
+      "line": 3726,
       "key": "message.Theimportedfolderisnolongeravailable"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3754,
+      "line": 3761,
       "key": "message.RemovedfromtheprojectlistFilesremainin"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3767,
+      "line": 3774,
       "key": "message.ProjectfilesmovedtoTrashRestorefromFiles"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3768,
+      "line": 3775,
       "key": "message.projectDeleteStopped"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3811,
+      "line": 3818,
       "key": "message.Projectclosed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3846,
+      "line": 3853,
       "key": "message.renamed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3846,
+      "line": 3853,
       "key": "message.Renamefaileddestinationexistsortheprojectis"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3847,
+      "line": 3854,
       "key": "message.renameRejected"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3858,
+      "line": 3865,
       "key": "message.exportNotLocal"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3862,
+      "line": 3869,
       "key": "message.exporting"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3865,
+      "line": 3872,
       "key": "message.exported"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 3866,
+      "line": 3873,
       "key": "message.exportFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 4010,
+      "line": 4017,
       "key": "message.Cantcolorafileoutsidetheproject"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 4114,
+      "line": 4121,
       "key": "message.Workspaceconfigisunavailable"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 4125,
+      "line": 4132,
       "key": "message.Projectoverridesrequirealocalproject"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5336,
+      "line": 5343,
       "key": "message.Finishorsafelycancelpackageinstallationbeforerestarting"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5341,
+      "line": 5348,
       "key": "message.Restartpostponedwaitforaptdpkgtoreach"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 5855,
+      "line": 5862,
       "key": "message.writeFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6008,
+      "line": 6015,
       "key": "message.bufferRetained"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6101,
+      "line": 6108,
       "key": "message.reloaded"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6102,
+      "line": 6109,
       "key": "message.reloadedMany"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6120,
+      "line": 6127,
       "key": "message.Nounsavedchanges"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6144,
+      "line": 6151,
       "key": "message.cannotDiscard"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6151,
+      "line": 6158,
       "key": "message.discardFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6156,
+      "line": 6163,
       "key": "message.discarded"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6167,
+      "line": 6174,
       "key": "message.Nothingtoformat"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6174,
-      "key": "message.formatted"
-    },
-    {
-      "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
       "line": 6181,
-      "key": "message.Alreadyformatted"
+      "key": "message.formatted"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
       "line": 6188,
+      "key": "message.Alreadyformatted"
+    },
+    {
+      "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
+      "line": 6195,
       "key": "message.formatted"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6201,
+      "line": 6208,
       "key": "message.Formattingreplydiscardedbecausethefilechanged"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6233,
+      "line": 6240,
       "key": "message.saved"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6242,
+      "line": 6249,
       "key": "message.readOnly"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6245,
+      "line": 6252,
       "key": "message.Restoretheremovedfilebeforesavingopenedits"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6247,
+      "line": 6254,
       "key": "message.cannotSave"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6282,
+      "line": 6289,
       "key": "message.saveFailed"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6298,
+      "line": 6305,
       "key": "message.Saved1file"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6298,
+      "line": 6305,
       "key": "message.savedMany"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6327,
+      "line": 6334,
       "key": "message.fileGone"
     },
     {
       "path": "app/src/main/java/dev/blamspot/jcode/MainViewModel.kt",
-      "line": 6543,
+      "line": 6550,
       "key": "message.Projectoverridesrequirealocalprojectroot"
     },
     {

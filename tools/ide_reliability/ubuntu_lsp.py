@@ -91,6 +91,12 @@ def run_language(language,variant):
    completion(relative,'import pathlib\npathlib.Pa\n','pathlib.Pa','Path')
    change(relative,original);wire.send({'jsonrpc':'2.0','method':'textDocument/didClose','params':{'textDocument':{'uri':uri(relative)}}});opened(relative,original,'python')
    completion(relative,'import pathlib\npathlib.Pa\n','pathlib.Pa','Path')
+  if language=='Python':
+   changed='x=1\nprint( x )\n';change(relative,changed)
+   edits=wire.rpc('textDocument/formatting',{'textDocument':{'uri':uri(relative)},'options':{'tabSize':4,'insertSpaces':True}})
+   assert isinstance(edits,list) and edits,edits
+   assert any('x = 1' in edit.get('newText','') for edit in edits),edits
+   details.append({'feature':'actual autopep8 formatting','edits':len(edits)})
   wire.rpc('shutdown',None);wire.send({'jsonrpc':'2.0','method':'exit','params':None})
   return details
  finally:

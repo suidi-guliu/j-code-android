@@ -1,6 +1,8 @@
 package dev.blamspot.jcode
 
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 
 import android.app.Application
 import android.content.Context
@@ -3032,9 +3034,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Installing (or removing) a Dev Pack changes which servers are paired, so the files already
         // open have to be re-evaluated rather than waiting for the user to reopen them.
         viewModelScope.launch {
-            nativePackages.rows.map { rows -> rows.filter { row -> row.pack.declarations().any { it.type in setOf("language","lsp","dap") } }.map { it.record } }.distinctUntilChanged().collect {
+            var previous=emptyMap<String,dev.suicode.packages.InstalledPackage>()
+            nativePackages.rows.map { rows -> rows.filter { row -> row.pack.declarations().any { it.type in setOf("language","lsp","dap") } }.map { it.record } }.distinctUntilChanged().collect { records ->
+                val current=records.associateBy { it.id }
+                val dependencies=nativePackages.rows.value.associate { row -> row.record.id to row.pack.manifest.getValue("dependencies").jsonArray.map { it.jsonObject.getValue("id").jsonPrimitive.content } }
+                val affected=dev.suicode.nativehost.affectedServicePackages(previous,current,dependencies)
+                previous=current
                 refreshInstalledExtensions()
-                lspController.shutdownAll()
+                lspController.shutdownPackages(affected)
                 dev.suicode.nativehost.NativeLanguageServices.refreshAndCheck(nativePackages,distroService) { error -> _messages.tryEmit(error) }
                 lspController.retryOpenDocuments()
             }

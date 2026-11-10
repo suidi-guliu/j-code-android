@@ -225,6 +225,18 @@ class LspController(
         }
     }
 
+    /** Package changes must not close another owner's JDT-hosted active DAP connection. */
+    suspend fun shutdownPackages(owners: Set<String>) = withContext(Dispatchers.IO) {
+        startMutex.withLock {
+            val keys=sessions.filterValues { it.descriptor.ownerPackage in owners }.keys.toList()
+            keys.forEach { key ->
+                documents.values.filter { it.key==key }.forEach { it.changeJob?.cancel() }
+                promptedServerIds.remove(key.serverId)
+                stopSession(key)
+            }
+        }
+    }
+
     /** Tears every session down — a different project's files never belong to the same server root. */
     fun shutdownAll() {
         documents.values.forEach { it.changeJob?.cancel() }

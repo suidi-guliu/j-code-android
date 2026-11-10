@@ -41,7 +41,7 @@ import kotlinx.serialization.json.*
             Text(id,style=MaterialTheme.typography.bodySmall)
             Text("${pack?.version ?: item!!.version} · ${pack?.manifest?.getValue("author")?.jsonPrimitive?.content ?: item!!.author}")
             Text(strings.text("management.category")+": "+strings.text("management.category.${if(localization) "localization" else (if(pack==null) item!!.category else card.category.wire).replace("-","")}"))
-            Text(strings.text(if(pack?.official==true || pack==null && item?.signer?.isNotEmpty()==true) "management.verified" else "management.unverified"),color=if(pack?.official==true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(UiTextKeys.english.getValue(if(pack?.official==true || pack==null && item?.signer?.isNotEmpty()==true) "management.verified" else "management.unverified"),color=if(pack?.official==true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             Text(strings.text(if(row==null) "status.notInstalled" else if(row.record.enabled) "status.enabled" else "status.disabled"))
             item?.let { Text(it.url,style=MaterialTheme.typography.bodySmall) }
             if(item!=null && row!=null && item.version!=row.record.version) Text(strings.text("management.updateAvailable",mapOf("version" to item.version)),color=MaterialTheme.colorScheme.primary)
