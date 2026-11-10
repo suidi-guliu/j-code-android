@@ -24,7 +24,7 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
     private val cache=java.util.concurrent.ConcurrentHashMap<String,Pair<Long,List<KitDependencyStatus>>>()
     private fun verify(r: KitRequirement): String = buildList {
         if(r.provider!="environment" || r.environmentId=="java") r.files.forEach { add("test -r ${shellQuote(it)}") }
-        r.pythonModules.forEach { add("python3 -c ${shellQuote("import $it")}") }
+        r.pythonModules.forEach { add(KitProbeScripts.modulePresence(it)) }
         r.commands.forEach { add("command -v ${shellQuote(it)} >/dev/null 2>&1") }
         if(r.files.isEmpty() && r.commands.isEmpty() && r.anyCommands.isEmpty() && r.pythonModules.isEmpty()) r.packages.forEach { add("dpkg-query -W -f='\${db:Status-Abbrev}' ${shellQuote(it)} 2>/dev/null | grep -q '^ii '") }
         if(r.environmentId=="java") add("( . /opt/sui-code/java.env && test -x \"\$JAVA_HOME/bin/java\" && \"\$JAVA_HOME/bin/java\" -version && \"\$JAVA_HOME/bin/javac\" -version ) >/dev/null 2>&1")
@@ -43,12 +43,7 @@ class NativeKitSetup(private val context: Context,private val host: NativePackag
         // Only Core-composed existence/dpkg checks; never a prerequisite's installation resource.
         val checks=requirements.map { CatalogProbeBatch.Probe(it.id,verify(it)) }
         val versions=requirements.joinToString("\n") { r ->
-            val command=when {
-                r.commands.isNotEmpty() -> shellQuote(r.commands.first())+" --version 2>&1 | head -1"
-                r.pythonModules.isNotEmpty() -> "python3 -c "+shellQuote("import ${r.pythonModules.first()} as m; print(getattr(m, '__version__', 'installed'))")
-                r.packages.isNotEmpty() -> "dpkg-query -W -f='\${Version}' "+shellQuote(r.packages.first())
-                else -> "printf '%s' "+shellQuote("Verified files present; required/source version: "+r.version)
-            }
+            val command=KitProbeScripts.versionMetadata(r)
             "printf 'SUI_VERSION\\t%s\\t' ${shellQuote(r.id)}; timeout 3 /bin/bash --noprofile --norc -c ${shellQuote(command)} 2>/dev/null | tr '\\n\\r\\t' '   '; printf '\\n'"
         }
         val result=distro.execOwned(CatalogProbeBatch.script(checks)+"\n"+versions,"/tmp","sui-kit:dependency-probe",45000)
