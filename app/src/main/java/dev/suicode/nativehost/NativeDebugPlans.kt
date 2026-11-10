@@ -15,10 +15,14 @@ object NativeDebugPlans {
     suspend fun resolve(host: NativePackageHost,distro: DistroService,engine: DebugEngineEntry,sourcePath: String,projectPath: String,
                         rpc: suspend (String,String,JSONArray)->Any?): ResolvedDebugPlan {
         val row=host.rows.value.single { row -> row.record.enabled && Capability.DAP in row.record.grants && Capability.RUN in row.record.grants && row.pack.declarations().any { it.type=="dap" && it.descriptor.getValue("arguments").jsonObject["id"]?.jsonPrimitive?.content==engine.id } }
+        dev.blamspot.jcode.OutputLog.append("Debug Kit: ${row.record.id} · ${row.record.version} · $sourcePath")
         val component=row.pack.declarations().single { it.type=="dap" && it.descriptor.getValue("arguments").jsonObject["id"]?.jsonPrimitive?.content==engine.id }
         val args=component.descriptor.getValue("arguments").jsonObject
-        val source=WorkspaceHostPaths.hostToGuest(sourcePath)
-        val project=WorkspaceHostPaths.hostToGuest(projectPath)
+        val paths=dev.blamspot.jcode.core.distro.NativeTaskPaths.resolve(File(sourcePath),File(projectPath),distro.environmentState.value.runtime.binds)
+        val access=distro.validateTaskDirectory(paths)
+        check(access.succeeded) { "E_DEBUG_MAPPING: ${paths.guestDirectory}: ${access.internalError ?: access.stderr}" }
+        val source=paths.guestSource
+        val project=paths.guestDirectory
         val context=mutableMapOf<String,JsonElement>("source" to JsonPrimitive(source),"project" to JsonPrimitive(project),"sourceUri" to JsonPrimitive(File(source).toURI().toASCIIString()),"projectUri" to JsonPrimitive(File(project).toURI().toASCIIString()))
         args["preLaunchResource"]?.jsonPrimitive?.content?.let { resource ->
             require(resource.startsWith("resources/") && resource.split('/').none { it==".." || it=="." })

@@ -37,8 +37,8 @@ import kotlinx.coroutines.launch
         }
     }
     val permissions=preview.pack.permissions+(plan?.dependencies?.flatMap { it.pack.permissions } ?: emptyList())
-    AlertDialog(onDismissRequest={if(!state.installing) onDismiss()},title={Text(strings.text("management.reviewInstallation"))},
-        text={Column(Modifier.heightIn(max=520.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    dev.blamspot.jcode.workbench.WorkbenchReviewDialog(onDismissRequest=onDismiss,title={Text(strings.text("management.reviewInstallation"))},
+        text={Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text("${preview.pack.id} · ${preview.pack.version}\n${preview.source}\n${preview.bytes.size} bytes · SHA-256 ${preview.pack.digest}")
             Text(UiTextKeys.english.getValue(if(preview.pack.official) "management.verified" else "management.unverified"),color=if(preview.pack.official) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             if(preparing) { LinearProgressIndicator(Modifier.fillMaxWidth());Text(strings.text("packages.checking")) }

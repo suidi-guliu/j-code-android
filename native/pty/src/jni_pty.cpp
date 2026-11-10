@@ -89,6 +89,12 @@ Java_dev_blamspot_jcode_core_term_PtyProcess_nativeGetMasterFd(JNIEnv* env, jobj
     return pty ? pty->masterFd() : -1;
 }
 
+JNIEXPORT jint JNICALL
+Java_dev_blamspot_jcode_core_term_PtyProcess_nativeGetChildPid(JNIEnv* env, jobject thiz) {
+    Pty* pty = getPty(env, thiz);
+    return pty ? pty->childPid() : -1;
+}
+
 // Raw-fd poll deliberately NOT dereferencing the Pty object: the reader thread may race a
 // concurrent close()/delete, so it only ever touches the fd captured at session start. A poll
 // already blocked in the kernel holds its own reference to the file description, and callers

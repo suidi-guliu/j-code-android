@@ -35,6 +35,7 @@ data class VariableRow(val name: String, val value: String, val type: String?, v
 class DebugController(
     private val distroService: DistroService,
     parentScope: CoroutineScope,
+    val terminals: DebugTerminalHost,
 ) {
     // Every DAP request writes to the adapter's transport, and for a TCP adapter (js-debug) that is a
     // socket write — illegal on Android's main thread. The caller passes viewModelScope, which is
@@ -44,6 +45,10 @@ class DebugController(
     // Keep the caller's lifecycle (cancellation still cascades) but do the work off the main thread.
     private val scope = CoroutineScope(parentScope.coroutineContext + Dispatchers.IO)
 
+    init { terminals.onSessionClosed={ cancelled -> pushOutput("Program input terminal closed; ending its debug session.\n");stop(cancelled) } }
+    var breakpointExtensions: (DebugEngineEntry)->Set<String> = { it.extensions.toSet() }
+    var authorizeTerminal: (String)->Boolean = { false }
+    private var activeExtensions: Set<String> = emptySet()
     var resolveKitPlan: (suspend (DebugEngineEntry,String,String)->dev.suicode.packages.ResolvedDebugPlan)? = null
     private var preparation: kotlinx.coroutines.Job? = null
     private val generation = java.util.concurrent.atomic.AtomicLong()
@@ -119,6 +124,7 @@ class DebugController(
             _state.value = DebugState.ERROR
             return
         }
+        activeExtensions=breakpointExtensions(engine)
         _state.value = DebugState.STARTING
         pushOutput("Preparing ${engine.name}…\n")
         ownerPackage = engine.ownerPackage
@@ -163,14 +169,21 @@ class DebugController(
         session = s
         activeSession = s
         s.onOutput = { _, text -> if (session===s) pushOutput(text) }
+        s.onExit = { code -> if(session===s) { terminals.exited(code);pushOutput("Debuggee exit code: $code\n") } }
         s.onTerminated = { if (session===s) endSession() }
+        s.onRunInTerminal = { request ->
+            check(session===s && !ended) { "Debug session is no longer active" }
+            terminals.launch(request,launchProject ?: error("Missing debug project"),engine.ownerPackage ?: engine.name,source=launchSource ?: hostPath) {
+                session===s && !ended && engine.ownerPackage?.let(authorizeTerminal)==true
+            }
+        }
         // js-debug (multi-session): the root adapter asks us — via a `startDebugging` reverse request —
         // to open the CHILD session where the debuggee runs and breakpoints bind. Single-session adapters
         // (python/coreclr/lldb) never fire this, so this is inert for them.
         s.onStartDebugging = { request, config -> spawnChild(request, config) }
         // While preparing we hold STARTING; ignore the fresh session's initial DISCONNECTED so the
         // panel doesn't flicker back to the launch row between build and adapter start.
-        observe(s,scope.launch { s.state.collect { if (session===s && !(it == DebugState.DISCONNECTED && _state.value == DebugState.STARTING)) _state.value = it } })
+        observe(s,scope.launch { s.state.collect { if (session===s && !(it == DebugState.DISCONNECTED && _state.value == DebugState.STARTING)) { _state.value = it;if(it==DebugState.ERROR) { terminals.stop(false,"Debug adapter failed; inspect its output");s.close() } } } })
         observe(s,scope.launch { s.stopped.collect { st -> if (st != null) onStopped(s, st) else clearStoppedView() } })
 
         val distroBreakpoints = distroBps() // DAP lines are 1-based; applied on `initialized`
@@ -194,14 +207,25 @@ class DebugController(
     }
 
     private suspend fun prepareLaunch(engine: DebugEngineEntry, hostPath: String, projectDir: String): LaunchPlan {
+        val preparationGeneration=generation.get()
         val result=resolveKitPlan?.invoke(engine,hostPath,projectDir)
             ?: throw dev.blamspot.jcode.core.debug.DebugException("No enabled native IDE Kit provides this launch workflow")
-        return LaunchPlan(result.cwd,JSONObject(result.launch.toString()),engine.adapterCommand,tcpPort=result.port)
+        val config=JSONObject(result.launch.toString())
+        if(config.has("suiTerminal")) {
+            check(config.getString("suiTerminal")=="lldb-stdio") { "Unsupported declared debugger terminal mode" }
+            config.remove("suiTerminal")
+            val request=dev.blamspot.jcode.core.debug.RunInTerminal.parse(JSONObject().put("cwd",result.cwd).put("args",JSONArray().put(config.getString("program"))).put("title",engine.name))
+            val tty=terminals.prepareStdio(request,projectDir,engine.ownerPackage ?: engine.name,source=hostPath) { engine.ownerPackage?.let(authorizeTerminal)==true && !ended && generation.get()==preparationGeneration }
+            val commands=config.optJSONArray("preRunCommands") ?: JSONArray()
+            listOf("input","output","error").forEach { commands.put("settings set target.$it-path $tty") }
+            config.put("preRunCommands",commands)
+        }
+        return LaunchPlan(result.cwd,config,engine.adapterCommand,tcpPort=result.port)
     }
 
     /** Current breakpoints as distro-path -> 1-based lines (DAP convention). */
     private fun distroBps(): Map<String, List<Int>> =
-        currentBps.mapKeys { hostToDistro(it.key) }.mapValues { e -> e.value.sorted().map { it + 1 } }
+        currentBps.filterKeys { path -> activeExtensions.any { path.endsWith(it) } }.mapKeys { hostToDistro(it.key) }.mapValues { e -> e.value.sorted().map { it + 1 } }
 
     /**
      * js-debug multi-session: open a CHILD DAP session by connecting to the `__jsDebugChildServer` port
@@ -300,6 +324,7 @@ class DebugController(
     /** Called when the user toggles a breakpoint; remembers it and pushes to every live session. */
     fun onBreakpointsChanged(hostPath: String, lines: Set<Int>) {
         currentBps = currentBps.toMutableMap().apply { if (lines.isEmpty()) remove(hostPath) else put(hostPath, lines) }
+        if(activeExtensions.none { hostPath.endsWith(it) }) return
         val distroPath = hostToDistro(hostPath)
         val distroLines = lines.sorted().map { it + 1 }
         // Breakpoints bind in the child sessions (js-debug); harmless on a single-session root.
@@ -357,7 +382,8 @@ class DebugController(
 
     fun stopPackage(id: String) { if (ownerPackage==id) stop() }
 
-    @Synchronized fun stop() {
+    @Synchronized fun stop(cancelled: Boolean=true) {
+        terminals.stop(cancelled,if(cancelled) null else "Program input terminal closed unexpectedly")
         generation.incrementAndGet()
         preparation?.cancel(); preparation=null
         ownerPackage=null;launchSource=null;launchProject=null
@@ -375,6 +401,7 @@ class DebugController(
 
     /** A debuggee-driven end (root or last child terminated): tear everything down, exactly once. */
     @Synchronized private fun endSession() {
+        terminals.stop(false)
         if (ended) return
         ended = true
         clearObservers()

@@ -131,20 +131,17 @@ internal fun DebugLaunchRow(ui: DebugSessionUi) {
 }
 
 @Composable
-private fun DebugToolbar(ui: DebugSessionUi) {
+internal fun DebugToolbar(ui: DebugSessionUi) {
     val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
 
     val stopped = ui.state == DebugState.STOPPED
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = Space.xxs),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Space.xxs),
-    ) {
-        DebugAction(JCodeIcon.Continue, strings.text("run.continue"), enabled = stopped, tint = MaterialTheme.colorScheme.primary, onClick = ui.onContinue)
-        DebugAction(JCodeIcon.StepOver, strings.text("ui.stepOver"), enabled = stopped, onClick = ui.onStepOver)
-        DebugAction(JCodeIcon.StepInto, strings.text("ui.stepInto"), enabled = stopped, onClick = ui.onStepInto)
-        DebugAction(JCodeIcon.StepOut, strings.text("ui.stepOut"), enabled = stopped, onClick = ui.onStepOut)
-        Spacer(Modifier.weight(1f))
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
+            DebugAction(JCodeIcon.Continue, strings.text("run.continue"), enabled = stopped, tint = MaterialTheme.colorScheme.primary, onClick = ui.onContinue)
+            DebugAction(JCodeIcon.StepOver, strings.text("ui.stepOver"), enabled = stopped, onClick = ui.onStepOver)
+            DebugAction(JCodeIcon.StepInto, strings.text("ui.stepInto"), enabled = stopped, onClick = ui.onStepInto)
+            DebugAction(JCodeIcon.StepOut, strings.text("ui.stepOut"), enabled = stopped, onClick = ui.onStepOut)
+        }
         DebugAction(JCodeIcon.Stop, strings.text("ui.stop"), enabled = true, tint = MaterialTheme.colorScheme.error, onClick = ui.onStop)
     }
 }

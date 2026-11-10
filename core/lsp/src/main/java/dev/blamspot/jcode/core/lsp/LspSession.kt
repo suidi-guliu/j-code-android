@@ -33,6 +33,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class LspSession(
     val descriptor: LspServerDescriptor,
     val projectRoot: String,
+    /** LSP permits null; the Android host supplies its real PID, standalone runners their own. */
+    private val clientProcessId: Int? = null,
     /** Spawns the server (given a shell command) and returns its stdio as an [LspTransport], or null. */
     private val transportFactory: (command: String) -> LspTransport?,
 ) : Closeable {
@@ -107,7 +109,7 @@ class LspSession(
     }
 
     private fun initializeParams(rootUri: String): JSONObject = JSONObject().apply {
-        put("processId", android.os.Process.myPid())
+        put("processId", clientProcessId ?: JSONObject.NULL)
         put("rootUri", rootUri)
         put("initializationOptions", contextOptions(JSONObject(descriptor.initializationOptions)))
         put("workspaceFolders", JSONArray().put(workspaceFolder(rootUri)))
@@ -496,9 +498,19 @@ class LspSession(
         }
     }
 
+    private val progressTokens=java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    val indexing: Boolean get()=progressTokens.isNotEmpty()
     private fun handleServerNotification(method: String, params: JSONObject) {
         when (method) {
             "textDocument/publishDiagnostics" -> handleDiagnostics(params)
+            "$/progress" -> {
+                val token=params.opt("token")?.toString() ?: return
+                when(params.optJSONObject("value")?.optString("kind")) {
+                    "begin" -> progressTokens.add(token)
+                    "end" -> progressTokens.remove(token)
+                }
+                onNotification?.invoke(method,params)
+            }
             else -> onNotification?.invoke(method, params)
         }
     }

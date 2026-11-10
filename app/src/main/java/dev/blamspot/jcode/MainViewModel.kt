@@ -295,7 +295,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun nativeSourceTab(): EditorTab? = _editorGroup.value.activeTab?.takeIf { !it.isPage }
         ?: _editorGroup.value.tabs.firstOrNull { it.id==nativeSourceId && !it.isPage }
     val nativePackages = dev.suicode.nativehost.NativePackageHost.get(appContext)
+    val debugTerminals = dev.blamspot.jcode.debug.DebugTerminalHost(appContext,distroService)
     val javaQuickRun = JavaQuickRunController(appContext, distroService, viewModelScope, ::emitMessage)
+    fun stopNativeTask(id: String) { if(debugTerminals.ownsTask(id)) debugController.stop() else javaQuickRun.stopTask(id) }
+    fun rerunNativeTask(record: dev.blamspot.jcode.tasks.NativeTaskRecord) {
+        viewModelScope.launch {
+            try {
+                val file=File(record.source)
+                if(record.kind=="debug") { startDebug(file.path);return@launch }
+                val accepted=javaQuickRun.startRecorded(file,record.project?.let(::File),nativePackages.recipe(record.packageId,record.component)) { saveAllDirtyAwait() }
+                if(!accepted) emitMessage(nativePackages.uiText("tasks.busy"))
+            } catch(e: Exception) { emitMessage(e.message ?: "Task could not restart") }
+        }
+    }
 
     fun quickRunActiveFile(repeatCount: Int): Boolean {
         val tab = _editorGroup.value.activeTab ?: return false
@@ -318,9 +330,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             lspController.shutdownPackages(setOf(id))
             lspController.retryOpenDocuments()
         } }
+        TerminalSessionHost.onSessionGone = { id,cancelled -> debugTerminals.closed(id,cancelled);javaQuickRun.closed(id,cancelled) }
         TerminalSessionHost.manager(appContext).onTaskComplete = { sessionId, payload ->
             setupTerminalRunner.handleTaskComplete(sessionId, payload)
             javaQuickRun.complete(sessionId, payload)
+            debugTerminals.completed(sessionId,payload)
             _runTerminalCompletions.tryEmit(sessionId to (payload.substringAfter(';').trim().toIntOrNull() ?: -1))
         }
         TerminalSessionHost.manager(appContext).onTaskProgress = setupTerminalRunner::handleTaskProgress
@@ -2504,7 +2518,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      *  progress — and say whose — instead of an unexplained spinner for the first several minutes. */
     val sdkInstallRequestedId: StateFlow<String?> = _sdkInstallRequestedId.asStateFlow()
 
-    private val debugController = DebugController(distroService, viewModelScope)
+    private val debugController = DebugController(distroService, viewModelScope,debugTerminals)
     fun nativeDebugOwnedBy(packageId: String): Boolean = debugController.ownedBy(packageId)
     val debugState = debugController.state
     val debugCallStack = debugController.callStack
@@ -2717,7 +2731,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!requireLanguageServer(path, LspFeature.Definition, "Go to Definition")) return
         val targets = lspController.definition(path, line, character)
         when (targets.size) {
-            0 -> emitMessage(nativePackages.uiText("message.noDefinition", mapOf("symbol" to (word).toString())))
+            0 -> {
+                val status=lspController.statusFor(path)
+                emitMessage(when {
+                    status?.state==LspState.ERROR -> "${status.name}: ${status.detail ?: "Language server request failed"}"
+                    status?.indexing==true -> nativePackages.uiText("lsp.indexing",mapOf("server" to status.name))
+                    status?.configurationIssue!=null -> status.configurationIssue
+                    else -> nativePackages.uiText("lsp.noTarget",mapOf("server" to (status?.name ?: "Language server"),"symbol" to word))
+                })
+            }
             1 -> openLspLocation(targets.first())
             else -> _lspLocationPicker.value =
                 LspLocationPicker("Definitions of \"$word\"", targets.toEntries())
@@ -2843,13 +2865,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     !isLanguageServerPaired(descriptor.id, name) ->
                         "$actionLabel needs an enabled IDE Kit for $name; install one from Native Packages"
                     descriptor.id !in lspCatalogState.value.installedEntryIds ->
-                        "$actionLabel needs ${entry?.name ?: descriptor.id}; install it from Toolchains"
+                        "$actionLabel needs ${entry?.name ?: descriptor.id}; review the component in Packages → IDE Kit Library"
                     else -> "$actionLabel needs the Linux environment to be ready"
                 },
             )
             return false
         }
-        if (status.state != LspState.READY) {
+        if (!lspController.canRequest(path)) {
             emitMessage(
                 when (status.state) {
                     LspState.ERROR -> "${status.name} failed to start${status.detail?.let { ": $it" } ?: ""}"
@@ -3015,6 +3037,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 else { startDebug(tab.filePath.path);dev.suicode.packages.Reply(true,"STARTING") }
             }
         })
+        debugController.breakpointExtensions = { engine ->
+            engine.extensions.toSet()+dev.blamspot.jcode.core.lsp.LspServerDescriptor.BUILT_IN.filter { it.ownerPackage==engine.ownerPackage }.flatMap { descriptor ->
+                val languages=engine.extensions.filter { it in descriptor.extensions }.map(descriptor::languageIdFor).toSet()
+                descriptor.extensions.filter { descriptor.languageIdFor(it) in languages }
+            }
+        }
+        debugController.authorizeTerminal = { id -> nativePackages.rows.value.any { it.record.id==id && it.record.enabled && dev.suicode.packages.Capability.DAP in it.record.grants && dev.suicode.packages.Capability.RUN in it.record.grants } }
         debugController.resolveKitPlan = { engine,source,project ->
             dev.suicode.nativehost.NativeDebugPlans.resolve(nativePackages,distroService,engine,source,project) { path,command,arguments -> lspController.executeCommand(path,command,arguments) }
         }
@@ -5485,6 +5514,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        debugController.stop()
         javaQuickRun.stop()
         nativePackages.detach()
         stopAllRuntimeServices()

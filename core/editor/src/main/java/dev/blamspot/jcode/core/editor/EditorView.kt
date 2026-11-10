@@ -32,7 +32,7 @@ data class EditorContextRequest(
     val xPx: Float,
     val yPx: Float,
     val word: String,
-    /** Byte offset the press landed on (the end of the buffer when it landed past the last line)
+    /** Byte offset at the selected identifier start, otherwise the press (or end of buffer)
      *  — the position language-server actions resolve against. */
     val offset: Int,
 )
@@ -302,7 +302,7 @@ class EditorView @JvmOverloads constructor(
                     EditorContextRequest(
                         e.x, e.y,
                         word?.third ?: "",
-                        offset ?: state.snapshot.value.byteLength,
+                        word?.first ?: offset ?: state.snapshot.value.byteLength,
                     ),
                 )
             }

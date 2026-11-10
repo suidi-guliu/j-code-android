@@ -47,6 +47,8 @@ data class LspServerStatus(
     val root: String,
     val state: LspState,
     val detail: String?,
+    val indexing: Boolean = false,
+    val configurationIssue: String? = null,
 )
 
 /**
@@ -431,6 +433,9 @@ class LspController(
         publishStatus()
     }
 
+    /** A failed request does not make a still-running server impossible to query again. */
+    fun canRequest(hostPath: String): Boolean = readySession(hostPath) != null
+
     private fun readySession(hostPath: String): Pair<Managed, OpenDocument>? {
         val document = documents[hostPath] ?: return null
         val managed = sessions[document.key] ?: return null
@@ -476,7 +481,7 @@ class LspController(
     }
 
     private fun startSession(descriptor: LspServerDescriptor, key: SessionKey): Managed {
-        val session = LspSession(descriptor, key.root) { command ->
+        val session = LspSession(descriptor, key.root, android.os.Process.myPid()) { command ->
             distroService.spawnProjectStdioProcess(
                 command = command,
                 owner="sui-kit:${descriptor.ownerPackage}/lsp:${key.hashCode()}",
@@ -514,6 +519,8 @@ class LspController(
                 }
             }
         }
+        val previousNotification=session.onNotification
+        session.onNotification={ method,params -> previousNotification?.invoke(method,params);if(method=="$/progress") publishStatus() }
         backgroundScope.launch {
             log("starting ${descriptor.id} in ${key.root.substringAfterLast('/')}")
             session.start(session.hostToDistroUri(key.root))
@@ -618,6 +625,13 @@ class LspController(
         root = key.root,
         state = if(requestError!=null) LspState.ERROR else session.state.value,
         detail = session.errorMessage ?: requestError ?: stderr,
+        indexing = session.indexing,
+        configurationIssue = runCatching {
+            val declaration=JSONObject(descriptor.initializationOptions).optJSONObject("suiIndex") ?: return@runCatching null
+            val marker=declaration.getString("projectMarker");val database=declaration.getString("database")
+            require(listOf(marker,database).all { path -> !path.startsWith('/') && path.split('/').none { it in setOf("..", ".", "") } })
+            if(File(key.root,marker).isFile && !File(key.root,database).canRead()) "Compilation database missing: $database. Configure/Build this project, then retry." else null
+        }.getOrNull(),
     )
 
     /** ".kt" for "Main.kt"; null for a file with no extension. */

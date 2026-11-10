@@ -3,7 +3,7 @@
   "type": "object",
   "additionalProperties": false,
   "minProperties": 1,
-  "maxProperties": 783,
+  "maxProperties": 817,
   "properties": {
     "nav.files": {
       "type": "string",
@@ -3916,6 +3916,176 @@
       "maxLength": 2048
     },
     "management.offlineRepairDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.results": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.empty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.details": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.rerun": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.exit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.times": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.logBound": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.logTruncated": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.busy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "focus.editor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "focus.dock": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "focus.restore": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "focus.details": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "focus.debugDetails": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "terminal.rename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "terminal.name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "terminal.closeFinished": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "terminal.reuseIdle": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "terminal.count": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "terminal.noIdle": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "debug.programTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "debug.cwd": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "debug.environmentKeys": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "debug.reviewTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "debug.openTerminal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "lsp.noTarget": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "lsp.indexing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.state.STARTING": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.state.RUNNING": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.state.SUCCEEDED": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.state.FAILED": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.state.CANCELLED": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.state.INTERRUPTED": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "tasks.state.FINISHED": {
       "type": "string",
       "minLength": 1,
       "maxLength": 2048

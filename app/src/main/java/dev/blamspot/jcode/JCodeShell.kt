@@ -79,6 +79,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -982,6 +983,24 @@ fun JCodeApp(
             (serverItems + packItems).distinctBy { it.label }
         }
     }
+    val terminalReview by viewModel.debugTerminals.review.collectAsStateWithLifecycle()
+    terminalReview?.let { review ->
+        androidx.compose.ui.window.Dialog(onDismissRequest={viewModel.debugTerminals.decide(false)},properties=androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth=false)) {
+            Surface(Modifier.fillMaxWidth(.9f).heightIn(max=600.dp),shape=MaterialTheme.shapes.medium) {
+                Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                    Text(dev.blamspot.jcode.design.uiText("debug.programTerminal"),style=MaterialTheme.typography.titleLarge)
+                    Text(review.publisher)
+                    Text(dev.blamspot.jcode.design.uiText("debug.cwd",mapOf("path" to review.request.cwd)))
+                    Text(review.request.args.mapIndexed { index,arg -> "$index: "+org.json.JSONObject.quote(arg) }.joinToString("\n"),fontFamily=androidx.compose.ui.text.font.FontFamily.Monospace)
+                    var environmentExpanded by remember(review) { mutableStateOf(false) }
+                    TextButton(onClick={environmentExpanded=!environmentExpanded}) { Text(dev.blamspot.jcode.design.uiText("debug.environmentKeys",mapOf("keys" to review.request.env.keys.joinToString(", ")))) }
+                    if(environmentExpanded) Text(review.request.env.entries.joinToString("\n") { (key,value) -> "$key = ${value ?: "<unset>"}" },fontFamily=androidx.compose.ui.text.font.FontFamily.Monospace)
+                    Text(dev.suicode.packages.UiTextKeys.english.getValue("debug.reviewTerminal"))
+                    Row { TextButton(onClick={viewModel.debugTerminals.decide(false)}) { Text(dev.blamspot.jcode.design.uiText("ui.cancel")) };TextButton(onClick={viewModel.debugTerminals.decide(true)}) { Text(dev.blamspot.jcode.design.uiText("debug.openTerminal")) } }
+                }
+            }
+        }
+    }
     // Debug launch target = the active source file, if it has an installed debug engine (stdio adapters
     // and js-debug's TCP adapter are both supported now).
     val activeDebugFile = editorGroup.activeTab?.takeIf { !it.isPage }?.filePath
@@ -1686,6 +1705,7 @@ fun JCodeApp(
                 onOpenPanel = viewModel::openVsixPanelPage,
             )
         },
+        dev.blamspot.jcode.tasks.LocalNativeTaskActions provides remember(viewModel) { dev.blamspot.jcode.tasks.NativeTaskActions(viewModel::stopNativeTask,viewModel::rerunNativeTask,viewModel.javaQuickRun::reveal) },
         LocalTaskManagerBackgroundActions provides remember {
             TaskManagerBackgroundActions(
                 snapshot = viewModel::backgroundExtensionSnapshot,
@@ -1716,7 +1736,7 @@ fun JCodeApp(
         LocalPendingReload provides pendingReloadUi,
         LocalRunConfigPresets provides contributedRunPresets,
         LocalSetupTerminalSessionId provides setupTerminalSessionId,
-        LocalSetupTerminalFocusRequests provides remember(viewModel) { kotlinx.coroutines.flow.merge(viewModel.setupTerminalRunner.focusRequests, viewModel.javaQuickRun.focusRequests) },
+        LocalSetupTerminalFocusRequests provides remember(viewModel) { kotlinx.coroutines.flow.merge(viewModel.setupTerminalRunner.focusRequests, viewModel.javaQuickRun.focusRequests, viewModel.debugTerminals.focusRequests) },
         LocalDebugSession provides debugSessionUi,
         LocalPerformanceSettings provides performanceSettings,
         LocalEnvVarSettings provides envVarSettings,
@@ -2322,7 +2342,8 @@ private fun JCodeShell(
     var leftSidebarExpanded by rememberSaveable(windowInfo.widthClass) {
         mutableStateOf(!usesModalWorkspace)
     }
-    val isPersistentLeftSidebarVisible = !usesModalWorkspace && leftSidebarExpanded
+    var focusMode by rememberSaveable { mutableStateOf("NORMAL") }
+    val isPersistentLeftSidebarVisible = !usesModalWorkspace && leftSidebarExpanded && focusMode=="NORMAL"
     // Source Control shows a live working tree, but the app only ever hinted at disk changes it made
     // itself (a save, an explorer operation) — so anything done in the terminal (git add, a build, an
     // agent editing files) left the staged/changed lists stale until the user poked something. Poll
@@ -2353,6 +2374,7 @@ private fun JCodeShell(
     // sits in a right drawer over the editor and the tools sit in the left drawer, so close both.
     LaunchedEffect(bringEditorToFront, usesModalWorkspace) {
         bringEditorToFront.collect {
+            if(focusMode=="DOCK") focusMode="NORMAL"
             if (usesModalWorkspace) {
                 rightSidebarVisible = false
                 compactDrawerState.close()
@@ -2560,6 +2582,8 @@ private fun JCodeShell(
             seenTerminalIds intersect live
         }
     }
+    val terminalSessionManager = remember(appContext) { TerminalSessionHost.manager(appContext) }
+    val terminalMetadataVersion by terminalSessionManager.metadataVersion.collectAsStateWithLifecycle()
     // Derived once per actual change (not per recomposition) so a busy-title update doesn't rebuild the
     // whole top bar, and the instance list isn't a fresh List object every frame.
     val terminalBusy by remember {
@@ -2570,15 +2594,16 @@ private fun JCodeShell(
     }
     val terminalInstances by remember {
         derivedStateOf {
+            terminalMetadataVersion
             terminalSessionIds.mapIndexed { index, id ->
-                TerminalInstance(id, "${index + 1}. ${terminalTabLabel(terminalTitles[id])}")
+                TerminalInstance(id, "${index + 1}. ${terminalTabLabel(terminalSessionManager.getSession(id)?.label ?: terminalTitles[id])}")
             }
         }
     }
 
     // Process-lifetime manager so terminal sessions (native PTY processes) survive Activity
     // recreation/backgrounding instead of being orphaned with the composition.
-    val terminalSessionManager = remember(appContext) { TerminalSessionHost.manager(appContext) }
+
     // Apply the user's configurable instance limit to the process-lifetime manager.
     val configuredMaxTerminals = LocalPerformanceSettings.current.maxTerminalSessions
     LaunchedEffect(terminalSessionManager, configuredMaxTerminals) {
@@ -2694,6 +2719,7 @@ private fun JCodeShell(
     LaunchedEffect(setupFocusRequests) {
         setupFocusRequests?.collect { id ->
             if (terminalSessionManager.getSession(id) != null) {
+                focusMode="NORMAL"
                 if (id !in terminalSessionIds) terminalSessionIds = terminalSessionIds + id
                 selectTerminalSession(id)
                 selectRightPanelTab(RightPanelTab.Terminal)
@@ -2755,7 +2781,8 @@ private fun JCodeShell(
     // The manager has already reaped the PTY + released the foreground hold; here we just sync the UI.
     DisposableEffect(Unit) {
         TerminalSessionHost.setUiTitleListener { id, title ->
-            terminalTitles[id] = title.ifBlank { "terminal" }
+            val session=terminalSessionManager.getSession(id)
+            terminalTitles[id] = if(session?.managedLabel==true || title.isBlank() || title=="terminal") session?.label ?: "Shell" else "${session?.label ?: "Shell"} · $title"
         }
         onDispose { TerminalSessionHost.setUiTitleListener(null) }
     }
@@ -2992,6 +3019,7 @@ private fun JCodeShell(
     }
 
     fun closeTerminalSession(sessionId: String) {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) { dev.blamspot.jcode.tasks.NativeTaskHistory.get(appContext).sessionClosed(sessionId,true) }
         if(sessionId==setupTerminalSessionId && dev.suicode.nativehost.NativePackageHost.get(appContext).setup.state.value.installing) {
             dev.suicode.nativehost.NativePackageHost.get(appContext).setup.cancel()
             scope.launch { snackbarHostState.showSnackbar(strings.text("ui.kitCancellationRequestedSetupStaysOpenUntilTheCurrent")) }
@@ -3008,7 +3036,7 @@ private fun JCodeShell(
         terminalSessionManager.childrenOf(sessionId).forEach { closeTerminalSession(it) }
         val remaining = terminalSessionIds.filterNot { it == sessionId }
         terminalSessionManager.closeSession(sessionId)
-        TerminalSessionHost.onSessionStopped(sessionId)
+        TerminalSessionHost.onSessionStopped(sessionId,userClosed=true)
         terminalTitles.remove(sessionId)
         terminalSessionManager.clearRelocation(sessionId)
         terminalSessionIds = remaining
@@ -3626,7 +3654,7 @@ private fun JCodeShell(
             var splitWidthPx by remember(configuration.screenHeightDp) {
                 mutableIntStateOf(with(splitDensity) { configuration.screenHeightDp.dp.roundToPx() })
             }
-            val dragSplit = rightSidebarDocked && rightSidebarVisible && persistentRightDrawer
+            val dragSplit = rightSidebarDocked && rightSidebarVisible && persistentRightDrawer && focusMode=="NORMAL"
             // The drag runs on local state and is saved once on release. Reading the stored value back
             // each frame would lose most of a drag: it only updates after a round trip through
             // preferences, so every delta in the meantime would be measured from the same stale width.
@@ -3643,9 +3671,20 @@ private fun JCodeShell(
                     .padding(innerPadding)
                     .onSizeChanged { splitWidthPx = it.height; measuredWorkbenchWidth=it.width/paneDensity.density },
             ) {
+                CompositionLocalProvider(
+                    dev.blamspot.jcode.workbench.LocalWorkbenchFocus provides dev.blamspot.jcode.workbench.WorkbenchFocusControls(focusMode) { mode -> focusMode=mode;if(mode=="DOCK") rightSidebarVisible=true },
+                    dev.blamspot.jcode.workbench.LocalTerminalManagement provides dev.blamspot.jcode.workbench.TerminalManagementActions {
+                        scope.launch {
+                            val snapshot=terminalSessionManager.sessions.values.toList()
+                            val candidate=withContext(kotlinx.coroutines.Dispatchers.IO) { snapshot.firstOrNull { session ->
+                                session.spawnSpec?.workdir==(selectedProject?.location?.let { dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(it) } ?: "/workspace") && session.taskState==null && session.relocationParentId==null && terminalSessionManager.childrenOf(session.id).isEmpty() && session.foreground==null && dev.blamspot.jcode.core.distro.TerminalIdleProbe.idle(session.pty.childPid,dev.blamspot.jcode.core.distro.WorkspaceHostPaths.guestToHost((selectedProject?.location?.let { dev.blamspot.jcode.core.distro.WorkspaceHostPaths.hostToGuest(it) } ?: "/workspace")))
+                            } }
+                            if(candidate!=null && terminalSessionManager.getSession(candidate.id)!=null) selectTerminalSession(candidate.id) else createTerminalSession()
+                        }
+                    },
+                ) {
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
+                    modifier = (if(focusMode=="DOCK") Modifier.height(0.dp) else Modifier.weight(1f))
                         .fillMaxWidth(),
                 ) {
                     CompositionLocalProvider(
@@ -3692,6 +3731,7 @@ private fun JCodeShell(
                             }
                         },
                         onToggleRightSidebar = {
+                            if(focusMode!="NORMAL") focusMode="NORMAL"
                             if (usesModalWorkspace) {
                                 rightSidebarVisible = !rightSidebarVisible
                             } else if (canShowRightSidebar) {
@@ -3745,7 +3785,7 @@ private fun JCodeShell(
                         onEditorLanguageAction = onEditorLanguageAction,
                         editorPageContent = { tab ->
                             when (tab.pageKind) {
-                                EditorPageKind.Settings -> SettingsFeature.Content(
+                                EditorPageKind.Settings -> dev.blamspot.jcode.workbench.WorkbenchExpandableDetails(strings.text("nav.settings")) { SettingsFeature.Content(
                                     effectiveConfig = effectiveConfig,
                                     workspaceConfig = workspaceConfig,
                                     projectConfig = projectConfig,
@@ -3774,7 +3814,7 @@ private fun JCodeShell(
                                     onSelectFormatter = onSelectFormatter,
                                     isUserWorkspace = breadcrumb.size > 1,
                                     modifier = Modifier.fillMaxSize(),
-                                )
+                                ) }
                                 EditorPageKind.Environment -> OnboardingFeature.EnvironmentSetupPage(
                                     environmentState = environmentState,
                                     autoSetupProgress = autoSetupProgress,
@@ -4161,7 +4201,7 @@ private fun JCodeShell(
                         onDragStopped = { rightDrawerSplit.onSetWidthFraction(liveDrawerFraction) },
                     )
                 }
-                if (rightSidebarDocked && rightSidebarVisible) {
+                if (rightSidebarDocked && rightSidebarVisible && focusMode!="EDITOR") {
                     WorkbenchRightSidebar(
                         selected = rightPanelSelection,
                         vsixExtensions = vsixExtensions,
@@ -4178,18 +4218,19 @@ private fun JCodeShell(
                         onOpenEnvironmentWizard = onOpenEnvironmentWizard,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(drawerWidth),
+                            .then(if(focusMode=="DOCK") Modifier.weight(1f) else Modifier.height(drawerWidth)),
                         onSelected = { selectRightPanel(it) },
                         onSelectTerminalSession = ::selectTerminalSession,
                         onAddTerminalSession = ::createTerminalSession,
                         onRemoveTerminalSession = ::closeTerminalSession,
-                        onHide = { rightSidebarVisible = false },
+                        onHide = { focusMode="NORMAL";rightSidebarVisible = false },
                         runningProjectName = runningProjectId?.let { id ->
                             workspace?.projects?.firstOrNull { it.id == id }?.name ?: selectedProject?.name
                         },
                         runInProgress = runInProgress,
                         onStopRun = ::handleStopRun,
                     )
+                }
                 }
             }
         }
@@ -5113,8 +5154,8 @@ private fun recentSubtitle(recent: RecentEntity): String = when (recent.kind) {
 /** A live terminal instance shown in the Terminal-button long-press list. */
 /** Terminal tab/instance label, capped at 8 characters (the OSC title can be a long command line). */
 private fun terminalTabLabel(raw: String?): String {
-    val s = (raw ?: "terminal").ifBlank { "terminal" }
-    return if (s.length > 8) s.take(7) + "…" else s
+    val s = (raw ?: "Shell").ifBlank { "Shell" }
+    return if (s.length > 28) s.take(27) + "…" else s
 }
 
 @Composable
@@ -5215,6 +5256,8 @@ private fun WorkbenchRightSidebar(
                 if (activeVsix != null) {
                     VsixTitleActionsMenu(activeVsix)
                 }
+                val focus=dev.blamspot.jcode.workbench.LocalWorkbenchFocus.current
+                WorkbenchIconActionButton(icon=jcIcon(JCodeIcon.Fullscreen),contentDescription=strings.text(if(focus.mode=="DOCK") "focus.restore" else "focus.dock"),onClick={focus.setMode(if(focus.mode=="DOCK") "NORMAL" else "DOCK")})
                 WorkbenchIconActionButton(
                     icon = jcIcon(JCodeIcon.Close),
                     contentDescription = strings.text("ui.close"),
@@ -5573,7 +5616,7 @@ private fun TerminalRunningDialog(
 }
 
 @Composable
-private fun TerminalSidebarContent(
+internal fun TerminalSidebarContent(
     selectedProject: Project?,
     terminalSessionIds: List<String>,
     selectedTerminalSessionId: String,
@@ -5590,8 +5633,31 @@ private fun TerminalSidebarContent(
     modifier: Modifier = Modifier,
 ) {
     val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
+    val terminalScope=rememberCoroutineScope()
+    val terminalMetadata by (TerminalSessionHost.existingManager()?.metadataVersion ?: remember { kotlinx.coroutines.flow.MutableStateFlow(0L) }).collectAsStateWithLifecycle()
+    terminalMetadata
+    var renameId by remember { mutableStateOf<String?>(null) }
+    var renameValue by remember { mutableStateOf("") }
+    renameId?.let { id -> AlertDialog(onDismissRequest={renameId=null},title={Text(strings.text("terminal.rename"))},text={androidx.compose.material3.OutlinedTextField(renameValue,{renameValue=it.take(80)},singleLine=true,label={Text(strings.text("terminal.name"))})},confirmButton={TextButton(enabled=renameValue.isNotBlank(),onClick={terminalSessionFor(id)?.let { it.managedLabel=true;it.label=renameValue.trim() };renameId=null}) { Text(strings.text("ui.save")) }},dismissButton={TextButton(onClick={renameId=null}) { Text(strings.text("ui.cancel")) }}) }
 
-    Column(modifier = modifier.fillMaxSize()) {
+
+    BoxWithConstraints(modifier=modifier.fillMaxSize()) {
+    val maximumInspector=((maxHeight-100.dp).coerceAtLeast(0.dp)*.6f)
+    var inspectorHeight by rememberSaveable { mutableFloatStateOf(160f) }
+    var showInspector by rememberSaveable { mutableStateOf(false) }
+    val inspectorDensity=LocalDensity.current
+    val debugUi=LocalDebugSession.current
+    Column(modifier = Modifier.fillMaxSize()) {
+        if(debugUi.state in setOf(DebugState.RUNNING,DebugState.STOPPED,DebugState.STARTING,DebugState.INITIALIZING)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { DebugToolbar(debugUi) }
+                JcTooltip(strings.text("focus.debugDetails")) { IconButton(onClick={showInspector=!showInspector}) { Icon(jcIcon(JCodeIcon.Debug),strings.text("focus.debugDetails")) } }
+            }
+            if(showInspector) {
+                Column(Modifier.fillMaxWidth().height((inspectorHeight.takeIf { it.isFinite() } ?: 160f).coerceAtLeast(0f).dp.coerceAtMost(maximumInspector)).verticalScroll(rememberScrollState())) { DebugSessionPanel(debugUi) }
+                Box(Modifier.fillMaxWidth().height(12.dp).background(MaterialTheme.colorScheme.outlineVariant).draggable(rememberDraggableState { delta -> inspectorHeight=(inspectorHeight+delta/inspectorDensity.density).coerceIn(0f,maximumInspector.value) },Orientation.Vertical))
+            }
+        }
         var menuForId by remember { mutableStateOf<String?>(null) }
         val orderedSessionIds = terminalSessionIds.sortedBy { it !in pinnedTerminalIds }
         // Closing a terminal running a foreground program prompts first (Kill / Close Unbusy / Cancel).
@@ -5599,7 +5665,7 @@ private fun TerminalSidebarContent(
         // preference as the project/workspace close guard.
         val perf = LocalPerformanceSettings.current
         var pendingTerminalClose by remember { mutableStateOf<List<String>?>(null) }
-        fun terminalBusy(id: String) = terminalSessionFor(id)?.foreground != null
+        fun terminalBusy(id: String) = terminalSessionFor(id)?.let { it.foreground!=null || it.taskState in setOf("STARTING","RUNNING") } == true
         fun requestCloseTerminals(ids: List<String>) {
             val targets = ids.filter { it in terminalSessionIds }
             if (targets.isEmpty()) return
@@ -5627,11 +5693,11 @@ private fun TerminalSidebarContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .height(30.dp),
+                    .height(40.dp),
                 horizontalArrangement = Arrangement.spacedBy(Space.none),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
                 orderedSessionIds.forEach { sessionId ->
                     val isActive = sessionId == selectedTerminalSessionId
                     val isPinned = sessionId in pinnedTerminalIds
@@ -5649,7 +5715,7 @@ private fun TerminalSidebarContent(
                                     if (isActive) MaterialTheme.colorScheme.surfaceVariant
                                     else MaterialTheme.colorScheme.surface
                                 )
-                                .height(30.dp)
+                                .height(40.dp)
                                 .padding(horizontal = Space.ms),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(Space.xs),
@@ -5672,7 +5738,7 @@ private fun TerminalSidebarContent(
                             }
                             MiddleEllipsisText(
                                 text = terminalTabLabel(
-                                    terminalTitleFor(sessionId) ?: terminalSessionFor(sessionId)?.label
+                                    terminalSessionFor(sessionId)?.takeIf { it.managedLabel }?.label ?: terminalTitleFor(sessionId) ?: terminalSessionFor(sessionId)?.label
                                 ),
                                 maxWidth = LocalTabMaxSize.current.size.titleMaxWidth,
                                 style = MaterialTheme.typography.labelSmall,
@@ -5685,6 +5751,9 @@ private fun TerminalSidebarContent(
                             // The "×" appears ONLY on the active, unpinned tab (so tapping a background
                             // tab to switch can't close it). A plain clickable Box keeps the touch target
                             // tight (18dp) — an IconButton's 48dp minimum would spill over the title.
+                            terminalSessionFor(sessionId)?.let { session -> session.taskState?.let { state ->
+                                Text(strings.text("tasks.state."+if(state in setOf("STARTING","RUNNING","SUCCEEDED","FAILED","CANCELLED","INTERRUPTED")) state else "FINISHED")+(session.taskExitCode?.let { " ($it)" } ?: ""),style=MaterialTheme.typography.labelSmall)
+                            } }
                             if (isActive && !isPinned && !LocalTabCloseButtonSetting.current.hidden) {
                                 JcTooltip(strings.text("ui.closeTerminal")) {
                                     Box(
@@ -5715,6 +5784,7 @@ private fun TerminalSidebarContent(
                                         onSetTerminalPinned(sessionId, !isPinned)
                                     })
                                 }
+                                add(ContextAction(JCodeIcon.Rename,strings.text("terminal.rename")) { renameValue=terminalSessionFor(sessionId)?.label.orEmpty();renameId=sessionId })
                                 add(ContextAction(JCodeIcon.Clear, strings.text("ui.clear")) {
                                     terminalSessionFor(sessionId)?.pty?.write(byteArrayOf(0x0C))
                                 })
@@ -5728,10 +5798,27 @@ private fun TerminalSidebarContent(
                         )
                     }
                 }
+                }
+                Text(strings.text("terminal.count",mapOf("count" to terminalSessionIds.size.toString())),style=MaterialTheme.typography.labelSmall)
+                Box {
+                    IconButton(onClick={menuForId="__all__"},modifier=Modifier.size(40.dp)) { Icon(jcIcon(JCodeIcon.MoreVert),strings.text("files.more")) }
+                    val management=dev.blamspot.jcode.workbench.LocalTerminalManagement.current
+                    CompactContextMenu(expanded=menuForId=="__all__",onDismissRequest={menuForId=null},listActions=listOf(
+                        ContextAction(JCodeIcon.Terminal,strings.text("terminal.reuseIdle")) { management.reuseIdle() },
+                        ContextAction(JCodeIcon.Close,strings.text("terminal.closeFinished")) {
+                            terminalScope.launch {
+                                val candidates=terminalSessionIds.filter { id -> id !in pinnedTerminalIds && terminalSessionFor(id)?.taskState in setOf("SUCCEEDED","FAILED","CANCELLED","FINISHED") }
+                                val idle=withContext(kotlinx.coroutines.Dispatchers.IO) { candidates.filter { id -> terminalSessionFor(id)?.let { dev.blamspot.jcode.core.distro.TerminalIdleProbe.idle(it.pty.childPid) }==true } }
+                                val safe=idle.filter { terminalSessionFor(it)?.taskState !in setOf("RUNNING","STARTING") }
+                                safe.forEach { terminalSessionFor(it)?.foreground=null };requestCloseTerminals(safe)
+                            }
+                        }
+                    ))
+                }
                 JcTooltip(strings.text("ui.newTerminal")) {
                     IconButton(
                         onClick = onAddTerminalSession,
-                        modifier = Modifier.size(width = 32.dp, height = 30.dp),
+                        modifier = Modifier.size(width = 40.dp, height = 40.dp),
                     ) {
                         Text(
                             text = "+",
@@ -5907,6 +5994,7 @@ private fun TerminalSidebarContent(
             }
         }
     }
+}
 }
 
 @Composable

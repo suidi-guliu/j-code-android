@@ -28,6 +28,7 @@ import java.io.File
 object TerminalSessionHost {
     @Volatile
     private var manager: TerminalSessionManager? = null
+    @Volatile var onSessionGone: ((String,Boolean)->Unit)?=null
     private val fgsHandles = HashMap<String, BackendSessionHandle>()
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -116,6 +117,7 @@ object TerminalSessionHost {
                 // the session off-thread: release its foreground-service hold, then notify the UI (on
                 // the main thread) so it can drop the tab and free the parser.
                 mgr.onSessionExit = { sessionId ->
+                    runCatching { dev.blamspot.jcode.tasks.NativeTaskHistory.get(context).sessionClosed(sessionId) }
                     onSessionStopped(sessionId)
                     uiExitListener?.let { listener -> mainHandler.post { listener(sessionId) } }
                 }
@@ -144,6 +146,7 @@ object TerminalSessionHost {
                 // sessions inside OutputLog). Runs on the reader thread; OutputLog copies what it keeps.
                 mgr.onOutput = { sessionId, data, length ->
                     OutputLog.appendRaw(sessionId, data, length)
+                    runCatching { dev.blamspot.jcode.tasks.NativeTaskHistory.get(context).append(sessionId,data,length) }.onFailure { android.util.Log.w("TaskHistory","Cannot append task output",it) }
                 }
                 // A guest OSC 52 clipboard write (Claude Code's copy-on-select, tmux `set-clipboard`)
                 // fires off the reader thread; the Android clipboard requires the main thread.
@@ -196,7 +199,8 @@ object TerminalSessionHost {
     }
 
     /** Release the foreground-service hold for a closed terminal session. */
-    fun onSessionStopped(sessionId: String) {
+    fun onSessionStopped(sessionId: String,userClosed: Boolean=false) {
+        onSessionGone?.invoke(sessionId,userClosed)
         synchronized(this) { fgsHandles.remove(sessionId)?.close() }
     }
 }

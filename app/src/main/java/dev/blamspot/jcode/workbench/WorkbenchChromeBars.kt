@@ -243,6 +243,8 @@ internal fun WorkbenchTopBar(
                 active = leftSidebarExpanded,
             )
 
+            val focus=LocalWorkbenchFocus.current
+            WorkbenchIconActionButton(icon=jcIcon(JCodeIcon.Fullscreen),contentDescription=strings.text(if(focus.mode=="EDITOR") "focus.restore" else "focus.editor"),onClick={focus.setMode(if(focus.mode=="EDITOR") "NORMAL" else "EDITOR")},active=focus.mode=="EDITOR")
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(Space.hairline),

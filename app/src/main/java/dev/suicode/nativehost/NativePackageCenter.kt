@@ -74,7 +74,7 @@ fun NativePackageCenter(modifier: Modifier=Modifier,initialSection: Int=0,server
             }
             var showLog by remember { mutableStateOf(false) }
             TextButton(onClick={showLog=true}) { Text(strings.text("ui.installationLog")) }
-            if(showLog) AlertDialog(onDismissRequest={showLog=false},title={Text(setupState.logPath ?: strings.text("ui.setupLog"))},text={Text(setupState.log.takeLast(20000),Modifier.heightIn(max=400.dp).verticalScroll(rememberScrollState()))},confirmButton={TextButton(onClick={showLog=false}) { Text(strings.text("ui.close")) }})
+            if(showLog) dev.blamspot.jcode.workbench.WorkbenchDetailDialog(setupState.logPath ?: strings.text("ui.setupLog"),{showLog=false}) { Text(setupState.log.takeLast(60000),Modifier.fillMaxSize().verticalScroll(rememberScrollState())) }
         }
         feedback?.let { Text(it) }
         if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())

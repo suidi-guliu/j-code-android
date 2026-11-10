@@ -128,6 +128,7 @@ internal fun TaskManagerSidebarContent(
         val debugActive = debug.state != DebugState.DISCONNECTED && debug.state != DebugState.TERMINATED
         val hasSessions = terminalSessionIds.isNotEmpty() || runningProjectName != null || debugActive
 
+        dev.blamspot.jcode.tasks.NativeTaskResults()
         hostMemory?.let { mem ->
             TaskSectionLabel("Device")
             HostMemoryRow(mem)

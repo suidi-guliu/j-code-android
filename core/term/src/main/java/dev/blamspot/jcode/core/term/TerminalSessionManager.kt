@@ -15,6 +15,8 @@ import kotlinx.coroutines.isActive
 import dev.blamspot.jcode.core.diag.DiagArea
 import dev.blamspot.jcode.core.diag.DiagnosticLog
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /** Upper bound for the user-configurable session limit (Settings default is 12). */
 private const val MAX_SESSIONS_CAP = 24
@@ -39,11 +41,14 @@ class TerminalSessionManager(
 ) {
     class Session(
         val id: String,
-        var label: String,
+        label: String,
         val pty: PtyProcess,
         var cols: Int = 80,
         var rows: Int = 24,
     ) {
+        internal var onMetadataChange: (() -> Unit)?=null
+        var label: String=label
+            set(value) { field=value;onMetadataChange?.invoke() }
         /** This session's own screen + scrollback. The manager feeds it continuously (see
          *  [startReader]) so the session keeps running and retains its content even when no view is
          *  attached — e.g. while the terminal panel is hidden, a CLI like `claude`/`opencode` keeps
@@ -78,6 +83,11 @@ class TerminalSessionManager(
          *  distro/binds/user/arch/workdir (OSC 7715). Null for sessions created before this existed. */
         @Volatile var spawnSpec: SpawnSpec? = null
         var processOwner: String? = null
+        @Volatile var managedLabel: Boolean = false
+        @Volatile var taskState: String? = null
+            set(value) { field=value;onMetadataChange?.invoke() }
+        @Volatile var taskExitCode: Int? = null
+            set(value) { field=value;onMetadataChange?.invoke() }
 
         /** Resize both the PTY and the parser together (parser realloc is synchronized against the
          *  reader's feed). Safe to call from the UI thread. */
@@ -296,6 +306,10 @@ class TerminalSessionManager(
             field = value.coerceIn(1, MAX_SESSIONS_CAP)
         }
 
+    private val nextShell=java.util.concurrent.atomic.AtomicInteger()
+    private val mutableMetadata=kotlinx.coroutines.flow.MutableStateFlow(0L)
+    val metadataVersion=mutableMetadata.asStateFlow()
+
     val sessionCount: Int
         get() = synchronized(sessionsLock) { _sessions.size }
 
@@ -445,9 +459,9 @@ class TerminalSessionManager(
             }
         }
 
-        val sessionId = "terminal-${UUID.randomUUID().toString().take(8)}"
+        val sessionId = "terminal-${UUID.randomUUID()}"
         // Seed label shown until the shell reports the running program (see OSC 7712 / GUEST_SHELL_INTEGRATION).
-        val sessionLabel = label ?: "terminal"
+        val sessionLabel = label ?: "Shell ${nextShell.incrementAndGet()}"
 
         val home = if (user == "root") "/root" else "/home/$user"
         val envVars = mapOf(
@@ -468,7 +482,8 @@ class TerminalSessionManager(
             "BROWSER" to "/usr/local/bin/xdg-open",
         ) + adbEnvVars() + androidSdkEnvVars(rootfsPath) + userEnvVars.filterKeys { ENV_NAME_RE.matches(it) }
 
-        val taggedEnv = if (processOwner != null) envVars + (GuestProcessTree.OWNER_ENV to processOwner) else envVars
+        val sessionOwner=processOwner ?: "sui-terminal:$sessionId"
+        val taggedEnv=envVars+(GuestProcessTree.OWNER_ENV to sessionOwner)
         val prootArgs = prootManager.buildShellCommand(
             rootfsPath = rootfsPath,
             shellCommand = shellCommand,
@@ -493,8 +508,9 @@ class TerminalSessionManager(
             )
             val session = Session(sessionId, sessionLabel, pty)
             session.spawnSpec = SpawnSpec(distroId, binds, user, rootfsArch, workdir)
-            session.processOwner = processOwner
-            synchronized(sessionsLock) { _sessions[sessionId] = session }
+            session.processOwner = sessionOwner
+            session.onMetadataChange={ mutableMetadata.update { it+1 } }
+            synchronized(sessionsLock) { _sessions[sessionId] = session };mutableMetadata.update { it+1 }
             activeSessionId = sessionId
             startReader(session)
             session
@@ -622,6 +638,7 @@ class TerminalSessionManager(
     /** Tear down a session whose shell exited by itself (see [startReader]). Idempotent. */
     private fun reapExitedSession(id: String) {
         val session = synchronized(sessionsLock) { _sessions.remove(id) } ?: return
+        mutableMetadata.update { it+1 }
         // Why the tree ended, decided BEFORE the teardown reaps the child itself. waitForExit reports
         // a negative value when the child died on a signal, and SIGKILL is what a phantom-process trim
         // (or the OOM killer) sends — proot never signals itself that way. The burst rule catches the
@@ -682,6 +699,7 @@ class TerminalSessionManager(
      */
     fun closeSession(id: String) {
         val session = synchronized(sessionsLock) { _sessions.remove(id) } ?: return
+        mutableMetadata.update { it+1 }
         // If this is a relocated child being force-closed, unblock its parent with a real code before
         // the PTY dies (the parent would otherwise only get EOF → exit 0). No-op for normal sessions.
         writeRelocationBackstop(session, "E 143\n")
@@ -800,7 +818,7 @@ class TerminalSessionManager(
             // other and hangs the FIFO.
             val protected = relocationParents.keys.toSet() + relocationParents.values.toSet()
             _sessions.values
-                .filter { it.foreground == null && it.id !in protected && now - it.lastActivityAt >= idleMillis }
+                .filter { it.foreground == null && it.taskState !in setOf("RUNNING","STARTING") && it.id !in protected && now - it.lastActivityAt >= idleMillis && dev.blamspot.jcode.core.distro.TerminalIdleProbe.idle(it.pty.childPid) }
                 .map { it.id }
         }
         stale.forEach { id ->

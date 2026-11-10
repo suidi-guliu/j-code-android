@@ -60,6 +60,9 @@ class DebugSession(
     /** Console/program output: (category, text). category is "stdout"/"stderr"/"console". */
     var onOutput: ((String, String) -> Unit)? = null
     var onTerminated: (() -> Unit)? = null
+    var onExit: ((Int) -> Unit)? = null
+    var onProcess: ((Int) -> Unit)? = null
+    var onRunInTerminal: (suspend (RunInTerminal) -> TerminalProcess)? = null
 
     /**
      * The adapter asked us (a DAP reverse request) to open a CHILD debug session — js-debug's
@@ -115,7 +118,7 @@ class DebugSession(
                 put("linesStartAt1", true)
                 put("columnsStartAt1", true)
                 put("pathFormat", "path")
-                put("supportsRunInTerminalRequest", false)
+                put("supportsRunInTerminalRequest", onRunInTerminal != null)
                 // js-debug (multi-session) asks us to open child sessions via `startDebugging`; advertise
                 // it so the adapter delegates the debuggee to a child instead of stalling on launch.
                 put("supportsStartDebuggingRequest", true)
@@ -128,6 +131,7 @@ class DebugSession(
                     .onFailure { _state.value = DebugState.ERROR; onOutput?.invoke("stderr", (it.message ?: "launch failed") + "\n") }
             }
         } catch (e: Exception) {
+            onOutput?.invoke("stderr","Debug initialization failed: ${e.message}\n")
             _state.value = DebugState.ERROR
             close()
         }
@@ -150,10 +154,17 @@ class DebugSession(
         }
     }
 
-    suspend fun continueThread(threadId: Int) { sendRequest("continue", JSONObject().put("threadId", threadId)); clearStopped() }
-    suspend fun next(threadId: Int) { sendRequest("next", JSONObject().put("threadId", threadId)); clearStopped() }
-    suspend fun stepIn(threadId: Int) { sendRequest("stepIn", JSONObject().put("threadId", threadId)); clearStopped() }
-    suspend fun stepOut(threadId: Int) { sendRequest("stepOut", JSONObject().put("threadId", threadId)); clearStopped() }
+    private suspend fun control(command: String,threadId: Int) {
+        val previous=_stopped.value
+        // A fast adapter can publish stopped before acknowledging next/continue. Never erase it.
+        clearStopped()
+        try { sendRequest(command,JSONObject().put("threadId",threadId)) }
+        catch(e: Exception) { if(_state.value==DebugState.RUNNING && _stopped.value==null) { _stopped.value=previous;if(previous!=null) _state.value=DebugState.STOPPED };throw e }
+    }
+    suspend fun continueThread(threadId: Int) = control("continue",threadId)
+    suspend fun next(threadId: Int) = control("next",threadId)
+    suspend fun stepIn(threadId: Int) = control("stepIn",threadId)
+    suspend fun stepOut(threadId: Int) = control("stepOut",threadId)
     suspend fun pause(threadId: Int) { runCatching { sendRequest("pause", JSONObject().put("threadId", threadId)) } }
 
     suspend fun stackTrace(threadId: Int): List<DapStackFrame> {
@@ -201,7 +212,7 @@ class DebugSession(
             writeMessage(JSONObject().apply {
                 put("seq", id); put("type", "request"); put("command", command); put("arguments", arguments)
             })
-            withTimeout(30_000) { deferred.await() }
+            withTimeout(if(command in setOf("launch","attach") && onRunInTerminal!=null) 180_000L else 30_000L) { deferred.await() }
         } finally { pending.remove(id) }
     }
 
@@ -309,6 +320,16 @@ class DebugSession(
         val requestSeq = json.optInt("seq", -1)
         val args = json.optJSONObject("arguments") ?: JSONObject()
         when (command) {
+            "runInTerminal" -> scope.launch {
+                try {
+                    val handler=onRunInTerminal ?: throw DebugException("Integrated terminal host unavailable")
+                    val result=handler(RunInTerminal.parse(args))
+                    sendResponse(requestSeq,command,true,body=result.json())
+                } catch(e: Exception) {
+                    onOutput?.invoke("stderr","Debug terminal: ${e.message}\n")
+                    runCatching { sendResponse(requestSeq,command,false,message=e.message ?: "Terminal launch rejected") }
+                }
+            }
             "startDebugging" -> {
                 runCatching {
                     onStartDebugging?.invoke(
@@ -324,7 +345,7 @@ class DebugSession(
         }
     }
 
-    private suspend fun sendResponse(requestSeq: Int, command: String, success: Boolean, message: String? = null) {
+    private suspend fun sendResponse(requestSeq: Int, command: String, success: Boolean, message: String? = null, body: JSONObject? = null) {
         writeMessage(JSONObject().apply {
             put("seq", seq.incrementAndGet())
             put("type", "response")
@@ -332,6 +353,7 @@ class DebugSession(
             put("success", success)
             put("command", command)
             if (message != null) put("message", message)
+            if (body != null) put("body",body)
         })
     }
 
@@ -356,7 +378,12 @@ class DebugSession(
                 val category = body.optString("category", "console")
                 if (category != "telemetry") onOutput?.invoke(category, body.optString("output", ""))
             }
-            "terminated", "exited" -> { _state.value = DebugState.TERMINATED; onTerminated?.invoke() }
+            "process" -> body.optInt("systemProcessId",0).takeIf { it>0 }?.let { onProcess?.invoke(it) }
+            "exited" -> {
+                val code=body.opt("exitCode")
+                if(code is Int) onExit?.invoke(code) else onOutput?.invoke("stderr","Adapter omitted a valid integer exit code; program result is unknown.\n")
+            }
+            "terminated" -> { _state.value = DebugState.TERMINATED; onTerminated?.invoke() }
             "thread" -> scope.launch { runCatching { _threads.value = threadsNow() } }
         }
     }
@@ -389,7 +416,7 @@ class DebugSession(
                 runCatching { closing?.close() }
                 transport=null
                 pending.values.forEach { it.cancel() };pending.clear()
-                _state.value=DebugState.DISCONNECTED
+                if(_state.value!=DebugState.ERROR) _state.value=DebugState.DISCONNECTED
                 scope.cancel();cleanup.cancel()
             }
         }

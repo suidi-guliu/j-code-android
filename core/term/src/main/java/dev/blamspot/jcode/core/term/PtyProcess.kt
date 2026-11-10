@@ -27,6 +27,8 @@ class PtyProcess private constructor(
     }
 
     /** Master fd captured at creation, for [awaitReadable]'s raw poll. */
+    val childPid: Int = if(nativeHandle!=0L) nativeGetChildPid() else -1
+
     private val masterFd: Int = if (nativeHandle != 0L) nativeGetMasterFd() else -1
 
     /**
@@ -103,6 +105,8 @@ class PtyProcess private constructor(
     private external fun nativeResize(cols: Int, rows: Int): Boolean
     private external fun nativeWaitForExit(): Int
     private external fun nativeIsOpen(): Boolean
+    private external fun nativeGetChildPid(): Int
+
     private external fun nativeGetMasterFd(): Int
 
     companion object {

@@ -1,6 +1,8 @@
 package dev.suicode.nativehost
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -16,7 +18,7 @@ import kotlinx.serialization.json.*
     host: NativePackageHost,item: LibraryItem?,row: NativePackageRow?,busy: Boolean,
     review: ()->Unit,rollback: ()->Unit,perform: (suspend ()->Unit)->Unit,showLanguage: ()->Unit,
     invoke: (String)->Unit,showText: (String,String)->Unit,
-    serverStates: Map<String,String>,restartServer: (String)->Unit,serverLog: (String)->String,dapStatus: String?,
+    serverStates: Map<String,String>,restartServer: (String)->Unit,serverLog: (String)->String,dapStatus: String?,expandedDetails: Boolean=false,
 ) {
     val uriHandler=androidx.compose.ui.platform.LocalUriHandler.current
     val strings=dev.blamspot.jcode.design.LocalUiTranslations.current
@@ -34,9 +36,14 @@ import kotlinx.serialization.json.*
         catch(e: CancellationException) { throw e }
         catch(e: Exception) { failure=e.message }
     }
+    var largeDetails by remember { mutableStateOf(false) }
+    if(largeDetails) dev.blamspot.jcode.workbench.WorkbenchDetailDialog(item?.name ?: id,{largeDetails=false}) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { NativePackageCard(host,item,row,busy,review,rollback,perform,showLanguage,invoke,showText,serverStates,restartServer,serverLog,dapStatus,true) }
+    }
     val localization=item?.category=="localization" || card.category==CardCategory.LOCALIZATION || pack?.declarations()?.any { it.type=="localization" }==true
-    OutlinedCard(Modifier.fillMaxWidth().testTag("package-$id")) {
+    OutlinedCard(Modifier.fillMaxWidth().testTag(if(expandedDetails) "package-details-$id" else "package-$id")) {
         Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            if(!expandedDetails) TextButton(onClick={largeDetails=true}) { Text(strings.text("focus.details")) }
             Text(pack?.manifest?.getValue("name")?.jsonPrimitive?.content ?: item!!.name,style=MaterialTheme.typography.titleMedium)
             Text(id,style=MaterialTheme.typography.bodySmall)
             Text("${pack?.version ?: item!!.version} · ${pack?.manifest?.getValue("author")?.jsonPrimitive?.content ?: item!!.author}")
