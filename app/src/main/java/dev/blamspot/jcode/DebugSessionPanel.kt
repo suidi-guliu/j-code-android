@@ -52,7 +52,7 @@ internal val DebugSessionUi.active: Boolean
  * resolved [ui].
  */
 @Composable
-internal fun DebugSessionPanel(ui: DebugSessionUi, modifier: Modifier = Modifier) {
+internal fun DebugSessionPanel(ui: DebugSessionUi, modifier: Modifier = Modifier, showToolbar: Boolean = true) {
     val strings = dev.blamspot.jcode.design.LocalUiTranslations.current
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -68,7 +68,7 @@ internal fun DebugSessionPanel(ui: DebugSessionUi, modifier: Modifier = Modifier
             Spacer(Modifier.weight(1f))
             DebugStateChip(ui.state)
         }
-        DebugToolbar(ui)
+        if(showToolbar) DebugToolbar(ui)
         if (ui.callStack.isNotEmpty()) CallStackList(ui)
         if (ui.variables.isNotEmpty()) VariablesList(ui)
         // Console output lives in the right-drawer "Debug" tab (alongside Terminal/Output), not here.

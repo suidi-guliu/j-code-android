@@ -44,8 +44,8 @@ public class DebugInputCli {
  public static void main(String[] args)throws Exception{
   if(!"1".equals(System.getenv("SUI_OWNED_INTEGRATION")))throw new IllegalStateException("Owned integration only");
   JSONObject cfg=new JSONObject(Files.readString(Path.of(args[0])));Path root=Path.of(cfg.getString("evidence"));Files.createDirectories(root);
-  List<Broker> brokers=new CopyOnWriteArrayList<>();AtomicReference<Wire> wire=new AtomicReference<>();AtomicInteger exit=new AtomicInteger(Integer.MIN_VALUE),pid=new AtomicInteger();AtomicBoolean ended=new AtomicBoolean();List<String> adapterOutput=new CopyOnWriteArrayList<>();
-  JSONObject launch=cfg.getJSONObject("launch");String language=cfg.getString("language");
+  List<Broker> brokers=new CopyOnWriteArrayList<>();AtomicReference<Wire> wire=new AtomicReference<>();AtomicInteger exit=new AtomicInteger(Integer.MIN_VALUE),pid=new AtomicInteger(),terminalPid=new AtomicInteger();AtomicBoolean ended=new AtomicBoolean();List<String> adapterOutput=new CopyOnWriteArrayList<>();
+  JSONObject launch=cfg.getJSONObject("launch");String language=cfg.getString("language");launch.remove("suiTerminalExit");
   Process sentinel=new ProcessBuilder("/bin/sleep","120").start();
   DebugSession session=new DebugSession(language,cfg.getString("project"),command->{try{
    Wire w;
@@ -62,6 +62,7 @@ public class DebugInputCli {
    waitFor(()->Files.isRegularFile(Path.of(paths.getPid())),"No production launcher PID acknowledgement");
    String[] ids=Files.readString(Path.of(paths.getPid())).trim().split(" ");
    if(ids.length!=2)throw new AssertionError("Invalid actual terminal PID metadata");
+   terminalPid.set(Integer.parseInt(ids[0]));
    Files.writeString(Path.of(paths.getGo()),"go");
    return new TerminalProcess(Integer.parseInt(ids[0]),Integer.parseInt(ids[1]));
   }catch(Exception e){throw new RuntimeException(e);}});
@@ -88,7 +89,11 @@ public class DebugInputCli {
     if(mode.equals("eof")){
      // Languages may explicitly handle EOF. This fixture must either terminate nonzero or reach its after-input breakpoint with a documented failure value.
      if(!ended.get())throw new AssertionError("EOF fixture did not terminate with a real error: "+adapterOutput);
-     if(exit.get()==0 || exit.get()==Integer.MIN_VALUE)throw new AssertionError("EOF did not report its real nonzero exit");
+     if(language.equals("java")) {
+      // Java Debug may send terminated without exited on an uncaught exception.
+      // Keep the DAP code unknown; require the direct java command's real PTY exit + exception.
+      broker.until("NoSuchElementException");broker.until("[Terminal command exit 1]");
+     }else if(exit.get()==0 || exit.get()==Integer.MIN_VALUE)throw new AssertionError("EOF did not report its real nonzero exit");
     }else {
      if(session.getState().getValue()!=DebugState.STOPPED)throw new AssertionError("Did not stop after input: "+adapterOutput);
      int afterThread=session.getStopped().getValue().getThreadId();List<DapStackFrame> afterStack=await(c->session.stackTrace(afterThread,c));if(afterStack.isEmpty()||afterStack.getFirst().getLine()!=cfg.getInt("after"))throw new AssertionError("Wrong after breakpoint "+afterStack);
@@ -102,9 +107,13 @@ public class DebugInputCli {
    }
    session.close();waitFor(()->session.getState().getValue()==DebugState.DISCONNECTED,"Disconnect incomplete");
    if(pid.get()>0)waitFor(()->!running(pid.get()),"Debuggee leaked after disconnect: "+pid);
+   if(terminalPid.get()>0)waitFor(()->!running(terminalPid.get()),"Reviewed terminal child leaked after disconnect: "+terminalPid);
    if(!sentinel.isAlive())throw new AssertionError("Unrelated owned process was killed");
    if(wire.get().sent.toString(java.nio.charset.StandardCharsets.UTF_8).contains("用户输入张三"))throw new AssertionError("stdin was written into DAP transport");
-   JSONObject result=new JSONObject().put("language",language).put("mode",mode).put("result","PASS").put("exitCode",exit.get()==Integer.MIN_VALUE?JSONObject.NULL:exit.get()).put("realCoreSession",true).put("debuggeePid",pid.get()).put("unrelatedRetained",true).put("dapAndStdinSeparate",true);
+   Integer terminalExit=null;
+   String terminalText=broker.text(),terminalMarker="[Terminal command exit ";int terminalStart=terminalText.lastIndexOf(terminalMarker);
+   if(terminalStart>=0) { int terminalEnd=terminalText.indexOf(']',terminalStart);if(terminalEnd>terminalStart)terminalExit=Integer.parseInt(terminalText.substring(terminalStart+terminalMarker.length(),terminalEnd)); }
+   JSONObject result=new JSONObject().put("language",language).put("mode",mode).put("result","PASS").put("exitCode",exit.get()==Integer.MIN_VALUE?JSONObject.NULL:exit.get()).put("realCoreSession",true).put("adapterReportedExitCode",exit.get()==Integer.MIN_VALUE?JSONObject.NULL:exit.get()).put("actualTerminalCommandExit",terminalExit==null?JSONObject.NULL:terminalExit).put("debuggeePid",pid.get()).put("reviewedTerminalPid",terminalPid.get()).put("unrelatedRetained",true).put("dapAndStdinSeparate",true);
    Files.writeString(root.resolve("result.json"),result.toString(2));System.out.println(result);
   } finally {
    session.close();for(Broker broker:brokers)broker.close();sentinel.destroyForcibly();sentinel.waitFor();Files.writeString(root.resolve("adapter-output.log"),String.join("",adapterOutput));

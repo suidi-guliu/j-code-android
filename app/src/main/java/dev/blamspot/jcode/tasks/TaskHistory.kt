@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.*
 import org.json.JSONObject
 import org.json.JSONArray
 
-enum class TaskOutcome { STARTING,RUNNING,SUCCEEDED,FAILED,CANCELLED,INTERRUPTED }
+enum class TaskOutcome { STARTING,RUNNING,SUCCEEDED,FAILED,CANCELLED,INTERRUPTED,FINISHED }
 data class NativeTaskRecord(val id: String,val name: String,val packageId: String,val component: String,val source: String,val project: String?,val started: Long,val ended: Long?=null,val sessionId: String?=null,val outcome: TaskOutcome=TaskOutcome.STARTING,val exitCode: Int?=null,val detail: String="",val truncated: Boolean=false,val kind: String="task",val packageVersion: String="") {
     val durationMs get()=((ended ?: System.currentTimeMillis())-started).coerceAtLeast(0)
 }
@@ -45,6 +45,7 @@ class TaskHistoryStore(private val root: File) {
     @Synchronized fun finish(id: String,exitCode: Int?,cancelled: Boolean=false,detail: String="") {
         update(id) { r -> r.copy(ended=r.ended ?: System.currentTimeMillis(),exitCode=exitCode ?: r.exitCode,detail=detail.ifBlank { r.detail },outcome=when { cancelled || r.outcome==TaskOutcome.CANCELLED -> TaskOutcome.CANCELLED;exitCode==0 -> TaskOutcome.SUCCEEDED;exitCode!=null -> TaskOutcome.FAILED;else -> TaskOutcome.INTERRUPTED }) }
     }
+    @Synchronized fun finishedWithoutCode(id: String,detail: String) { update(id) { if(it.outcome in setOf(TaskOutcome.STARTING,TaskOutcome.RUNNING)) it.copy(ended=System.currentTimeMillis(),outcome=TaskOutcome.FINISHED,detail=detail) else it } }
     @Synchronized fun failedToStart(id: String,detail: String) { update(id) { if(it.outcome==TaskOutcome.CANCELLED) it else it.copy(ended=System.currentTimeMillis(),outcome=TaskOutcome.FAILED,detail=detail) } }
     @Synchronized fun sessionClosed(sessionId: String,cancelled: Boolean=false) {
         val id=sessionToTask[sessionId] ?: return

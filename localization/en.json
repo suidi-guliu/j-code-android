@@ -789,7 +789,7 @@
   "tasks.exit": "Exit code: {code}",
   "tasks.times": "Started: {start}\nEnded: {end}\nDuration: {duration} ms",
   "tasks.logBound": "Preview: last 64 KiB. Task log limit: 16 MiB.",
-  "tasks.logTruncated": "The log reached its size limit; further output is available in the terminal scrollback.",
+  "tasks.logTruncated": "The saved log is incomplete because its size limit or storage could not be satisfied; inspect the terminal scrollback and archive warning.",
   "tasks.busy": "Another native task is running. Stop it or wait before retrying.",
   "focus.editor": "Maximize editor",
   "focus.dock": "Maximize bottom panel",

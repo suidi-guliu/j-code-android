@@ -19,7 +19,8 @@ object DebugTerminalLaunch {
         val env=request.env.filterValues { it==null }.keys.flatMap { listOf("-u",it) }+listOf("--")+request.env.filterValues { it!=null }.map { "${it.key}=${it.value}" }
         val command=(listOf("/usr/bin/env","--default-signal=INT,QUIT")+env+request.args).joinToString(" ",transform=::shellQuote)
         val child="""
-            printf '%s %s\n' "${'$'}${'$'}" "${'$'}0" > ${shellQuote(paths.pid)}
+            printf '%s %s\n' "${'$'}${'$'}" "${'$'}0" > ${shellQuote(paths.pid+".tmp")}
+            mv -f -- ${shellQuote(paths.pid+".tmp")} ${shellQuote(paths.pid)}
             for attempt in {1..750}; do [ ! -r ${shellQuote(paths.go)} ] && [ ! -r ${shellQuote(paths.cancel)} ] || break; sleep .02; done
             [ ! -r ${shellQuote(paths.cancel)} ] || exit 143
             [ -r ${shellQuote(paths.go)} ] || exit 70
@@ -40,7 +41,7 @@ object DebugTerminalLaunch {
             fi
             printf '\033]7713;debug-${paths.token};%s\007' "${'$'}result"
             printf '\n[Terminal command exit %s]\n' "${'$'}result"
-            rm -f -- ${listOf(paths.ready,paths.cancel,paths.go,paths.pid,paths.script).joinToString(" ",transform=::shellQuote)}
+            rm -f -- ${listOf(paths.ready,paths.cancel,paths.go,paths.pid,paths.pid+".tmp",paths.script).joinToString(" ",transform=::shellQuote)}
             rmdir -- ${shellQuote(paths.directory)} 2>/dev/null
             exec /bin/bash --noprofile --norc -i
         """.trimIndent()

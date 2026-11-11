@@ -17,7 +17,7 @@ import java.io.File
 class ZhHansRuntimeTest {
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
     private val context get()=instrumentation.targetContext
-    private fun bytes()=instrumentation.context.assets.open("sui-code-zh-hans-1.0.1.suik").use { it.readBytes() }
+    private fun bytes()=instrumentation.context.assets.open("sui-code-zh-hans-1.0.2.suik").use { it.readBytes() }
     private fun parameters(text:String):Map<String,String> = buildMap {
         var from=0
         while(true) {

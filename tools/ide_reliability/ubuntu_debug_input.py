@@ -67,12 +67,12 @@ for label in ['plain','中文 space']:
     prepared=subprocess.run(['/bin/bash',str(a.library/'C_CPP/suik/resources/prepare-debug.sh'),str(source),str(project)],capture_output=True,text=True,timeout=120)
     (a.output/f'{language}-{label}-prepare.log').write_text(prepared.stdout+prepared.stderr);assert prepared.returncode==0,prepared.stderr;program=json.loads(prepared.stdout)['program']
    if language=='Java':
-    server=pathlib.Path('/opt/sui-code/ide/java/current');configuration=project/'jdt-configuration';shutil.copytree(server/'config_linux',configuration)
+    server=pathlib.Path('/opt/sui-code/ide/java/current');configuration=root/('jdt-configuration-'+label);shutil.copytree(server/'config_linux',configuration)
     launcher=next((server/'plugins').glob('org.eclipse.equinox.launcher_*.jar'))
-    command=[a.proot,'--kill-on-exit','--link2symlink','-r','/','-w',str(project),a.jdk+'/bin/java','-Xmx640m','-Declipse.application=org.eclipse.jdt.ls.core.id1','-Declipse.product=org.eclipse.jdt.ls.core.product','-Dosgi.bundles.defaultStartLevel=4','--add-modules=ALL-SYSTEM','--add-opens','java.base/java.util=ALL-UNNAMED','--add-opens','java.base/java.lang=ALL-UNNAMED','-jar',str(launcher),'-configuration',str(configuration),'-data',str(project/'jdt-workspace')]
+    command=[a.proot,'--kill-on-exit','--link2symlink','-r','/','-w',str(project),a.jdk+'/bin/java','-Xmx640m','-Declipse.application=org.eclipse.jdt.ls.core.id1','-Declipse.product=org.eclipse.jdt.ls.core.product','-Dosgi.bundles.defaultStartLevel=4','--add-modules=ALL-SYSTEM','--add-opens','java.base/java.util=ALL-UNNAMED','--add-opens','java.base/java.lang=ALL-UNNAMED','-jar',str(launcher),'-configuration',str(configuration),'-data',str(root/('jdt-workspace-'+label))]
     jdt=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=(a.output/f'Java-{label}-jdt.stderr').open('wb'),start_new_session=True,env={**os.environ,'JAVA_HOME':a.jdk})
     lsp=Framed(jdt.stdout,jdt.stdin)
-    lsp.rpc('initialize',{'processId':os.getpid(),'rootUri':project.as_uri(),'workspaceFolders':[{'uri':project.as_uri(),'name':'integration'}],'capabilities':{'workspace':{'configuration':True,'workspaceFolders':True}},'initializationOptions':{'bundles':[str(server/'java-debug.jar')]}})
+    lsp.rpc('initialize',{'processId':os.getpid(),'rootUri':project.as_uri(),'workspaceFolders':[{'uri':project.as_uri(),'name':'integration'}],'capabilities':{'workspace':{'configuration':True,'workspaceFolders':True}},'initializationOptions':{'bundles':[str(server/'java-debug.jar')],'extendedClientCapabilities':{'classFileContentsSupport':True}}})
     lsp.send({'jsonrpc':'2.0','method':'initialized','params':{}});lsp.send({'jsonrpc':'2.0','method':'textDocument/didOpen','params':{'textDocument':{'uri':source.as_uri(),'languageId':'java','version':1,'text':text}}})
     mains=[]
     for _ in range(30):
@@ -86,7 +86,7 @@ for label in ['plain','中文 space']:
    for repeat,mode in [(1,'normal'),(2,'normal'),(1,'cancel'),(1,'eof')]:
     case=f'{language}-{label}-{mode}-{repeat}';directory=project/case;directory.mkdir()
     try:
-     launch=json.loads(json.dumps(workflow['launch']).replace('${source}',str(source)).replace('${project}',str(project)).replace('${prepared.program}',program if language in ['C','C_CPP'] else '')) if language!='Java' else {'type':'java','request':'launch','mainClass':'Hello','projectName':selected['projectName'],'modulePaths':paths[0],'classPaths':paths[1],'cwd':str(project),'console':workflow['launch']['console'],'stopOnEntry':False,'javaExec':a.jdk+'/bin/java'}
+     launch=json.loads(json.dumps(workflow['launch']).replace('${source}',str(source)).replace('${project}',str(project)).replace('${prepared.program}',program if language in ['C','C_CPP'] else '')) if language!='Java' else {'type':'java','request':'launch','mainClass':'Hello','projectName':selected['projectName'],'modulePaths':paths[0],'classPaths':paths[1],'cwd':str(project),'console':workflow['launch']['console'],'suiTerminalExit':workflow['launch'].get('suiTerminalExit'),'stopOnEntry':False,'javaExec':a.jdk+'/bin/java'}
      config={'language':descriptor['debugType'],'project':str(project),'source':str(source),'launch':launch,'before':next(i+1 for i,line in enumerate(text.splitlines()) if 'BEFORE' in line),'after':next(i+1 for i,line in enumerate(text.splitlines()) if 'AFTER' in line),'mode':mode,'evidence':str(directory),'proot':[a.proot,'--kill-on-exit','--link2symlink','-r','/','-w',str(project)],'broker':str(a.broker),'adapter':descriptor['adapterCommand']}
      if language=='Java':config['port']=int(lsp.rpc('workspace/executeCommand',{'command':'vscode.java.startDebugSession','arguments':[]}))
      file=directory/'config.json';file.write_text(json.dumps(config,ensure_ascii=False))

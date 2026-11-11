@@ -38,4 +38,20 @@ class TaskHistoryTest {
   } finally { directory.deleteRecursively() }
  }
 
+ @Test fun debugTerminationWithoutCodeNeverMeansSuccessAndLaterActualExitWins() {
+  val root=Files.createTempDirectory("debug-exit").toFile()
+  try {
+   val store=TaskHistoryStore(root)
+   val task=store.start("Debug","kit","dap","/Hello.java",null,kind="debug")
+   store.bind(task.id,"debug");store.finishedWithoutCode(task.id,"Adapter terminated without a program result")
+   assertEquals(TaskOutcome.FINISHED,store.records.value.single().outcome)
+   assertNull(store.records.value.single().exitCode)
+   store.finish(task.id,1,detail="Actual direct-program PTY exit")
+   assertEquals(TaskOutcome.FAILED,store.records.value.single().outcome)
+   assertEquals(1,store.records.value.single().exitCode)
+   store.finish(task.id,null,true);store.finish(task.id,0)
+   assertEquals(TaskOutcome.CANCELLED,store.records.value.single().outcome)
+  } finally { root.deleteRecursively() }
+ }
+
 }

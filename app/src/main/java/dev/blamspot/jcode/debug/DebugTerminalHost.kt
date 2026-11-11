@@ -26,12 +26,15 @@ class DebugTerminalHost(private val context: Context,private val distro: DistroS
     private val stdioHolders=java.util.concurrent.ConcurrentHashMap<String,File>()
     private val directories=java.util.concurrent.ConcurrentHashMap<String,File>()
     private val history get()=dev.blamspot.jcode.tasks.NativeTaskHistory.get(context)
+    private val directProgram=java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val terminalCodes=java.util.concurrent.ConcurrentHashMap<String,Int>()
+    private val terminalTokens=java.util.concurrent.ConcurrentHashMap<String,String>()
     private val records=java.util.concurrent.ConcurrentHashMap<String,String>()
     var onSessionClosed: ((Boolean) ->Unit)?=null
     fun ownsTask(taskId: String): Boolean=records.any { (session,id) -> id==taskId && (owners.containsKey(session) || stdioHolders.containsKey(session)) }
     fun closed(id: String,cancelled: Boolean) {
         if(owners.containsKey(id) || stdioHolders.containsKey(id)) onSessionClosed?.invoke(cancelled)
-        terminalIds.remove(id);records.remove(id)
+        terminalIds.remove(id);records.remove(id);directProgram.remove(id);terminalCodes.remove(id);terminalTokens.remove(id)
     }
     fun decide(allow: Boolean) { mutableReview.value?.decision?.complete(allow) }
     private suspend fun approve(request: RunInTerminal,project: String,publisher: String,authorized: ()->Boolean): Long {
@@ -50,7 +53,7 @@ class DebugTerminalHost(private val context: Context,private val distro: DistroS
         check(authorized()) { "IDE Kit authorization changed during review" }
         return ticket
     }
-    suspend fun launch(request: RunInTerminal,project: String,publisher: String,source: String=project,authorized: ()->Boolean): TerminalProcess {
+    suspend fun launch(request: RunInTerminal,project: String,publisher: String,source: String=project,terminalExitIsProgram: Boolean=false,authorized: ()->Boolean): TerminalProcess {
         val ticket=approve(request,project,publisher,authorized)
         return withContext(Dispatchers.IO) {
             val runtime=distro.environmentState.value.runtime
@@ -66,7 +69,7 @@ class DebugTerminalHost(private val context: Context,private val distro: DistroS
             session.managedLabel=true;session.taskState="RUNNING"
             synchronized(lifecycle) {
                 if(ticket!=epoch || !authorized()) { manager.closeSession(session.id);throw CancellationException("Debug session cancelled during PTY creation") }
-                terminalIds.add(session.id);owners[session.id]=owner;directories[session.id]=File(distro.activeRootfsPath(),directory.removePrefix("/"))
+                terminalIds.add(session.id);terminalTokens[session.id]=token;if(terminalExitIsProgram) directProgram.add(session.id);owners[session.id]=owner;directories[session.id]=File(distro.activeRootfsPath(),directory.removePrefix("/"))
             }
             val record=history.start(session.label,publisher,"debug-session",source,project,kind="debug")
             history.bind(record.id,session.id)
@@ -144,17 +147,27 @@ class DebugTerminalHost(private val context: Context,private val distro: DistroS
     }
     fun exited(code: Int) {
         (owners.keys+stdioHolders.keys).forEach { id -> TerminalSessionHost.existingManager()?.getSession(id)?.let {
-            if(it.taskState!="CANCELLED") it.taskState=if(code==0) "SUCCEEDED" else "FAILED"
-            it.taskExitCode=code
-            records[id]?.let { record -> history.finish(record,code) }
+            // Some adapters report zero even when their direct java process exits with an exception.
+            // A declared direct-program terminal is authoritative; never infer a code for a launcher.
+            val actual=if(id in directProgram) terminalCodes[id] else code
+            if(actual!=null) {
+                if(it.taskState!="CANCELLED") it.taskState=if(actual==0) "SUCCEEDED" else "FAILED"
+                it.taskExitCode=actual
+                records[id]?.let { record -> history.finish(record,actual,detail=if(actual!=code) "Adapter reported $code; actual program PTY reported $actual" else "") }
+            }
         } }
     }
     fun completed(id: String,payload: String) {
-        if(!payload.startsWith("debug-") || id !in terminalIds) return
+        if(payload.substringBefore(';')!="debug-${terminalTokens[id]}" || id !in terminalIds) return
         val code=payload.substringAfter(';').toIntOrNull() ?: return
-        // This is the adapter's launcher exit, not necessarily the debuggee's exit.
-        // Only the actual DAP exited event supplies the program code.
-        TerminalSessionHost.existingManager()?.getSession(id)?.let { if(it.taskState=="RUNNING") it.taskState="FINISHED" }
+        terminalCodes[id]=code
+        TerminalSessionHost.existingManager()?.getSession(id)?.let { session ->
+            if(id in directProgram) {
+                if(session.taskState!="CANCELLED") session.taskState=if(code==0) "SUCCEEDED" else "FAILED"
+                session.taskExitCode=code
+                records[id]?.let { history.finish(it,code,detail="Actual direct-program PTY exit") }
+            } else if(session.taskState=="RUNNING") session.taskState="FINISHED"
+        }
     }
     fun stop(cancelled: Boolean,failure: String?=null) {
         mutableReview.value?.decision?.complete(false)
@@ -167,7 +180,7 @@ class DebugTerminalHost(private val context: Context,private val distro: DistroS
             (retiring.keys+holders.keys).forEach { id -> records[id]?.let { task ->
                 val record=history.records.value.firstOrNull { it.id==task }
                 if(record?.outcome in setOf(dev.blamspot.jcode.tasks.TaskOutcome.STARTING,dev.blamspot.jcode.tasks.TaskOutcome.RUNNING)) {
-                    if(failure!=null) history.failedToStart(task,failure) else history.finish(task,null,cancelled,"Debug session ended")
+                    if(failure!=null) history.failedToStart(task,failure) else if(cancelled) history.finish(task,null,true,"Debug session stopped") else history.finishedWithoutCode(task,"Debug session ended; waiting for any direct-program exit acknowledgement")
                 }
             } }
         }

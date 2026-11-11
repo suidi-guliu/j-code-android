@@ -10,7 +10,7 @@ def main(key):
  def package(name,kind,language_components,permissions,deps=[]):
   src=root/'native-library/src'/name/kind
   prefix='plugin' if kind=='suic' else 'ide'
-  manifest={'id':'dev.suicode.'+name.lower().replace('_','')+('.basic' if kind=='suic' else '.kit'),'name':name+(' Basic Plugin' if kind=='suic' else ' IDE Kit'),'author':'sui-code','description':'Native language execution' if kind=='suic' else 'Language services, project tools and development workflows','version':'1.1.0' if kind=='suic' else '1.2.0','kind':kind,'api':{'min':3,'max':3} if kind=='suic' else {'min':4,'max':4},'dependencies':deps,'permissions':permissions,'components':[]}
+  manifest={'id':'dev.suicode.'+name.lower().replace('_','')+('.basic' if kind=='suic' else '.kit'),'name':name+(' Basic Plugin' if kind=='suic' else ' IDE Kit'),'author':'sui-code','description':'Native language execution' if kind=='suic' else 'Language services, project tools and development workflows','version':'1.1.0' if kind=='suic' else '1.3.0','kind':kind,'api':{'min':3,'max':3} if kind=='suic' else {'min':4,'max':4},'dependencies':deps,'permissions':permissions,'components':[]}
   for cid,typ,data in language_components:
    path=f'{prefix}/{cid}.json';write(src/path,data);manifest['components'].append({'id':cid,'type':typ,'entry':path})
   if kind=='suik': manifest['card']={'version':1,'category':'language-ide-kit','basicPlugin':deps[0]['id'],'languageIds':{'Java':['java'],'C_CPP':['c','cpp'],'Python':['python']}[name],'slots':{'runtime':'runtime','lsp':'language-server','dap':'debugger','build':'build','test':'test','run':'run-project','format':'format','lint':'diagnostics'},'actions':['overview']}
@@ -30,7 +30,7 @@ def main(key):
   with zipfile.ZipFile(io.BytesIO(out.read_bytes()[20:])) as z:
    signature=json.loads(z.read('signature.sig'))
   public=(root/'native-library/official-p256.der').read_bytes()
-  catalog.append({'id':manifest['id'],'name':manifest['name'],'version':manifest['version'],'kind':kind,'url':f'https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5.4-ide-reliability-management/native-library/v1/{out.name}','bytes':result['bytes'],'sha256':result['sha256'],'author':manifest['author'],'description':manifest['description'],'dependencies':deps,'changeLog':'v0.5.4: shared verified mounts, optional IDE components, runtime ownership and declarative management cards.','signer':hashlib.sha256(public).hexdigest(),'signature':signature['signature'],'api':manifest['api'],'cardCategory':manifest.get('card',{}).get('category','general')})
+  catalog.append({'id':manifest['id'],'name':manifest['name'],'version':manifest['version'],'kind':kind,'url':f'https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5.5-debug-ux/native-library/v1/{out.name}','bytes':result['bytes'],'sha256':result['sha256'],'author':manifest['author'],'description':manifest['description'],'dependencies':deps,'changeLog':'v0.5.5: reviewed interactive debug terminals, true task outcomes and clangd compile database diagnostics; installed tools are reused.','signer':hashlib.sha256(public).hexdigest(),'signature':signature['signature'],'api':manifest['api'],'cardCategory':manifest.get('card',{}).get('category','general')})
   return manifest['id']
  for name,languages,env,tools,provider,server in [
   ('Java',[('java',['java'])],'java',['java','javac','jshell'],'temurin','sui-jdtls'),
@@ -56,9 +56,9 @@ def main(key):
   ],['language.lsp','file.read','file.write','process.run','debug.dap','project.read','ui.panel'],[{'id':basic,'min':'1.0.0','max':'2.0.0'}])
  # Directory approval authenticates this download hash, not the unsigned author's package signature.
  zh=root/'localization/zh-Hans';manifest=json.loads((zh/'manifest.json').read_text())
- out=root/'localization/releases/sui-code-zh-hans-1.0.1.suik'
+ out=root/'localization/releases/sui-code-zh-hans-1.0.2.suik'
  result=build(zh,out)
- catalog.append({'id':manifest['id'],'name':manifest['name'],'version':manifest['version'],'kind':'suik','url':'https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5.4-ide-reliability-management/localization/releases/'+out.name,'bytes':result['bytes'],'sha256':result['sha256'],'author':manifest['author'],'description':manifest['description'],'dependencies':[],'changeLog':'v1.0.1: management translations and independent localization card; original translations preserved.','signer':'','signature':'','api':manifest['api'],'cardCategory':'localization'})
+ catalog.append({'id':manifest['id'],'name':manifest['name'],'version':manifest['version'],'kind':'suik','url':'https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5.5-debug-ux/localization/releases/'+out.name,'bytes':result['bytes'],'sha256':result['sha256'],'author':manifest['author'],'description':manifest['description'],'dependencies':[],'changeLog':'v1.0.2: interactive debug, task results and responsive workbench translations; original translations preserved.','signer':'','signature':'','api':manifest['api'],'cardCategory':'localization'})
  write(root/'native-library/v1/index.json',{'format':1,'packages':catalog})
  with tempfile.TemporaryDirectory() as tmp:
   message=pathlib.Path(tmp)/'catalog'

@@ -797,7 +797,7 @@ object UiTextKeys {
         "tasks.exit" to "Exit code: {code}",
         "tasks.times" to "Started: {start}\nEnded: {end}\nDuration: {duration} ms",
         "tasks.logBound" to "Preview: last 64 KiB. Task log limit: 16 MiB.",
-        "tasks.logTruncated" to "The log reached its size limit; further output is available in the terminal scrollback.",
+        "tasks.logTruncated" to "The saved log is incomplete because its size limit or storage could not be satisfied; inspect the terminal scrollback and archive warning.",
         "tasks.busy" to "Another native task is running. Stop it or wait before retrying.",
         "focus.editor" to "Maximize editor",
         "focus.dock" to "Maximize bottom panel",

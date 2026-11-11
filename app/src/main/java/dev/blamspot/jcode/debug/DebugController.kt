@@ -100,6 +100,7 @@ class DebugController(
         val adapterPath: String = "",
         /** DAP request: "launch" spawns the debuggee, "attach" joins one that is already running. */
         val request: String = "launch",
+        val terminalExitIsProgram: Boolean = false,
     )
 
     /**
@@ -169,11 +170,11 @@ class DebugController(
         session = s
         activeSession = s
         s.onOutput = { _, text -> if (session===s) pushOutput(text) }
-        s.onExit = { code -> if(session===s) { terminals.exited(code);pushOutput("Debuggee exit code: $code\n") } }
+        s.onExit = { code -> if(session===s) { terminals.exited(code);pushOutput("Debug adapter reported exit: $code\n") } }
         s.onTerminated = { if (session===s) endSession() }
         s.onRunInTerminal = { request ->
             check(session===s && !ended) { "Debug session is no longer active" }
-            terminals.launch(request,launchProject ?: error("Missing debug project"),engine.ownerPackage ?: engine.name,source=launchSource ?: hostPath) {
+            terminals.launch(request,launchProject ?: error("Missing debug project"),engine.ownerPackage ?: engine.name,source=launchSource ?: hostPath,terminalExitIsProgram=plan.terminalExitIsProgram) {
                 session===s && !ended && engine.ownerPackage?.let(authorizeTerminal)==true
             }
         }
@@ -211,6 +212,9 @@ class DebugController(
         val result=resolveKitPlan?.invoke(engine,hostPath,projectDir)
             ?: throw dev.blamspot.jcode.core.debug.DebugException("No enabled native IDE Kit provides this launch workflow")
         val config=JSONObject(result.launch.toString())
+        val terminalExitIsProgram=if(config.has("suiTerminalExit")) {
+            check(config.opt("suiTerminalExit")=="program") { "Unsupported debugger exit policy" };config.remove("suiTerminalExit");true
+        } else false
         if(config.has("suiTerminal")) {
             check(config.getString("suiTerminal")=="lldb-stdio") { "Unsupported declared debugger terminal mode" }
             config.remove("suiTerminal")
@@ -220,7 +224,7 @@ class DebugController(
             listOf("input","output","error").forEach { commands.put("settings set target.$it-path $tty") }
             config.put("preRunCommands",commands)
         }
-        return LaunchPlan(result.cwd,config,engine.adapterCommand,tcpPort=result.port)
+        return LaunchPlan(result.cwd,config,engine.adapterCommand,tcpPort=result.port,terminalExitIsProgram=terminalExitIsProgram)
     }
 
     /** Current breakpoints as distro-path -> 1-based lines (DAP convention). */

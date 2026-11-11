@@ -5654,7 +5654,7 @@ internal fun TerminalSidebarContent(
                 JcTooltip(strings.text("focus.debugDetails")) { IconButton(onClick={showInspector=!showInspector}) { Icon(jcIcon(JCodeIcon.Debug),strings.text("focus.debugDetails")) } }
             }
             if(showInspector) {
-                Column(Modifier.fillMaxWidth().height((inspectorHeight.takeIf { it.isFinite() } ?: 160f).coerceAtLeast(0f).dp.coerceAtMost(maximumInspector)).verticalScroll(rememberScrollState())) { DebugSessionPanel(debugUi) }
+                Column(Modifier.fillMaxWidth().height((inspectorHeight.takeIf { it.isFinite() } ?: 160f).coerceAtLeast(0f).dp.coerceAtMost(maximumInspector)).verticalScroll(rememberScrollState())) { DebugSessionPanel(debugUi,showToolbar=false) }
                 Box(Modifier.fillMaxWidth().height(12.dp).background(MaterialTheme.colorScheme.outlineVariant).draggable(rememberDraggableState { delta -> inspectorHeight=(inspectorHeight+delta/inspectorDensity.density).coerceIn(0f,maximumInspector.value) },Orientation.Vertical))
             }
         }

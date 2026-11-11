@@ -789,7 +789,7 @@
   "tasks.exit": "退出码：{code}",
   "tasks.times": "开始：{start}\n结束：{end}\n耗时：{duration} 毫秒",
   "tasks.logBound": "预览末尾 64 KiB；单个任务日志上限 16 MiB。",
-  "tasks.logTruncated": "日志已达大小上限；后续输出可查看终端滚动记录。",
+  "tasks.logTruncated": "保存的日志因大小限制或存储问题而不完整；请查看终端回滚记录及归档错误提示。",
   "tasks.busy": "已有原生任务运行中，请等待或停止后重试。",
   "focus.editor": "最大化编辑器",
   "focus.dock": "最大化底部面板",

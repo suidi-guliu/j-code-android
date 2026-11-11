@@ -75,7 +75,7 @@ class NativePackageHost private constructor(private val context: Context) {
     val library=mutableLibrary.asStateFlow()
     suspend fun refreshLibrary()=withContext(Dispatchers.IO) {
         fun fetch(path: String,limit: Int): ByteArray {
-            val connection=URL("https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5.4-ide-reliability-management/native-library/v1/$path").openConnection() as java.net.HttpURLConnection
+            val connection=URL("https://raw.githubusercontent.com/suidi-guliu/j-code-android/sui-code/v0.5.5-debug-ux/native-library/v1/$path").openConnection() as java.net.HttpURLConnection
             connection.instanceFollowRedirects=false;connection.connectTimeout=20000;connection.readTimeout=30000
             try {
                 check(connection.responseCode==200) { "Official library HTTP ${connection.responseCode}" }
