@@ -102,6 +102,7 @@ class DebugSession(
                     for ((path, lines) in breakpoints) setBreakpoints(path, lines)
                     sendRequest("configurationDone", JSONObject())
                 } catch (e: Exception) {
+                    if (closed.get()) throw e
                     onOutput?.invoke("stderr", "Breakpoint configuration failed: ${e.message}\n")
                     _state.value = DebugState.ERROR
                     runCatching { sendRequest("disconnect", JSONObject().put("terminateDebuggee", true)) }
@@ -128,9 +129,15 @@ class DebugSession(
             // Fire launch/attach; its response only completes after configurationDone, so don't block.
             scope.launch {
                 runCatching { sendRequest(request, configuration) }
-                    .onFailure { _state.value = DebugState.ERROR; onOutput?.invoke("stderr", (it.message ?: "launch failed") + "\n") }
+                    .onFailure {
+                        if (!closed.get()) {
+                            _state.value = DebugState.ERROR
+                            onOutput?.invoke("stderr", (it.message ?: "launch failed") + "\n")
+                        }
+                    }
             }
         } catch (e: Exception) {
+            if (closed.get()) return
             onOutput?.invoke("stderr","Debug initialization failed: ${e.message}\n")
             _state.value = DebugState.ERROR
             close()
@@ -405,6 +412,7 @@ class DebugSession(
     override fun close() {
         if(!closed.compareAndSet(false,true)) return
         val closing=transport
+        val failedBeforeClose = _state.value == DebugState.ERROR
         val cleanup=CoroutineScope(SupervisorJob()+Dispatchers.IO)
         // Keep the reader alive until disconnect is acknowledged. Cancelling first loses Java's
         // terminateDebuggee request because its adapter lives in the retained language server.
@@ -416,7 +424,7 @@ class DebugSession(
                 runCatching { closing?.close() }
                 transport=null
                 pending.values.forEach { it.cancel() };pending.clear()
-                if(_state.value!=DebugState.ERROR) _state.value=DebugState.DISCONNECTED
+                if (!failedBeforeClose) _state.value = DebugState.DISCONNECTED
                 scope.cancel();cleanup.cancel()
             }
         }

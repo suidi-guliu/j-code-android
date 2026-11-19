@@ -248,6 +248,8 @@ if a.mode=='upgrade':
 ensure_workbench()
 if a.mode=='upgrade':
  hashes('v055-before-localization');legacy_records('after-upgrade');instrument('dev.blamspot.jcode.BaselineDataTest#verifyRegisteredProjectSurvives','v055-project-retained',1);alive('v055-project-restart');ensure_workbench()
+instrument('dev.blamspot.jcode.DebugTerminalRuntimeTest','live-debug-native-pty',1)
+alive('after-live-debug');ensure_workbench()
 ui_lifecycle()
 for i in range(3):alive('final-english-cold-'+str(i+1))
 if a.mode=='upgrade':hashes('after-ui-lifecycle')
@@ -260,7 +262,6 @@ instrument('dev.blamspot.jcode.ZhHansRuntimeTest','full-kit-android',4)
 instrument('dev.blamspot.jcode.PackageManagementUiTest','package-management-ui',5)
 instrument('dev.blamspot.jcode.LauncherIconRuntimeTest','launcher-icons',2)
 instrument('dev.blamspot.jcode.WorkbenchRuntimeTest','workbench-maximize-and-target',1)
-instrument('dev.blamspot.jcode.DebugTerminalRuntimeTest','live-debug-native-pty',1)
 if a.mode=='upgrade':hashes('after-all-android-tests');legacy_records('after-all-tests')
 # Rendered framework icons and an actual Launcher app-drawer/launch interaction.
 for size in [48,96,216]:

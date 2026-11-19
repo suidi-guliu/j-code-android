@@ -7,13 +7,19 @@ import org.json.JSONObject
 import kotlin.test.*
 
 class DapTerminalTest {
-    private class Peer : DapTransport {
+    private class Peer(private val holdLaunchUntilStop: Boolean = false) : DapTransport {
         val written=CopyOnWriteArrayList<JSONObject>()
         val input=LinkedBlockingQueue<ByteArray>();var remaining=byteArrayOf()
         fun receive(j: JSONObject) { val bytes=j.toString().toByteArray();input.put("Content-Length: ${bytes.size}\r\n\r\n".toByteArray()+bytes) }
         override fun read(buffer: ByteArray): Int { if(remaining.isEmpty()) remaining=input.take();if(remaining.isEmpty()) return -1;val n=minOf(buffer.size,remaining.size);remaining.copyInto(buffer,0,0,n);remaining=remaining.copyOfRange(n,remaining.size);return n }
         override fun write(bytes: ByteArray) {
             val m=JSONObject(bytes.toString(Charsets.UTF_8).substringAfter("\r\n\r\n"));written+=m
+            if (holdLaunchUntilStop && m.optString("command") == "launch") return
+            if (holdLaunchUntilStop && m.optString("command") == "disconnect") {
+                val launch = written.first { it.optString("command") == "launch" }
+                receive(JSONObject().put("seq", 899).put("type", "response").put("request_seq", launch.getInt("seq"))
+                    .put("command", "launch").put("success", false).put("message", "Cancelled by disconnect"))
+            }
             if(m.optString("command")=="next") receive(JSONObject("""{"seq":901,"type":"event","event":"stopped","body":{"reason":"step","threadId":1}}"""))
             if(m.getString("type")=="request") receive(JSONObject().put("seq",900).put("type","response").put("request_seq",m.getInt("seq")).put("command",m.getString("command")).put("success",true).put("body",JSONObject()))
         }
@@ -61,4 +67,19 @@ class DapTerminalTest {
         } finally { session.close() }
     }
 
+    @Test fun stoppingAnOutstandingLaunchDoesNotReportAnAdapterError() = runBlocking {
+        val peer = Peer(holdLaunchUntilStop = true)
+        val session = DebugSession("java", "/project") { peer }
+        val errors = CopyOnWriteArrayList<String>()
+        session.onOutput = { category, message -> if (category == "stderr") errors.add(message) }
+        try {
+            session.start("adapter", "launch", JSONObject())
+            withTimeout(2000) { while (peer.written.none { it.optString("command") == "launch" }) delay(10) }
+            session.close()
+            withTimeout(3000) { while (session.state.value != DebugState.DISCONNECTED) delay(10) }
+            assertTrue(errors.isEmpty(), errors.toString())
+        } finally {
+            session.close()
+        }
+    }
 }

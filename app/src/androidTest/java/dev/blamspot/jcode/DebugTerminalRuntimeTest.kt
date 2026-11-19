@@ -94,8 +94,17 @@ class DebugTerminalRuntimeTest {
                 LaunchedEffect(state) {
                     if(state==DebugState.STOPPED) {
                         val thread=session.stopped.value?.threadId ?: return@LaunchedEffect
-                        frames=session.stackTrace(thread)
-                        variables=frames.firstOrNull()?.let { frame -> session.scopes(frame.id).filter { !it.expensive }.flatMap { sc -> session.variables(sc.variablesReference).map { VariableRow(it.name,it.value,it.type,1) } } }.orEmpty()
+                        val (stack, values) = withContext(Dispatchers.IO) {
+                            val stack = session.stackTrace(thread)
+                            val values = stack.firstOrNull()?.let { frame ->
+                                session.scopes(frame.id).filter { !it.expensive }.flatMap { scope ->
+                                    session.variables(scope.variablesReference).map { VariableRow(it.name, it.value, it.type, 1) }
+                                }
+                            }.orEmpty()
+                            stack to values
+                        }
+                        frames = stack
+                        variables = values
                     }
                 }
                 val ui=DebugSessionUi(state=state,callStack=frames,variables=variables,

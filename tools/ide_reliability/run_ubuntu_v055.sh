@@ -15,6 +15,7 @@ mapfile -t shim_sources < <(find tools/ide_reliability/linux-shim -name '*.java'
 javac --release 21 -d "$root/runtime/cli" "${shim_sources[@]}"
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends gcc g++ cmake ninja-build jq clangd-18 lldb-18 python3-debugpy libtalloc-dev
+ln -s "$(command -v clangd-18)" "$root/bin/clangd"
 proot_source="$root/proot"
 git init -q "$proot_source"
 git -C "$proot_source" fetch --depth=1 https://github.com/termux/proot.git 52d65a4dc140ca554d241a1438ddd4f6b00c9813
