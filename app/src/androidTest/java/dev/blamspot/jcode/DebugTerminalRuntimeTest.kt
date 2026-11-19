@@ -18,6 +18,9 @@ import dev.blamspot.jcode.core.debug.*
 import dev.blamspot.jcode.core.distro.TerminalIdleProbe
 import dev.blamspot.jcode.core.term.*
 import dev.blamspot.jcode.debug.VariableRow
+import dev.blamspot.jcode.design.LocalTabMaxSize
+import dev.blamspot.jcode.design.TabMaxSize
+import dev.blamspot.jcode.design.TabMaxSizeSetting
 import dev.blamspot.jcode.workbench.*
 import dev.suicode.nativehost.*
 import java.io.ByteArrayOutputStream
@@ -112,7 +115,10 @@ class DebugTerminalRuntimeTest {
                     onStepOver={scope.launch { session.stopped.value?.threadId?.let { session.next(it) } }},
                     onStop={scope.launch { session.close() }})
                 MaterialTheme { NativeLocalizationProvider(host) {
-                    CompositionLocalProvider(LocalDebugSession provides ui) {
+                    CompositionLocalProvider(
+                        LocalDebugSession provides ui,
+                        LocalTabMaxSize provides TabMaxSizeSetting(TabMaxSize.Large),
+                    ) {
                         roster
                         if(shown) TerminalSidebarContent(null,terminals.map { it.id },terminals.firstOrNull()?.id.orEmpty(),terminals.firstOrNull()?.pty,{ id -> terminals.firstOrNull { it.id==id } },{ id -> terminals.firstOrNull { it.id==id }?.label },true,emptyList(),{_,_->},{},{},{},{},Modifier.fillMaxSize())
                         else Text("Owned test: terminal view hidden; program and reader remain live")
