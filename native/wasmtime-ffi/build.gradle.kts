@@ -14,3 +14,11 @@ android {
     sourceSets.getByName("debug").jniLibs.srcDir(layout.buildDirectory.dir("generated/cargoJniLibs/debug"))
     sourceSets.getByName("release").jniLibs.srcDir(layout.buildDirectory.dir("generated/cargoJniLibs/release"))
 }
+
+// Populate the variant's JNI source directory before AGP packages the library.
+tasks.matching { it.name == "preDebugBuild" }.configureEach {
+    dependsOn("cargoBuildDebugJniLibs")
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn("cargoBuildReleaseJniLibs")
+}

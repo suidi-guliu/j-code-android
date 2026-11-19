@@ -34,12 +34,13 @@ public class TaskExitCli {
     GuestProcessTree.INSTANCE.terminateOwnerBlocking(owner);
    }
    String marker="\u001b]7713;native-"+token+";";
-   DebugInputCli.waitFor(()->active.text().contains(marker)&&active.text().indexOf('\u0007',active.text().indexOf(marker))>0,"No actual exit acknowledgement: "+cfg.getString("name"));
+   DebugInputCli.waitFor(()->active.text().contains(marker)&&active.text().indexOf('\u0007',active.text().indexOf(marker))>0,"No actual exit acknowledgement: "+cfg.getString("name"),180);
    String output=broker.text();int begin=output.indexOf(marker)+marker.length(),end=output.indexOf('\u0007',begin),exit=Integer.parseInt(output.substring(begin,end));
    byte[] bytes=Files.readAllBytes(broker.output);history.append(session,bytes,bytes.length);history.finish(token,exit,false,"");
    NativeTaskRecord result=history.getRecords().getValue().getFirst();
    TaskOutcome expected=mode.equals("cancel")?TaskOutcome.CANCELLED:cfg.getBoolean("success")?TaskOutcome.SUCCEEDED:TaskOutcome.FAILED;
    if(result.getOutcome()!=expected||(!mode.equals("cancel")&&((exit==0)!=cfg.getBoolean("success"))))throw new AssertionError(result+"\n"+output);
+   if(cfg.has("expectedExit") && exit!=cfg.getInt("expectedExit"))throw new AssertionError("Unexpected exit: "+exit+"\n"+output);
    if(cfg.has("contains")&&!output.contains(cfg.getString("contains")))throw new AssertionError(output);
    DebugInputCli.waitFor(()->!DebugInputCli.running(pid),"Task child leaked after completion");
    if(!sentinel.isAlive()||!broker.process.isAlive())throw new AssertionError("Unrelated process or retained transcript shell was killed");

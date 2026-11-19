@@ -4,7 +4,7 @@ No real Ubuntu/toolchain is installed: fixtures prove byte retention, not runtim
 """
 import argparse,subprocess,shlex,json,time,re,traceback,sys,xml.etree.ElementTree as ET
 from pathlib import Path
-p=argparse.ArgumentParser();p.add_argument('--serial',required=True);p.add_argument('--mode',choices=['upgrade','fresh'],required=True);p.add_argument('--inputs',type=Path,required=True);p.add_argument('--apk',type=Path,required=True);p.add_argument('--kit',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);p.add_argument('--debug-fixture',type=Path,required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--serial',required=True);p.add_argument('--mode',choices=['upgrade','fresh'],required=True);p.add_argument('--inputs',type=Path,required=True);p.add_argument('--apk',type=Path,required=True);p.add_argument('--android-test-apk',type=Path,required=True);p.add_argument('--kit',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);p.add_argument('--debug-fixture',type=Path,required=True);a=p.parse_args()
 root=Path(__file__).resolve().parents[2];a.evidence.mkdir(parents=True,exist_ok=True);pkg='dev.suicode.ide.debug';activity=pkg+'/dev.blamspot.jcode.MainActivity';kitid='dev.suicode.localization.zh-hans';serial=a.serial
 steps=[];last_xml='';WIDTH=1280;HEIGHT=800
 
@@ -240,7 +240,7 @@ if a.mode=='upgrade':
  install(a.inputs/'startup-androidTest.apk')
  instrument('dev.blamspot.jcode.BaselineDataTest#createRegisteredProject','v054-create-project',1)
  adb('shell','am force-stop '+pkg)
-install(a.apk);install(a.inputs/'startup-androidTest.apk');alive('v055-first-frame',a.mode=='upgrade')
+install(a.apk);install(a.android_test_apk);alive('v055-first-frame',a.mode=='upgrade')
 if a.mode=='upgrade':
  ensure_workbench(True)
  checkpoint('retained-original-chinese-selection',['运行文件','扩展包'])
@@ -255,7 +255,6 @@ if a.mode=='upgrade':hashes('after-ui-lifecycle')
 adb('shell','am force-stop '+pkg)
 for name,value in [('sui-native-ui-language','<map><int name="selection-v1" value="7"/><string name="untouched">keep</string><string name="unrelated-user-setting">preserve</string></map>'),('sui-workbench-layout','<map><string name="content-width-v1">broken</string><string name="untouched">keep</string></map>')]:runas('mkdir -p shared_prefs; printf %s '+shlex.quote(value)+' > shared_prefs/'+name+'.xml')
 alive('wrong-preference-english-fallback');assert 'broken' in runas('cat shared_prefs/sui-workbench-layout.xml').stdout
-install(a.inputs/'startup-androidTest.apk')
 instrument('dev.blamspot.jcode.StartupRuntimeTest','startup-android',4)
 instrument('dev.blamspot.jcode.ZhHansRuntimeTest','full-kit-android',4)
 instrument('dev.blamspot.jcode.PackageManagementUiTest','package-management-ui',5)

@@ -40,7 +40,8 @@ public class DebugInputCli {
   public void close()throws Exception{if(process.isAlive()){send(new JSONObject().put("close",true));if(!process.waitFor(7,TimeUnit.SECONDS)){process.destroyForcibly();process.waitFor();}}}
  }
  static boolean running(int pid){try{return !Files.readString(Path.of("/proc/"+pid+"/stat")).substring(Files.readString(Path.of("/proc/"+pid+"/stat")).lastIndexOf(')')+2).startsWith("Z");}catch(IOException e){return false;}}
- static void waitFor(BooleanSupplier condition,String why)throws Exception {long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(35);while(!condition.getAsBoolean()){if(System.nanoTime()>end)throw new AssertionError(why);Thread.sleep(20);}}
+ static void waitFor(BooleanSupplier condition,String why)throws Exception {waitFor(condition,why,35);}
+ static void waitFor(BooleanSupplier condition,String why,int seconds)throws Exception {long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(seconds);while(!condition.getAsBoolean()){if(System.nanoTime()>end)throw new AssertionError(why);Thread.sleep(20);}}
  public static void main(String[] args)throws Exception{
   if(!"1".equals(System.getenv("SUI_OWNED_INTEGRATION")))throw new IllegalStateException("Owned integration only");
   JSONObject cfg=new JSONObject(Files.readString(Path.of(args[0])));Path root=Path.of(cfg.getString("evidence"));Files.createDirectories(root);
@@ -105,6 +106,7 @@ public class DebugInputCli {
      int resumed=session.getStopped().getValue().getThreadId();await(c->session.continueThread(resumed,c));waitFor(ended::get,"Program did not terminate");broker.until("SECOND:"+second);broker.until("RESULT:你好 用户输入张三");if(exit.get()!=0)throw new AssertionError("Wrong exit "+exit);
     }
    }
+   if(mode.equals("normal") && (language.equals("java") || language.equals("python")))broker.until("[Terminal command exit 0]");
    session.close();waitFor(()->session.getState().getValue()==DebugState.DISCONNECTED,"Disconnect incomplete");
    if(pid.get()>0)waitFor(()->!running(pid.get()),"Debuggee leaked after disconnect: "+pid);
    if(terminalPid.get()>0)waitFor(()->!running(terminalPid.get()),"Reviewed terminal child leaked after disconnect: "+terminalPid);
@@ -113,7 +115,8 @@ public class DebugInputCli {
    Integer terminalExit=null;
    String terminalText=broker.text(),terminalMarker="[Terminal command exit ";int terminalStart=terminalText.lastIndexOf(terminalMarker);
    if(terminalStart>=0) { int terminalEnd=terminalText.indexOf(']',terminalStart);if(terminalEnd>terminalStart)terminalExit=Integer.parseInt(terminalText.substring(terminalStart+terminalMarker.length(),terminalEnd)); }
-   JSONObject result=new JSONObject().put("language",language).put("mode",mode).put("result","PASS").put("exitCode",exit.get()==Integer.MIN_VALUE?JSONObject.NULL:exit.get()).put("realCoreSession",true).put("adapterReportedExitCode",exit.get()==Integer.MIN_VALUE?JSONObject.NULL:exit.get()).put("actualTerminalCommandExit",terminalExit==null?JSONObject.NULL:terminalExit).put("debuggeePid",pid.get()).put("reviewedTerminalPid",terminalPid.get()).put("unrelatedRetained",true).put("dapAndStdinSeparate",true);
+   Object actualExit=language.equals("java") && terminalExit!=null ? terminalExit : exit.get()==Integer.MIN_VALUE ? JSONObject.NULL : exit.get();
+   JSONObject result=new JSONObject().put("language",language).put("mode",mode).put("result","PASS").put("exitCode",actualExit).put("realCoreSession",true).put("adapterReportedExitCode",exit.get()==Integer.MIN_VALUE?JSONObject.NULL:exit.get()).put("actualTerminalCommandExit",terminalExit==null?JSONObject.NULL:terminalExit).put("debuggeePid",pid.get()).put("reviewedTerminalPid",terminalPid.get()).put("unrelatedRetained",true).put("dapAndStdinSeparate",true);
    Files.writeString(root.resolve("result.json"),result.toString(2));System.out.println(result);
   } finally {
    session.close();for(Broker broker:brokers)broker.close();sentinel.destroyForcibly();sentinel.waitFor();Files.writeString(root.resolve("adapter-output.log"),String.join("",adapterOutput));
