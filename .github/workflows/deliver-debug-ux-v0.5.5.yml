@@ -51,11 +51,11 @@ jobs:
           set -euo pipefail
           test -c /dev/kvm
           sudo chmod a+rw /dev/kvm
-          sdkmanager 'emulator' 'system-images;android-36;google_apis;x86_64'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-36;google_apis;x86_64'
           export ANDROID_AVD_HOME="$RUNNER_TEMP/v055-avds"
           mkdir "$ANDROID_AVD_HOME"
           echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
-          printf 'no\n' | avdmanager create avd -n sui-v055-${{ matrix.mode }} -k 'system-images;android-36;google_apis;x86_64' -d pixel_c --force
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n sui-v055-${{ matrix.mode }} -k 'system-images;android-36;google_apis;x86_64' -d pixel_c --force
           sudo apt-get update
           sudo apt-get install -y python3-debugpy
       - name: Run real Android 16 instrumentation and UI checks
