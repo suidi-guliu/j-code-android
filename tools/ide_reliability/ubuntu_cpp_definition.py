@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Strict four-file CMake regression with real production LspSession and clangd in PRoot."""
 import argparse,json,os,pathlib,subprocess,tempfile
-p=argparse.ArgumentParser();p.add_argument('--classpath',required=True);p.add_argument('--library',type=pathlib.Path,required=True);p.add_argument('--output',type=pathlib.Path,required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--classpath',required=True);p.add_argument('--library',type=pathlib.Path,required=True);p.add_argument('--output',type=pathlib.Path,required=True);p.add_argument('--proot',default='/home/ubuntu/bin/proot');a=p.parse_args()
 assert os.environ.get('SUI_OWNED_INTEGRATION')=='1'
 root=pathlib.Path(tempfile.mkdtemp(prefix='sui-v055-definition-'));a.output.mkdir(parents=True,exist_ok=True)
 results=[]
@@ -14,7 +14,7 @@ for name in ['plain','中文 space']:
   'src/main.cpp':'#include "math.hpp"\nint main() { return add(1, 2) == 3 ? 0 : 1; }\n',
   'src/c_math.c':'#include <stdio.h>\nint c_add(int a,int b) { return a+b; }\n'}
  for relative,text in sources.items():(project/relative).write_text(text)
- prefix=['/home/ubuntu/bin/proot','--kill-on-exit','--link2symlink','-r','/','-w',str(project)]
+ prefix=[a.proot,'--kill-on-exit','--link2symlink','-r','/','-w',str(project)]
  build=project/'.sui-code/build'
  def command(argv,label,expect=0):
   value=subprocess.run(prefix+argv,capture_output=True,text=True,timeout=120)

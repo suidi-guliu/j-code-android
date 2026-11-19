@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Actual three-language success/failure/cancellation, compiled planner/launcher/history, owned PRoot."""
 import argparse,base64,json,os,pathlib,shutil,subprocess,tempfile,time,traceback
-p=argparse.ArgumentParser();p.add_argument('--classpath',required=True);p.add_argument('--library',type=pathlib.Path,required=True);p.add_argument('--broker',required=True);p.add_argument('--output',type=pathlib.Path,required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--classpath',required=True);p.add_argument('--library',type=pathlib.Path,required=True);p.add_argument('--broker',required=True);p.add_argument('--output',type=pathlib.Path,required=True);p.add_argument('--proot',default='/home/ubuntu/bin/proot');a=p.parse_args()
 assert os.environ.get('SUI_OWNED_INTEGRATION')=='1'
 root=pathlib.Path(tempfile.mkdtemp(prefix='sui-v055-tasks-'));projects=root/'projects';projects.mkdir();a.output.mkdir(parents=True,exist_ok=True);results=[]
 # PRoot binds the project root over /workspace, which may also be the host checkout.
 # Stage the complete Kit resource trees in the same guest-visible area used by the app.
 library = root / 'kits'
 shutil.copytree(a.library, library)
-env=dict(os.environ,LANG='C.UTF-8',LC_ALL='C.UTF-8',JAVA_TOOL_OPTIONS='-Djavax.net.ssl.trustStore=/run/java-cacerts',PATH='/home/ubuntu/bin:'+os.environ['PATH'])
+env=dict(os.environ,LANG='C.UTF-8',LC_ALL='C.UTF-8',JAVA_TOOL_OPTIONS='-Djavax.net.ssl.trustStore=/run/java-cacerts',PATH=str(pathlib.Path(a.proot).parent)+':'+os.environ['PATH'])
 def plan(host):
  value=subprocess.run(['/jdk/bin/java','-cp',a.classpath,'RuntimePathCli',str(host),str(projects),str(root/'aliases')],capture_output=True,text=True,env=env,check=True)
  binds=[];cwd=None
@@ -17,7 +17,7 @@ def plan(host):
   if fields[0]=='cwd':cwd=base64.b64decode(fields[1]).decode()
   elif fields[0]=='bind':binds+=['-b',base64.b64decode(fields[1]).decode()+':'+base64.b64decode(fields[2]).decode()]
  assert cwd
- return cwd,['/home/ubuntu/bin/proot','--kill-on-exit','--link2symlink','-r','/',*binds,'-w',cwd]
+ return cwd,[a.proot,'--kill-on-exit','--link2symlink','-r','/',*binds,'-w',cwd]
 def case(name,language,host,argv,success=True,source=None,mode='normal',input=None,contains=None,expected_exit=None):
  directory=root/('result-'+str(len(results)));directory.mkdir();guest,prefix=plan(host)
  config={'name':name,'package':'dev.suicode.'+language.lower()+'.ide','component':name.split()[-1],'source':str(source or host),'project':str(host),'cwd':guest,'hostCwd':str(host),'argv':[v.replace('${project}',guest) for v in argv],'success':success,'mode':mode,'broker':a.broker,'evidence':str(directory),'proot':prefix,'version':'v0.5.5 source'}
