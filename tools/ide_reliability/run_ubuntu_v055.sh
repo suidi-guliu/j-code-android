@@ -9,6 +9,9 @@ export PATH="/home/ubuntu/bin:/opt/sui-code/ide/java/maven/apache-maven-3.9.11/b
 root="$RUNNER_TEMP/v055-ubuntu"
 mkdir -p "$root/runtime" "$root/evidence"
 unzip -q .delivery/sui-code-v0.5.5-candidate/integration-runtime.zip -d "$root/runtime"
+# Bind the Android process APIs used by the packaged production code to the Linux kernel.
+mapfile -t shim_sources < <(find tools/ide_reliability/linux-shim -name '*.java' -print)
+javac --release 21 -d "$root/runtime/cli" "${shim_sources[@]}"
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends gcc g++ cmake ninja-build jq clangd-18 lldb-18 python3-debugpy libtalloc-dev
 proot_source="$root/proot"
