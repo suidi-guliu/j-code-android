@@ -1,6 +1,6 @@
 # sui-code v0.5.5 集中改进与验收报告
 
-生产基线 `4a19b04ec7406f6c25683142a735a9d137403a6f`。构建源码 `51c18154904e84b66c8cd6e88632f2795c49cac9`，分支 `sui-code/v0.5.5-debug-ux`。
+生产基线 `4a19b04ec7406f6c25683142a735a9d137403a6f`。构建源码 `a0313fde95ec1a7c31782e89fd6ee8d63790bdb4`，分支 `sui-code/v0.5.5-debug-ux`。
 
 ## APK 与扩展包
 
