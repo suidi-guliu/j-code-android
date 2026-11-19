@@ -1,0 +1,66 @@
+name: Publish requested v0.5.5 release
+on:
+  push:
+    branches: [sui-code/v0.5.5-debug-ux]
+    paths: ['.github/workflows/publish-v0.5.5.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: publish-sui-code-v055
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Assemble the requested release and disclose outstanding acceptance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          candidate=.delivery/sui-code-v0.5.5-candidate
+          (cd "$candidate" && sha256sum --check --strict SHA256SUMS)
+          mkdir release
+          cp "$candidate/sui-code-v0.5.5-debug.apk" "$candidate/linux-evidence.zip" "$candidate/native-sdk.zip" release/
+          cp native-library/v1/{Java,C_CPP,Python}.suik localization/releases/sui-code-zh-hans-1.0.2.suik release/
+          gh run download 44529247751 -n v055-ubuntu-evidence -D ubuntu-evidence
+          gh run download 44529247751 -n v055-android-fresh-evidence -D android-evidence
+          gh api repos/${{ github.repository }}/actions/runs/44529247751/jobs > jobs.json
+          upgrade=$(jq -r '.jobs[] | select(.name == "android (upgrade)") | .conclusion // .status' jobs.json)
+          if [ "$upgrade" = success ] || [ "$upgrade" = failure ]; then
+            gh run download 44529247751 -n v055-android-upgrade-evidence -D android-evidence
+          fi
+          (cd ubuntu-evidence && zip -qr ../release/ubuntu-evidence.zip .)
+          (cd android-evidence && zip -qr ../release/android-evidence.zip .)
+          cp "$candidate/report.md" release/report.md
+          cat > release/release-notes.md <<'NOTES'
+          sui-code v0.5.5，versionCode 1070808，dev.suicode.ide.debug，仅 ARM64。APK 签名与 v0.5.4 一致，可覆盖安装。
+
+          五项改动包括交互调试终端、C++ 跨文件跳转、真实任务结果、响应式工作台和终端管理。Java/C/C++/Python IDE Kit 为 1.3.0，中文包为独立 1.0.2。
+
+          当前验收状态仍有未完成项。Android16 新装已通过 17 项 instrumentation。Ubuntu24.04 的 49 项任务场景通过。Java 中文路径的停止调试用例仍报 Stop did not disconnect，Ubuntu job 因此失败。物理 ARM64 平板验收待执行。完整证据及失败日志随附件提供。
+
+          APK SHA-256 d402133998806495e405acc313c9a868f6bcbbf9177d3682d1663169172a63f3
+
+          https://github.com/suidi-guliu/j-code-android/actions/runs/44529247751
+          NOTES
+          printf '\nAndroid16 覆盖安装任务本次发布查询状态为 `%s`。\n' "$upgrade" >> release/release-notes.md
+          printf '\n## 发布时最新验收状态\n\n' >> release/report.md
+          cat release/release-notes.md >> release/report.md
+          git diff --binary 4a19b04ec7406f6c25683142a735a9d137403a6f HEAD -- . ':(exclude).delivery' > release/changes.patch
+          (cd release && sha256sum * > SHA256SUMS)
+          (cd release && zip -q -0 ../sui-code-v0.5.5-integrated.zip *)
+          gh release create v0.5.5 --target "$GITHUB_SHA" --title 'sui-code v0.5.5' --notes-file release/release-notes.md --draft
+          gh release upload v0.5.5 sui-code-v0.5.5-integrated.zip release/*
+          gh release edit v0.5.5 --draft=false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sui-code-v0.5.5-release
+          path: |
+            release/*
+            sui-code-v0.5.5-integrated.zip
+          if-no-files-found: error
