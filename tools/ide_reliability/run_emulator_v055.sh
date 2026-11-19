@@ -10,11 +10,14 @@ evidence="$RUNNER_TEMP/v055-evidence/$mode"
 mkdir -p "$evidence"
 serial="emulator-$port"
 fixture_pid=''
-emulator -avd "sui-v055-$mode" -port "$port" -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader -memory 2048 -cores 2 -skin 1280x800 -camera-back none -camera-front none > "$evidence/emulator.log" 2>&1 &
+sudo chmod 0666 /dev/kvm
+adb start-server
+emulator -avd "sui-v055-$mode" -port "$port" -no-window -no-metrics -no-audio -no-snapshot -no-boot-anim -gpu swiftshader -memory 2048 -cores 2 -skin 1280x800 -camera-back none -camera-front none > "$evidence/emulator.log" 2>&1 &
 emulator_pid=$!
 cleanup() {
   if [[ -n "$fixture_pid" ]]; then kill -INT "$fixture_pid" 2>/dev/null || true; fi
   adb -s "$serial" emu kill >/dev/null 2>&1 || kill "$emulator_pid" 2>/dev/null || true
+  tail -n 40 "$evidence/emulator.log" || true
 }
 trap cleanup EXIT
 ready=false

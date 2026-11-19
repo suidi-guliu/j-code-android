@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: sui-code-v055-verified-delivery
+  group: sui-code-v055-verified-delivery-${{ github.sha }}
   cancel-in-progress: true
 jobs:
   android:
@@ -50,7 +50,9 @@ jobs:
         run: |
           set -euo pipefail
           test -c /dev/kvm
-          sudo chmod a+rw /dev/kvm
+          printf 'KERNEL=="kvm", GROUP="kvm", MODE="0666"\n' | sudo tee /etc/udev/rules.d/99-sui-emulator-kvm.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'emulator' 'system-images;android-36;google_apis;x86_64'
           export ANDROID_AVD_HOME="$RUNNER_TEMP/v055-avds"
           mkdir "$ANDROID_AVD_HOME"
@@ -58,6 +60,9 @@ jobs:
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n sui-v055-${{ matrix.mode }} -k 'system-images;android-36;google_apis;x86_64' -d pixel_c --force
           sudo apt-get update
           sudo apt-get install -y python3-debugpy
+          sudo udevadm settle
+          sudo chmod 0666 /dev/kvm
+          "$ANDROID_HOME/emulator/emulator" -accel-check
       - name: Run real Android 16 instrumentation and UI checks
         run: bash tools/ide_reliability/run_emulator_v055.sh ${{ matrix.mode }}
       - name: Preserve Android logs and receipts
