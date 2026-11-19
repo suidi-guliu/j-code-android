@@ -1249,7 +1249,13 @@ class DistroService(
     }
 
     /** Cancellable preparation for a reviewed Kit; never used for apt/dpkg installation. */
-    suspend fun execOwned(command: String,workdir: String,owner: String,timeoutMs: Long=300_000L): ExecResult = execOwnedBound(command,workdir,owner,timeoutMs,null)
+    suspend fun execOwned(
+        command: String,
+        workdir: String,
+        owner: String,
+        timeoutMs: Long = 300_000L,
+        binds: List<DistroBind>? = null,
+    ): ExecResult = execOwnedBound(command, workdir, owner, timeoutMs, binds)
 
     suspend fun validateTaskDirectory(paths: NativeTaskPaths): ExecResult = execOwnedBound(
         "test -d ${shellQuote(paths.guestDirectory)} && test -r ${shellQuote(paths.guestDirectory)} && test -x ${shellQuote(paths.guestDirectory)} && test -r ${shellQuote(paths.guestSource)}",
@@ -1953,7 +1959,8 @@ class DistroService(
         // everything the process forks, which is how [GuestProcessTree] finds the tree again to end
         // it — a proot tree cannot be reached through the launcher alone.
         owner: String? = null,
-    ): Process? = spawnStdioProcessBound(command,workdir,userOverride,extraPath,owner,null)
+        binds: List<DistroBind>? = null,
+    ): Process? = spawnStdioProcessBound(command, workdir, userOverride, extraPath, owner, binds)
 
     fun spawnProjectStdioProcess(command: String, project: File, owner: String): Process? {
         val paths = NativeTaskPaths.resolve(project,project,_environmentState.value.runtime.binds)

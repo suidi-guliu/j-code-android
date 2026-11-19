@@ -32,7 +32,7 @@ object NativeDebugPlans {
             }
             val script="$directory/$resource"
             try {
-                val result=distro.execOwned(owner="sui-kit:${row.record.id}/prepare",command="/bin/bash ${shellQuote(script)} ${shellQuote(source)} ${shellQuote(project)}",workdir=project,timeoutMs=300000L)
+                val result=distro.execOwned(owner="sui-kit:${row.record.id}/prepare",command="/bin/bash ${shellQuote(script)} ${shellQuote(source)} ${shellQuote(project)}",workdir=project,timeoutMs=300000L,binds=paths.binds)
                 check(result.succeeded) { "Kit preparation failed: ${result.stderr.takeLast(2000)}" }
                 context["prepared"]=Json.parseToJsonElement(result.stdout.trim())
             } finally { dev.blamspot.jcode.fs.SafeLocalFiles.remove(File(distro.activeRootfsPath(),directory.removePrefix("/"))) }

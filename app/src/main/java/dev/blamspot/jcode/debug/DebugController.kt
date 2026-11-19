@@ -94,6 +94,7 @@ class DebugController(
         val config: JSONObject,
         val adapterCommand: String,
         val tcpPort: Int?,
+        val binds: List<dev.blamspot.jcode.core.distro.DistroBind>,
         /** Adapter process user override (netcoredbg needs root for /root/.dotnet); null = runtime user. */
         val user: String? = null,
         /** Prepended to the adapter's PATH (e.g. /root/.dotnet). */
@@ -135,12 +136,15 @@ class DebugController(
                 catch (e: kotlinx.coroutines.CancellationException) { throw e }
                 catch (e: Exception) { if (generation.get()==ticket) pushOutput("Debug setup failed: ${e.message}\n"); null }
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
-            if (generation.get()!=ticket) return@launch
-            if (plan == null) {
-                _state.value = DebugState.ERROR
-                return@launch
+            synchronized(this@DebugController) {
+                if (generation.get()!=ticket) return@synchronized
+                if (plan == null) {
+                    terminals.stop(false, "Debug setup failed; inspect its output")
+                    _state.value = DebugState.ERROR
+                } else {
+                    beginSession(engine, plan, hostPath)
+                }
             }
-            synchronized(this@DebugController) { if (generation.get()==ticket) beginSession(engine, plan, hostPath) }
         }
     }
 
@@ -154,7 +158,7 @@ class DebugController(
                 SocketTransport.connect("127.0.0.1",plan.tcpPort,12_000L)
             } else {
             val proc = distroService.spawnStdioProcess(
-                command, workdir = plan.distroCwd, userOverride = plan.user, extraPath = plan.adapterPath,owner="sui-kit:${engine.ownerPackage}/dap",
+                command, workdir = plan.distroCwd, userOverride = plan.user, extraPath = plan.adapterPath,owner="sui-kit:${engine.ownerPackage}/dap", binds = plan.binds,
             )
             when {
                 proc == null -> null
@@ -171,7 +175,7 @@ class DebugController(
         activeSession = s
         s.onOutput = { _, text -> if (session===s) pushOutput(text) }
         s.onExit = { code -> if(session===s) { terminals.exited(code);pushOutput("Debug adapter reported exit: $code\n") } }
-        s.onTerminated = { if (session===s) endSession() }
+        s.onTerminated = { synchronized(this) { if (session === s) endSession() } }
         s.onRunInTerminal = { request ->
             check(session===s && !ended) { "Debug session is no longer active" }
             terminals.launch(request,launchProject ?: error("Missing debug project"),engine.ownerPackage ?: engine.name,source=launchSource ?: hostPath,terminalExitIsProgram=plan.terminalExitIsProgram) {
@@ -184,25 +188,35 @@ class DebugController(
         s.onStartDebugging = { request, config -> spawnChild(request, config) }
         // While preparing we hold STARTING; ignore the fresh session's initial DISCONNECTED so the
         // panel doesn't flicker back to the launch row between build and adapter start.
-        observe(s,scope.launch { s.state.collect { if (session===s && !(it == DebugState.DISCONNECTED && _state.value == DebugState.STARTING)) { _state.value = it;if(it==DebugState.ERROR) { terminals.stop(false,"Debug adapter failed; inspect its output");s.close() } } } })
+        observe(s, scope.launch {
+            s.state.collect { state ->
+                synchronized(this@DebugController) {
+                    if (session !== s || (state == DebugState.DISCONNECTED && _state.value == DebugState.STARTING)) return@synchronized
+                    _state.value = state
+                    if (state == DebugState.ERROR) {
+                        terminals.stop(false, "Debug adapter failed; inspect its output")
+                        s.close()
+                    }
+                }
+            }
+        })
         observe(s,scope.launch { s.stopped.collect { st -> if (st != null) onStopped(s, st) else clearStoppedView() } })
 
         val distroBreakpoints = distroBps() // DAP lines are 1-based; applied on `initialized`
         pushOutput("Starting ${engine.name} on ${hostPath.substringAfterLast('/')}…\n")
         scope.launch {
             if(session!==s) return@launch
-            runCatching { s.start(plan.adapterCommand, plan.request, plan.config, distroBreakpoints) }
-                .onFailure { pushOutput("Debug failed: ${it.message}\n"); _state.value = DebugState.ERROR }
-            // start() swallows a failed adapter launch (bad transport / handshake) into DISCONNECTED
-            // without rethrowing, and the STARTING guard on the state collector can eat that final
-            // DISCONNECTED — leaving the panel stuck on "Starting…" forever. If we never advanced past
-            // STARTING, the adapter never became reachable: surface it as an error instead of hanging.
-            if (_state.value == DebugState.STARTING) {
-                pushOutput(
-                    "Couldn't reach the ${engine.name} debug adapter — it started but the connection " +
-                        "timed out. See the log (tag JCodeDAP-adapter) for details.\n",
-                )
-                _state.value = DebugState.ERROR
+            val result = runCatching { s.start(plan.adapterCommand, plan.request, plan.config, distroBreakpoints) }
+            synchronized(this@DebugController) {
+                if (session !== s) return@synchronized
+                val failure = result.exceptionOrNull()
+                if (failure != null || (_state.value == DebugState.STARTING && s.state.value == DebugState.DISCONNECTED)) {
+                    val message = failure?.message ?: "Could not connect to the ${engine.name} debug adapter."
+                    pushOutput("Debug failed: $message\n")
+                    terminals.stop(false, message)
+                    s.close()
+                    _state.value = DebugState.ERROR
+                }
             }
         }
     }
@@ -224,7 +238,10 @@ class DebugController(
             listOf("input","output","error").forEach { commands.put("settings set target.$it-path $tty") }
             config.put("preRunCommands",commands)
         }
-        return LaunchPlan(result.cwd,config,engine.adapterCommand,tcpPort=result.port,terminalExitIsProgram=terminalExitIsProgram)
+        val paths = dev.blamspot.jcode.core.distro.NativeTaskPaths.resolve(
+            java.io.File(hostPath), java.io.File(projectDir), distroService.environmentState.value.runtime.binds,
+        )
+        return LaunchPlan(result.cwd, config, engine.adapterCommand, result.port, paths.binds, terminalExitIsProgram = terminalExitIsProgram)
     }
 
     /** Current breakpoints as distro-path -> 1-based lines (DAP convention). */
@@ -405,9 +422,9 @@ class DebugController(
 
     /** A debuggee-driven end (root or last child terminated): tear everything down, exactly once. */
     @Synchronized private fun endSession() {
-        terminals.stop(false)
         if (ended) return
         ended = true
+        terminals.stop(false)
         clearObservers()
         _location.value = null
         releaseAndroidAttachment()

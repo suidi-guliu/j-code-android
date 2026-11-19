@@ -58,7 +58,7 @@ class DebugTerminalHost(private val context: Context,private val distro: DistroS
         return withContext(Dispatchers.IO) {
             val runtime=distro.environmentState.value.runtime
             val paths=NativeTaskPaths.resolve(File(project),File(project),runtime.binds)
-            val access=distro.execOwned("test -d ${shellQuote(request.cwd)} && test -r ${shellQuote(request.cwd)} && test -x ${shellQuote(request.cwd)}",request.cwd,"sui-kit:debug-terminal/preflight",10000)
+            val access=distro.execOwned("test -d ${shellQuote(request.cwd)} && test -r ${shellQuote(request.cwd)} && test -x ${shellQuote(request.cwd)}",request.cwd,"sui-kit:debug-terminal/preflight",10000,paths.binds)
             check(access.succeeded) { "E_DEBUG_MAPPING: ${request.cwd}: ${access.stderr}" }
             val token=UUID.randomUUID().toString();val pathsForTerminal=dev.blamspot.jcode.core.debug.DebugTerminalPaths(token)
             val owner=pathsForTerminal.owner;val directory=pathsForTerminal.directory;val script=pathsForTerminal.script;val pidFile=pathsForTerminal.pid
@@ -157,32 +157,43 @@ class DebugTerminalHost(private val context: Context,private val distro: DistroS
             }
         } }
     }
-    fun completed(id: String,payload: String) {
-        if(payload.substringBefore(';')!="debug-${terminalTokens[id]}" || id !in terminalIds) return
-        val code=payload.substringAfter(';').toIntOrNull() ?: return
+    fun completed(id: String,payload: String) = synchronized(lifecycle) {
+        if(payload.substringBefore(';')!="debug-${terminalTokens[id]}" || id !in terminalIds) return@synchronized
+        val code=payload.substringAfter(';').toIntOrNull() ?: return@synchronized
         terminalCodes[id]=code
         TerminalSessionHost.existingManager()?.getSession(id)?.let { session ->
             if(id in directProgram) {
                 if(session.taskState!="CANCELLED") session.taskState=if(code==0) "SUCCEEDED" else "FAILED"
                 session.taskExitCode=code
-                records[id]?.let { history.finish(it,code,detail="Actual direct-program PTY exit") }
+                records[id]?.let { history.finish(it,code,cancelled=session.taskState=="CANCELLED",detail="Actual direct-program PTY exit") }
             } else if(session.taskState=="RUNNING") session.taskState="FINISHED"
         }
     }
     fun stop(cancelled: Boolean,failure: String?=null) {
         mutableReview.value?.decision?.complete(false)
-        val snapshots=synchronized(lifecycle) {
+        val (retiring, holders, retiringRecords) = synchronized(lifecycle) {
             epoch++
-            (owners.toMap() to stdioHolders.toMap()).also { owners.clear();stdioHolders.clear() }
+            val retiring = owners.toMap()
+            val holders = stdioHolders.toMap()
+            val retiringIds = retiring.keys + holders.keys
+            if (cancelled) {
+                retiringIds.forEach { id ->
+                    TerminalSessionHost.existingManager()?.getSession(id)?.let { session ->
+                        if (session.taskState == "RUNNING") session.taskState = "CANCELLED"
+                    }
+                }
+            }
+            owners.clear()
+            stdioHolders.clear()
+            Triple(retiring, holders, retiringIds.mapNotNull { records[it] })
         }
-        val retiring=snapshots.first;val holders=snapshots.second
         cleanup.launch {
-            (retiring.keys+holders.keys).forEach { id -> records[id]?.let { task ->
+            retiringRecords.forEach { task ->
                 val record=history.records.value.firstOrNull { it.id==task }
                 if(record?.outcome in setOf(dev.blamspot.jcode.tasks.TaskOutcome.STARTING,dev.blamspot.jcode.tasks.TaskOutcome.RUNNING)) {
                     if(failure!=null) history.failedToStart(task,failure) else if(cancelled) history.finish(task,null,true,"Debug session stopped") else history.finishedWithoutCode(task,"Debug session ended; waiting for any direct-program exit acknowledgement")
                 }
-            } }
+            }
         }
         holders.forEach { (id,file) ->
             TerminalSessionHost.existingManager()?.getSession(id)?.let { if(it.taskState=="RUNNING") it.taskState=if(cancelled) "CANCELLED" else "FINISHED" }
